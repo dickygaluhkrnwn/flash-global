@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { User, MapPin, Phone, FileText, Upload, ShieldCheck, ArrowRight, CheckCircle } from "lucide-react";
+import { User, MapPin, FileText, Upload, ShieldCheck, ArrowRight, CheckCircle } from "lucide-react";
 
 export default function DynamicUserFormPage({ params }: { params: { token: string } }) {
   const router = useRouter();

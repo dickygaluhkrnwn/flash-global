@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Clock, MapPin, Plane, Package, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 export default function TrackingResultPage({ params }: { params: { resi: string } }) {
   // Decode nomor resi dari URL (contoh: FG-9831A-SG)

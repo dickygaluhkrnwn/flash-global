@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Building2, MessageCircle, CreditCard, Lock, 
-  ArrowRight, CheckCircle2, ShieldCheck, FileText, QrCode
+  ArrowRight, ShieldCheck, FileText, QrCode
 } from "lucide-react";
 
 export default function PaymentPage() {
