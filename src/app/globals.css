@@ -5,6 +5,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* Flash Global Brand Colors */
+  --brand-maroon: #7A171D;
+  --brand-maroon-dark: #5A0E13;
+  --brand-gold: #C5A059;
+  --brand-gold-light: #DFBE7B;
 }
 
 @media (prefers-color-scheme: dark) {
