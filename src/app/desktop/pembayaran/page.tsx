@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Building2, CreditCard, Lock, ArrowRight, 
+  Building2, Lock, ArrowRight, 
   ShieldCheck, FileText, QrCode, Upload, Copy, CheckCircle
 } from "lucide-react";
 
@@ -13,6 +13,15 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
+// Mendefinisikan tipe data secara tegas untuk menggantikan 'any'
+interface OrderSummary {
+  id: string;
+  destination: string;
+  weight: number | string;
+  vehicle: string;
+  totalCost: number;
+}
+
 export default function PaymentPage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -20,8 +29,8 @@ export default function PaymentPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   
-  // State Data Order Nyata dari Firestore
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
+  // State Data Order Nyata dari Firestore menggunakan tipe OrderSummary
+  const [currentOrder, setCurrentOrder] = useState<OrderSummary | null>(null);
   const [isFetchingOrder, setIsFetchingOrder] = useState(true);
 
   // State Input Bukti Transfer

@@ -25,10 +25,8 @@ export default function DesktopLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Ambil fungsi login dari Zustand Store
   const { login } = useAuthStore();
 
-  // State Form
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -39,12 +37,10 @@ export default function DesktopLoginPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Fungsi utilitas untuk simpan user ke Firestore setelah Register/Google
   const saveUserToFirestore = async (uid: string, email: string, name: string, photoURL: string = "") => {
     const userRef = doc(db, "users", uid);
     const userSnap = await getDoc(userRef);
     
-    // Jika belum ada di database, buat dokumen baru
     if (!userSnap.exists()) {
       await setDoc(userRef, {
         uid,
@@ -68,7 +64,6 @@ export default function DesktopLoginPage() {
         // --- PROSES LOGIN ---
         const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
         
-        // Simpan ke Zustand
         login({
           uid: userCredential.user.uid,
           email: userCredential.user.email,
@@ -80,19 +75,16 @@ export default function DesktopLoginPage() {
         // --- PROSES REGISTER ---
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         
-        // Update Display Name di Firebase Auth
         await updateProfile(userCredential.user, {
           displayName: formData.name
         });
 
-        // Simpan Data Tambahan ke Firestore
         await saveUserToFirestore(
           userCredential.user.uid, 
           userCredential.user.email || "", 
           formData.name
         );
 
-        // Simpan ke Zustand
         login({
           uid: userCredential.user.uid,
           email: userCredential.user.email,
@@ -101,12 +93,15 @@ export default function DesktopLoginPage() {
         });
       }
       
-      // REVISI: Jika Sukses, Arahkan ke Dasbor (Tanpa kata desktop)
       router.push("/dashboard");
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Perbaikan Tipe Any ke Unknown
       console.error(error);
-      setErrorMsg(error.message.replace("Firebase: ", ""));
+      if (error instanceof Error) {
+        setErrorMsg(error.message.replace("Firebase: ", ""));
+      } else {
+        setErrorMsg("Terjadi kesalahan yang tidak terduga.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +116,6 @@ export default function DesktopLoginPage() {
     try {
       const result = await signInWithPopup(auth, provider);
       
-      // Pastikan data tersimpan di Firestore
       await saveUserToFirestore(
         result.user.uid, 
         result.user.email || "", 
@@ -129,7 +123,6 @@ export default function DesktopLoginPage() {
         result.user.photoURL || ""
       );
 
-      // Simpan ke Zustand
       login({
         uid: result.user.uid,
         email: result.user.email,
@@ -137,11 +130,14 @@ export default function DesktopLoginPage() {
         photoURL: result.user.photoURL
       });
 
-      // REVISI: Redirect ke dashboard publik (Tanpa kata desktop)
       router.push("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) { // Perbaikan Tipe Any ke Unknown
       console.error(error);
-      setErrorMsg("Gagal login dengan Google. Silakan coba lagi.");
+      if (error instanceof Error) {
+        setErrorMsg("Gagal login dengan Google: " + error.message);
+      } else {
+        setErrorMsg("Gagal login dengan Google. Silakan coba lagi.");
+      }
     } finally {
       setIsLoading(false);
     }

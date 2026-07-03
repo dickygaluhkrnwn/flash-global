@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Package, Ship, Plane, CheckCircle2, Clock, 
+  Package, Plane, CheckCircle2, Clock, 
   ArrowUpRight, FileText, Truck, 
   MapPin, Calendar, Star
 } from "lucide-react";
-import Link from "next/link"; // FUNGSI YANG DIPERBAIKI: Import Link dari next/link
+import Link from "next/link"; 
 
 // --- IMPORT BACKEND CORE ---
 import { db } from "@/lib/firebase";
@@ -30,16 +30,24 @@ interface Order {
   vehicle?: string;
 }
 
+// Tipe data khusus untuk menangani Timestamp Firebase tanpa menggunakan 'any'
+type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
+
 export default function DesktopDashboardPage() {
-  const { user } = useAuthStore(); // Tarik status pengguna aktif
+  const { user } = useAuthStore(); 
   const [activeTab, setActiveTab] = useState<string>("Semua");
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fungsi konversi format tanggal Firebase Timestamp ke teks yang rapi
-  const formatFirebaseDate = (timestamp: any) => {
+  const formatFirebaseDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "Memproses...";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    
+    // Pengecekan aman apakah objek tersebut memiliki fungsi toDate (bawaan Firestore)
+    const date = (typeof timestamp === "object" && "toDate" in timestamp && typeof timestamp.toDate === "function") 
+      ? timestamp.toDate() 
+      : new Date(timestamp as string | number);
+      
     return date.toLocaleDateString("id-ID", {
       day: "2-digit",
       month: "short",
@@ -56,13 +64,11 @@ export default function DesktopDashboardPage() {
 
     setIsLoading(true);
 
-    // Query 1: Tarik data real-time koleksi orders (Domestik) milik user aktif
     const ordersQuery = query(
       collection(db, "orders"),
-      where("email", "==", user.email) // Menggunakan filter email pemesan
+      where("email", "==", user.email) 
     );
 
-    // Query 2: Tarik data real-time koleksi quotes (Internasional) milik user aktif
     const quotesQuery = query(
       collection(db, "quotes"),
       where("userId", "==", user.uid)
@@ -73,7 +79,6 @@ export default function DesktopDashboardPage() {
     let localOrders: Order[] = [];
     let localQuotes: Order[] = [];
 
-    // Menggabungkan hasil snapshot dari kedua koleksi secara presisi
     const combineAndSetData = () => {
       const combined = [...localOrders, ...localQuotes].sort((a, b) => {
         return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -82,12 +87,11 @@ export default function DesktopDashboardPage() {
       setIsLoading(false);
     };
 
-    // Nyalakan Listener Koleksi Orders
     unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
       localOrders = snapshot.docs.map((doc) => {
         const data = doc.data();
         return {
-          id: doc.id.slice(-12).toUpperCase(), // Ambil potongan ID dokumen yang unik
+          id: doc.id.slice(-12).toUpperCase(), 
           category: "domestik" as const,
           origin: data.origin || "-",
           destination: data.destination || "-",
@@ -106,7 +110,6 @@ export default function DesktopDashboardPage() {
       console.error("Error fetching orders:", error);
     });
 
-    // Nyalakan Listener Koleksi Quotes
     unsubscribeQuotes = onSnapshot(quotesQuery, (snapshot) => {
       localQuotes = snapshot.docs.map((doc) => {
         const data = doc.data();
@@ -118,10 +121,10 @@ export default function DesktopDashboardPage() {
           weight: Number(data.weight) || 0,
           dimensions: `${data.length || 0}x${data.width || 0}x${data.height || 0} cm`,
           type: "Kargo",
-          status: "Sedang Diproses", // Default internasional masuk status draft awal
+          status: "Sedang Diproses", 
           statusSub: data.status || "Menunggu Penawaran CS",
           date: formatFirebaseDate(data.createdAt),
-          price: 0 // Harga forwarding dihitung manual oleh CS via WhatsApp
+          price: 0 
         };
       });
       combineAndSetData();
@@ -129,14 +132,12 @@ export default function DesktopDashboardPage() {
       console.error("Error fetching quotes:", error);
     });
 
-    // Clean up listeners saat komponen unmount
     return () => {
       unsubscribeOrders();
       unsubscribeQuotes();
     };
   }, [user]);
 
-  // Kalkulasi Statistik Dinamis Berdasarkan Data Firestore Nyata
   const totalActivity = orders.length;
   const processingCount = orders.filter(o => o.status === "Sedang Diproses" || o.status === "Menunggu Pembayaran" || o.status === "Menunggu Follow Up").length;
   const shippingCount = orders.filter(o => o.status === "Dikirim").length;
@@ -144,7 +145,6 @@ export default function DesktopDashboardPage() {
 
   const tabs = ["Semua", "Sedang Diproses", "Dikirim", "Selesai"];
 
-  // Filter tab dinamis (menangani fleksibilitas pemetaan status kustom)
   const filteredOrders = orders.filter(order => {
     if (activeTab === "Semua") return true;
     if (activeTab === "Sedang Diproses") {
@@ -169,7 +169,6 @@ export default function DesktopDashboardPage() {
 
       <div className="max-w-6xl mx-auto relative z-10">
         
-        {/* Atasan Dasbor */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dasbor Pengiriman</h1>
@@ -182,7 +181,6 @@ export default function DesktopDashboardPage() {
           </div>
         </div>
 
-        {/* Kotak Statistik Ringkas Dinamis */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           {[
             { label: "Total Aktivitas", value: `${totalActivity} Order`, sub: "Domestik & Global", icon: Package, color: "text-[#7A171D] bg-[#7A171D]/5" },
@@ -209,7 +207,6 @@ export default function DesktopDashboardPage() {
           ))}
         </div>
 
-        {/* Navigasi Filter Status Tab */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
           <div className="flex border-b border-gray-100 overflow-x-auto scrollbar-none">
             {tabs.map((tab) => (
@@ -233,7 +230,6 @@ export default function DesktopDashboardPage() {
           </div>
         </div>
 
-        {/* Daftar Kartu Pesanan Berdasarkan Real-time Filter */}
         <div className="space-y-4">
           {isLoading ? (
             <div className="min-h-[200px] flex flex-col items-center justify-center bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -343,7 +339,7 @@ export default function DesktopDashboardPage() {
           ) : (
             <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-16 text-center text-gray-400 font-semibold">
               <Package className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-              Tidak ditemukan data riwayat untuk filter status "{activeTab}"
+              Tidak ditemukan data riwayat untuk filter status &quot;{activeTab}&quot;
             </div>
           )}
         </div>

@@ -12,15 +12,39 @@ import Link from "next/link";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, onSnapshot } from "firebase/firestore";
 
+// Tipe data untuk menangani Firebase Timestamp
+type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
+
+// Tipe data untuk riwayat pelacakan (array)
+interface TrackingHistoryItem {
+  id?: string | number; // PERBAIKAN: Menambahkan 'id' secara eksplisit
+  status: string;
+  date: string;
+  description?: string;
+  location?: string;
+  [key: string]: unknown;
+}
+
+// Tipe data utama untuk TrackingData
+interface TrackingData {
+  id: string;
+  category: "Domestik" | "Internasional";
+  status?: string;
+  statusSub?: string;
+  origin?: string;
+  destination?: string;
+  createdAt?: FirebaseTimestamp;
+  trackingHistory?: TrackingHistoryItem[];
+  [key: string]: unknown;
+}
+
 export default function TrackingResultPage({ params }: { params: { resi: string } }) {
-  // Decode nomor resi dari URL (contoh: FG-9831A-SG)
   const awbNumber = decodeURIComponent(params.resi).toUpperCase();
 
-  const [trackingData, setTrackingData] = useState<any>(null);
+  const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);
 
-  // ALGORITMA PENCARIAN REAL-TIME CERDAS
   useEffect(() => {
     let unsubDoc = () => {};
     let unsubQuotes = () => {};
@@ -31,18 +55,20 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       setIsNotFound(false);
       
       try {
-        // 1. Cek di koleksi Quotes (Internasional)
         const qQuotes = query(collection(db, "quotes"), where("quoteId", "==", awbNumber));
         unsubQuotes = onSnapshot(qQuotes, (snapshot) => {
           if (!snapshot.empty) {
             isFound = true;
-            setTrackingData({ category: "Internasional", id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+            const data = snapshot.docs[0].data();
+            setTrackingData({ 
+              category: "Internasional", 
+              id: snapshot.docs[0].id, 
+              ...data 
+            });
             setIsLoading(false);
           }
         });
 
-        // 2. Cek di koleksi Orders (Domestik)
-        // Karena di dashboard kita memotong 12 karakter ID, kita cari referensi dokumen aslinya dulu
         if (!isFound) {
           const ordersSnap = await getDocs(collection(db, "orders"));
           const matchedOrder = ordersSnap.docs.find(d => 
@@ -52,17 +78,20 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
           if (matchedOrder) {
             isFound = true;
-            // Setelah ID asli ketemu, pasang listener real-time khusus untuk 1 dokumen ini saja (Sangat Ringan)
             unsubDoc = onSnapshot(doc(db, "orders", matchedOrder.id), (docSnap) => {
               if (docSnap.exists()) {
-                setTrackingData({ category: "Domestik", id: docSnap.id, ...docSnap.data() });
+                const data = docSnap.data();
+                setTrackingData({ 
+                  category: "Domestik", 
+                  id: docSnap.id, 
+                  ...data 
+                });
                 setIsLoading(false);
               }
             });
           }
         }
 
-        // Timeout Fallback jika resi tidak ada di kedua database
         setTimeout(() => {
           if (!isFound) {
             setIsLoading(false);
@@ -79,24 +108,24 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
     findAndListen();
 
-    // Matikan semua listener saat keluar dari halaman
     return () => {
       unsubDoc();
       unsubQuotes();
     };
   }, [awbNumber]);
 
-  // Fungsi utilitas format tanggal
-  const formatFirebaseDate = (timestamp: any) => {
+  const formatFirebaseDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "Baru saja";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = (typeof timestamp === "object" && "toDate" in timestamp && typeof timestamp.toDate === "function") 
+      ? timestamp.toDate() 
+      : new Date(timestamp as string | number);
+      
     return date.toLocaleString("id-ID", {
       day: "2-digit", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit", timeZoneName: "short"
     });
   };
 
-  // Fungsi Penentuan Ikon Dinamis Berdasarkan Teks Status
   const getIconForStatus = (statusText: string) => {
     const s = statusText.toLowerCase();
     if (s.includes("terbang") || s.includes("udara") || s.includes("pesawat") || s.includes("bandara")) return Plane;
@@ -107,22 +136,18 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     return Clock;
   };
 
-  // Menyusun Timeline (Menggabungkan array dari Admin/TLX jika ada, atau buat default sementara)
   const renderTimeline = () => {
     if (!trackingData) return [];
 
-    // Jika admin sudah mem-push data trackingHistory dari API/Manual
     if (trackingData.trackingHistory && Array.isArray(trackingData.trackingHistory) && trackingData.trackingHistory.length > 0) {
-      // Urutkan dari yang terbaru (asumsi admin menyimpan format timestamp/date standar)
       return [...trackingData.trackingHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((item, idx) => ({
         ...item,
         icon: getIconForStatus(item.status),
-        isCurrent: idx === 0, // Item pertama (terbaru) adalah status saat ini
+        isCurrent: idx === 0,
         isCompleted: true
       }));
     }
 
-    // Default Fallback jika admin belum input resi/update apa-apa
     return [
       {
         id: "default-1",
@@ -141,12 +166,10 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
   return (
     <main className="min-h-screen bg-slate-50 py-10 px-6 relative overflow-hidden">
-      {/* Background Ornamen */}
       <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-[#7A171D] rounded-full blur-[150px] opacity-5 pointer-events-none" />
       
       <div className="max-w-4xl mx-auto z-10 relative">
         
-        {/* Header (Back Button) */}
         <div className="mb-8">
           <Link href="/tracking" className="text-sm text-gray-500 hover:text-[#7A171D] transition-colors font-semibold flex items-center gap-2 mb-4 w-fit">
             <ArrowLeft className="w-4 h-4" /> Cari Resi Lain
@@ -176,7 +199,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
           <AnimatePresence>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
               
-              {/* Header Info Resi */}
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                 <div>
                   <h1 className="text-3xl font-extrabold text-gray-900 mb-1">Hasil Pelacakan</h1>
@@ -198,7 +220,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                 </div>
               </div>
 
-              {/* Info Box Destinasi */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl shadow-[#7A171D]/5 border border-gray-100 mb-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex-1 w-full flex items-center gap-4">
                   <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center shrink-0 border border-gray-200">
@@ -231,19 +252,17 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                 </div>
               </div>
 
-              {/* Timeline Visualisasi */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-xl shadow-[#7A171D]/5 border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-8 flex items-center gap-2 border-b pb-4 border-gray-100">
                   <Clock className="w-5 h-5 text-[#C5A059]" /> Riwayat Perjalanan
                 </h3>
 
                 <div className="relative pl-4 md:pl-8">
-                  {/* Garis vertikal timeline */}
                   <div className="absolute top-0 bottom-0 left-[35px] md:left-[51px] w-0.5 bg-gray-100"></div>
 
                   <div className="space-y-8 relative">
                     {timelineData.map((item, index) => {
-                      const NodeIcon = item.icon as any; // Render Ikon Dinamis
+                      const NodeIcon = item.icon as React.ElementType;
                       
                       return (
                         <motion.div 
@@ -253,7 +272,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                           transition={{ duration: 0.4, delay: index * 0.1 }}
                           className="flex gap-4 md:gap-6 relative"
                         >
-                          {/* Icon Node */}
                           <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 relative z-10 border-4 border-white shadow-sm ${
                             item.isCurrent ? "bg-[#7A171D] text-white shadow-lg shadow-[#7A171D]/30" : 
                             item.isCompleted ? "bg-[#C5A059] text-white" : "bg-gray-100 text-gray-400"
@@ -261,7 +279,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                             <NodeIcon className="w-5 h-5" />
                           </div>
 
-                          {/* Konten Timeline */}
                           <div className="pt-1 flex-1 pb-2">
                             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-1 mb-1">
                               <h4 className={`text-base font-extrabold ${item.isCurrent ? "text-[#7A171D]" : "text-gray-900"}`}>
