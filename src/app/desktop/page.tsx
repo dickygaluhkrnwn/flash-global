@@ -1,79 +1,54 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  MapPin, Box, ArrowRight, ChevronDown, 
-  Check, Minus, Plus, Star, Shield, Globe2, Calculator, MessageCircle
+  MapPin, Box, ArrowRight, Maximize, 
+  Star, Globe2, Calculator, Truck, Lock, X, FastForward, ChevronDown, User
 } from "lucide-react";
-
-// Data Destinasi Dummy dengan Harga Per Kg (Untuk Presentasi)
-const destinations = [
-  { id: "SG", name: "Singapura", flag: "🇸🇬", pricePerKg: 125000 },
-  { id: "MY", name: "Malaysia", flag: "🇲🇾", pricePerKg: 140000 },
-  { id: "TW", name: "Taiwan", flag: "🇹🇼", pricePerKg: 210000 },
-  { id: "AU", name: "Australia", flag: "🇦🇺", pricePerKg: 350000 },
-  { id: "US", name: "Amerika Serikat", flag: "🇺🇸", pricePerKg: 480000 },
-];
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function DesktopLandingPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
+
   const [isLoading, setIsLoading] = useState(false);
   const [estimate, setEstimate] = useState<number | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   
-  // Custom State untuk Form
-  const [isDestOpen, setIsDestOpen] = useState(false);
-  const [selectedDest, setSelectedDest] = useState(destinations[0]);
-  const [weight, setWeight] = useState<number>(5);
+  // State untuk Toggle Kalkulator vs Direct Booking
+  const [showCalculator, setShowCalculator] = useState(false);
+  
+  const [activeTab, setActiveTab] = useState<"domestik" | "internasional">("domestik");
+  const [formData, setFormData] = useState({
+    origin: "",
+    destination: "",
+    weight: "",
+    length: "",
+    width: "",
+    height: ""
+  });
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setEstimate(null);
+  };
 
-  // Menutup dropdown jika klik di luar area
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDestOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Fungsi Kalkulasi Harga
   const handleCalculate = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setEstimate(null); // Reset estimasi sebelumnya
+    setEstimate(null);
 
-    // Simulasi loading kalkulasi API
     setTimeout(() => {
-      const calculatedPrice = selectedDest.pricePerKg * weight;
-      setEstimate(calculatedPrice);
+      const basePrice = activeTab === "domestik" ? 15000 : 150000;
+      const calcWeight = Number(formData.weight) || 1;
+      setEstimate(basePrice * calcWeight);
       setIsLoading(false);
-    }, 1000);
+    }, 1200);
   };
 
-  // Fungsi Stepper Berat
-  const handleWeightChange = (type: "min" | "plus") => {
-    if (type === "min" && weight > 1) {
-      setWeight(weight - 1);
-      setEstimate(null); // Sembunyikan hasil jika berat diubah
-    }
-    if (type === "plus") {
-      setWeight(weight + 1);
-      setEstimate(null); // Sembunyikan hasil jika berat diubah
-    }
-  };
-
-  // Fungsi Redirect ke WA Admin
-  const handleWhatsApp = () => {
-    const adminWA = "6285177886877"; // 0851-7788-6877 format internasional
-    const text = `Halo Admin Flash Global, saya ingin tanya estimasi pengiriman:%0A- Tujuan: ${selectedDest.name}%0A- Berat: ${weight} Kg%0A- Estimasi Web: ${formatRupiah(estimate || 0)}%0A%0AMohon info lebih lanjut, terima kasih.`;
-    window.open(`https://wa.me/${adminWA}?text=${text}`, "_blank");
-  };
-
-  // Format ke Rupiah
   const formatRupiah = (number: number) => {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -82,233 +57,299 @@ export default function DesktopLandingPage() {
     }).format(number);
   };
 
+  const getNextRouteWithData = () => {
+    const params = new URLSearchParams({
+      origin: formData.origin,
+      destination: formData.destination,
+      weight: formData.weight.toString(),
+      l: formData.length.toString(),
+      w: formData.width.toString(),
+      h: formData.height.toString()
+    }).toString();
+
+    return activeTab === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`;
+  };
+
+  const handleDirectBooking = (type: "domestik" | "internasional") => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    router.push(type === "domestik" ? "/delivery/booking" : "/forwarding/quote");
+  };
+
+  const handleProceed = () => {
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+    router.push(getNextRouteWithData());
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center relative overflow-hidden py-20">
-      {/* Background Elements (Maroon & Gold Accents) */}
+      
+      {/* Background Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[120px] opacity-10 pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-[#C5A059] rounded-full blur-[100px] opacity-15 pointer-events-none" />
 
       <div className="max-w-7xl w-full px-6 mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 items-center z-10">
         
-        {/* Kiri: Headline & Marketing Message */}
-        <motion.div
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="relative"
-        >
-          {/* Social Proof Badge */}
+        {/* Kiri: Headline */}
+        <motion.div initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }} className="relative">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm mb-6">
             <div className="flex items-center gap-1 text-[#C5A059]">
-              <Star className="w-4 h-4 fill-current" />
-              <Star className="w-4 h-4 fill-current" />
-              <Star className="w-4 h-4 fill-current" />
-              <Star className="w-4 h-4 fill-current" />
-              <Star className="w-4 h-4 fill-current" />
+              <Star className="w-4 h-4 fill-current"/>
+              <Star className="w-4 h-4 fill-current"/>
+              <Star className="w-4 h-4 fill-current"/>
+              <Star className="w-4 h-4 fill-current"/>
+              <Star className="w-4 h-4 fill-current"/>
             </div>
             <span className="text-xs font-bold text-gray-700">Dipercaya 1000+ Klien B2B</span>
           </div>
 
           <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-[1.1] mb-6">
-            Kirim Paket ke Luar Negeri <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Lebih Cepat & Aman.</span>
+            Solusi Logistik <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Domestik & Global.</span>
           </h1>
           <p className="text-lg text-gray-600 mb-10 max-w-lg leading-relaxed">
-            Solusi ekspedisi forwarder terpercaya. Hitung tarif Anda sekarang dan tim ahli kami akan langsung mengurus bea cukai hingga sampai di tujuan.
+            Dari pengiriman dalam kota hingga ekspor antar benua. Pesan layanan kurir instan atau dapatkan penawaran kargo global tanpa ribet.
           </p>
           
           <div className="flex flex-wrap items-center gap-6 text-sm font-semibold text-gray-700">
             <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
               <div className="w-8 h-8 rounded-full bg-[#7A171D]/10 flex items-center justify-center">
-                <Globe2 className="text-[#7A171D] w-4 h-4" />
+                <Truck className="text-[#7A171D] w-4 h-4"/>
               </div>
-              <span>Jangkauan Global</span>
+              <span>Pengiriman Lokal</span>
             </div>
             <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
               <div className="w-8 h-8 rounded-full bg-[#C5A059]/10 flex items-center justify-center">
-                <Shield className="text-[#C5A059] w-4 h-4" />
+                <Globe2 className="text-[#C5A059] w-4 h-4"/>
               </div>
-              <span>Asuransi Penuh</span>
+              <span>Freight Forwarding</span>
             </div>
           </div>
         </motion.div>
 
-        {/* Kanan: Interactive Booking Widget */}
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="bg-white rounded-3xl shadow-2xl shadow-[#7A171D]/10 p-8 md:p-10 border border-gray-100 relative"
-        >
-          <div className="mb-8 border-b border-gray-100 pb-6">
-            <h2 className="text-2xl font-black text-gray-900">Kalkulator Pengiriman</h2>
-            <p className="text-gray-500 text-sm mt-1 font-medium">Dapatkan penawaran tarif instan hari ini.</p>
+        {/* Kanan: Widget Interaktif */}
+        <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.2 }} className="bg-white rounded-3xl shadow-2xl shadow-[#7A171D]/10 border border-gray-100 relative overflow-hidden flex flex-col">
+          
+          {/* FAST TRACK PANEL */}
+          <div className="p-8 md:p-10 border-b border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
+            <div className="flex items-center gap-3 mb-6">
+              <FastForward className="w-6 h-6 text-[#7A171D]" />
+              <h2 className="text-xl font-black text-gray-900">Pesan Langsung</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button 
+                onClick={() => handleDirectBooking("domestik")}
+                className="group relative overflow-hidden bg-white hover:bg-red-50 border-2 border-gray-100 hover:border-[#7A171D] p-5 rounded-2xl transition-all text-left flex flex-col items-start gap-2"
+              >
+                <div className="w-10 h-10 rounded-full bg-[#7A171D]/10 flex items-center justify-center text-[#7A171D] group-hover:scale-110 transition-transform">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 text-sm">Delivery Domestik</h4>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">Kurir & Darat Lokal</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#7A171D] absolute right-4 top-1/2 -translate-y-1/2 group-hover:translate-x-1 transition-all" />
+              </button>
+
+              <button 
+                onClick={() => handleDirectBooking("internasional")}
+                className="group relative overflow-hidden bg-white hover:bg-amber-50 border-2 border-gray-100 hover:border-[#C5A059] p-5 rounded-2xl transition-all text-left flex flex-col items-start gap-2"
+              >
+                <div className="w-10 h-10 rounded-full bg-[#C5A059]/10 flex items-center justify-center text-[#C5A059] group-hover:scale-110 transition-transform">
+                  <Globe2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-900 text-sm">Freight Forwarding</h4>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">Kargo Internasional</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#C5A059] absolute right-4 top-1/2 -translate-y-1/2 group-hover:translate-x-1 transition-all" />
+              </button>
+            </div>
           </div>
 
-          <form onSubmit={handleCalculate} className="space-y-6 relative">
-            
-            {/* Input Negara Asal (Static/Read-only style) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-[#7A171D]" /> Negara Asal
-              </label>
-              <div className="w-full px-5 py-4 rounded-xl border border-gray-200 bg-gray-50 flex items-center gap-3 opacity-70 cursor-not-allowed">
-                <span className="text-xl">🇮🇩</span>
-                <span className="font-bold text-gray-900">Indonesia</span>
+          {/* KALKULATOR PANEL */}
+          <div className="bg-white">
+            <button 
+              onClick={() => setShowCalculator(!showCalculator)}
+              className="w-full flex items-center justify-between p-6 md:px-10 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Calculator className="w-5 h-5 text-gray-400" />
+                <span className="font-bold text-gray-700 text-sm">Cek Estimasi Harga Dulu (Opsional)</span>
               </div>
-            </div>
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${showCalculator ? "rotate-180" : ""}`} />
+            </button>
 
-            {/* Custom Dropdown Negara Tujuan */}
-            <div className="space-y-2 relative" ref={dropdownRef}>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-[#C5A059]" /> Negara Tujuan
-              </label>
-              
-              <button
-                type="button"
-                onClick={() => setIsDestOpen(!isDestOpen)}
-                className={`w-full px-5 py-4 rounded-xl border ${isDestOpen ? 'border-[#C5A059] ring-4 ring-[#C5A059]/10 bg-white' : 'border-gray-200 bg-gray-50 hover:bg-white'} flex items-center justify-between transition-all outline-none`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{selectedDest.flag}</span>
-                  <span className="font-bold text-gray-900">{selectedDest.name}</span>
-                </div>
-                <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${isDestOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              <AnimatePresence>
-                {isDestOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-40 top-[105%] left-0 w-full bg-white border border-gray-100 rounded-xl shadow-xl shadow-[#7A171D]/10 overflow-hidden py-2"
-                  >
-                    {destinations.map((dest) => (
-                      <div
-                        key={dest.id}
-                        onClick={() => {
-                          setSelectedDest(dest);
-                          setEstimate(null); // Reset estimasi saat tujuan diubah
-                          setIsDestOpen(false);
-                        }}
-                        className="px-5 py-3 hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl grayscale group-hover:grayscale-0 transition-all">{dest.flag}</span>
-                          <span className={`font-bold ${selectedDest.id === dest.id ? 'text-[#7A171D]' : 'text-gray-700'}`}>
-                            {dest.name}
-                          </span>
-                        </div>
-                        {selectedDest.id === dest.id && (
-                          <Check className="w-4 h-4 text-[#7A171D]" />
-                        )}
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Custom Input Berat (Stepper) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                <Box className="w-3.5 h-3.5 text-gray-400" /> Berat Barang (Kg)
-              </label>
-              
-              <div className="flex items-center gap-4">
-                <button 
-                  type="button" 
-                  onClick={() => handleWeightChange("min")}
-                  className="w-14 h-14 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center hover:bg-[#7A171D] hover:border-[#7A171D] hover:text-white transition-all text-gray-600 active:scale-95"
+            <AnimatePresence>
+              {showCalculator && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
                 >
-                  <Minus className="w-5 h-5" />
-                </button>
-                
-                <div className="flex-1 relative">
-                  <input 
-                    type="number" 
-                    min="1"
-                    value={weight}
-                    onChange={(e) => {
-                      setWeight(Number(e.target.value) || 1);
-                      setEstimate(null);
-                    }}
-                    className="w-full px-5 py-4 text-center rounded-xl border-2 border-gray-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-white font-black text-2xl text-gray-900"
-                    required
-                  />
-                  <span className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none">Kg</span>
-                </div>
-
-                <button 
-                  type="button" 
-                  onClick={() => handleWeightChange("plus")}
-                  className="w-14 h-14 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center hover:bg-[#7A171D] hover:border-[#7A171D] hover:text-white transition-all text-gray-600 active:scale-95"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Submit Button (Hitung Estimasi) */}
-            {!estimate && (
-              <button 
-                type="submit" 
-                disabled={isLoading}
-                className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-5 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-[#7A171D]/30 disabled:opacity-70 disabled:cursor-not-allowed mt-8 group text-lg"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Menghitung...
-                  </>
-                ) : (
-                  <>
-                    <Calculator className="w-5 h-5" /> Hitung Estimasi Biaya
-                  </>
-                )}
-              </button>
-            )}
-          </form>
-
-          {/* Hasi Estimasi & Action Buttons (Muncul setelah tombol hitung diklik) */}
-          <AnimatePresence>
-            {estimate !== null && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: "auto", marginTop: 24 }}
-                exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="bg-slate-50 border border-[#C5A059]/30 rounded-2xl p-6 relative">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Estimasi Biaya Pengiriman</p>
-                  <h3 className="text-3xl font-black text-[#7A171D] mb-6">{formatRupiah(estimate)}</h3>
-                  
-                  <div className="flex flex-col gap-3">
-                    {/* Primary Action - Lanjut Booking */}
-                    <button 
-                      onClick={() => router.push(`/isi-data/TOKEN-MOCKUP-${Date.now()}`)}
-                      className="w-full bg-[#C5A059] hover:bg-[#DFBE7B] text-gray-900 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#C5A059]/20 group"
-                    >
-                      Lanjut Isi Data Booking <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
+                  <div className="p-6 md:p-10 pt-0 border-t border-gray-100">
                     
-                    {/* Secondary Action - Tanya WA */}
-                    <button 
-                      onClick={handleWhatsApp}
-                      className="w-full bg-white hover:bg-green-50 text-green-600 border border-green-200 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
-                    >
-                      <MessageCircle className="w-5 h-5" /> Tanya via WhatsApp
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                    {/* Tab Kalkulator */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl mb-6 mt-4 relative">
+                      <button 
+                        type="button" 
+                        onClick={() => { setActiveTab("domestik"); setEstimate(null); }} 
+                        className={`flex-1 py-3 text-xs font-bold transition-all rounded-lg relative z-10 ${activeTab === "domestik" ? "text-[#7A171D]" : "text-gray-500 hover:text-gray-700"}`}
+                      >
+                        Lokal (Domestik)
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => { setActiveTab("internasional"); setEstimate(null); }} 
+                        className={`flex-1 py-3 text-xs font-bold transition-all rounded-lg relative z-10 ${activeTab === "internasional" ? "text-[#C5A059]" : "text-gray-500 hover:text-gray-700"}`}
+                      >
+                        Global (Internasional)
+                      </button>
+                      
+                      {/* Animasi Background Tab */}
+                      <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-all duration-300 ${activeTab === "domestik" ? "left-1" : "left-[calc(50%+2px)]"}`}></div>
+                    </div>
 
+                    <form onSubmit={handleCalculate} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3"/> Asal
+                          </label>
+                          <input 
+                            type="text" 
+                            name="origin" 
+                            value={formData.origin} 
+                            onChange={handleInputChange} 
+                            // PERBAIKAN: Placeholder Dinamis
+                            placeholder={activeTab === "domestik" ? "Cth: Jakarta Selatan" : "Negara / Kota Asal"} 
+                            className={`w-full px-3 py-3 rounded-xl border border-gray-200 outline-none text-sm font-semibold bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} 
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                            <MapPin className={`w-3 h-3 ${activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]"}`}/> Tujuan
+                          </label>
+                          <input 
+                            type="text" 
+                            name="destination" 
+                            value={formData.destination} 
+                            onChange={handleInputChange} 
+                            // PERBAIKAN: Placeholder Dinamis
+                            placeholder={activeTab === "domestik" ? "Cth: Surabaya" : "Negara / Kota Tujuan"} 
+                            className={`w-full px-3 py-3 rounded-xl border border-gray-200 outline-none text-sm font-semibold bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} 
+                            required 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                            <Box className="w-3 h-3"/> Berat (Kg)
+                          </label>
+                          <input 
+                            type="number" 
+                            name="weight" 
+                            min="1" 
+                            value={formData.weight} 
+                            onChange={handleInputChange} 
+                            placeholder="0" 
+                            className={`w-full px-3 py-3 rounded-xl border border-gray-200 outline-none text-sm font-bold text-center bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} 
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5">
+                            <Maximize className="w-3 h-3"/> PxLxT (cm)
+                          </label>
+                          <div className="flex gap-1">
+                            <input type="number" name="length" placeholder="P" value={formData.length} onChange={handleInputChange} required className={`w-full px-1 py-3 text-center rounded-xl border border-gray-200 outline-none font-bold text-xs bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} />
+                            <input type="number" name="width" placeholder="L" value={formData.width} onChange={handleInputChange} required className={`w-full px-1 py-3 text-center rounded-xl border border-gray-200 outline-none font-bold text-xs bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} />
+                            <input type="number" name="height" placeholder="T" value={formData.height} onChange={handleInputChange} required className={`w-full px-1 py-3 text-center rounded-xl border border-gray-200 outline-none font-bold text-xs bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {!estimate && (
+                        <button 
+                          type="submit" 
+                          disabled={isLoading} 
+                          className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 mt-4 text-sm transition-all disabled:opacity-70"
+                        >
+                          {isLoading ? <span className="animate-pulse">Menghitung...</span> : "Hitung Estimasi"}
+                        </button>
+                      )}
+                    </form>
+
+                    <AnimatePresence>
+                      {estimate !== null && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-5 bg-slate-50 border border-gray-200 rounded-2xl text-center">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                            {activeTab === "domestik" ? "Estimasi Tarif Dasar" : "Estimasi Kasar (Belum Pajak)"}
+                          </p>
+                          <h3 className={`text-2xl font-black mb-4 ${activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]"}`}>
+                            {formatRupiah(estimate)}
+                          </h3>
+                          <button 
+                            onClick={handleProceed} 
+                            // PERBAIKAN: Tombol Lanjut berubah Emas jika tab Internasional
+                            className={`w-full text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm transition-all ${activeTab === "domestik" ? "bg-[#7A171D] hover:bg-[#5A0E13]" : "bg-[#C5A059] hover:bg-[#b08d4a]"}`}
+                          >
+                            {activeTab === "domestik" ? "Lanjut Pesan Kurir" : "Lengkapi Data Forwarding"} <ArrowRight className="w-4 h-4"/>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </motion.div>
       </div>
+
+      {/* CUSTOM AUTH MODAL (Pengganti Alert) */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowAuthModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-pointer" />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#7A171D] to-[#C5A059]" />
+              <button onClick={() => setShowAuthModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 transition-colors"><X className="w-6 h-6" /></button>
+
+              <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6">
+                <Lock className="w-8 h-8 text-[#7A171D]" />
+              </div>
+              
+              <h3 className="text-2xl font-extrabold text-gray-900 mb-2">Akses Terbatas</h3>
+              <p className="text-gray-500 leading-relaxed mb-8 text-sm">
+                Data dan riwayat pesanan sangat penting. Silakan masuk atau daftar akun Flash Global terlebih dahulu untuk melanjutkan pesanan.
+              </p>
+              
+              <div className="flex gap-4">
+                <button onClick={() => setShowAuthModal(false)} className="flex-1 py-3.5 px-4 rounded-xl font-bold text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
+                  Batal
+                </button>
+                <button onClick={() => router.push("/login")} className="flex-1 py-3.5 px-4 rounded-xl font-bold text-sm text-white bg-[#7A171D] hover:bg-[#5A0E13] shadow-lg shadow-[#7A171D]/20 transition-all flex items-center justify-center gap-2">
+                  <User className="w-4 h-4" /> Login
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </main>
   );
 }

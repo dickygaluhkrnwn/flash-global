@@ -15,9 +15,9 @@ export default function TrackingSearchPage() {
     if (!resi.trim()) return;
 
     setIsLoading(true);
-    // Simulasi loading sebelum pindah ke halaman detail resi
+    // Routing mengarah murni ke URL Publik (tanpa /desktop)
     setTimeout(() => {
-      router.push(`/tracking/${resi.trim()}`);
+      router.push(`/tracking/${resi.trim().toUpperCase()}`);
     }, 800);
   };
 
@@ -40,7 +40,7 @@ export default function TrackingSearchPage() {
           Lacak Paket Anda
         </h1>
         <p className="text-lg text-gray-600 mb-10">
-          Masukkan nomor resi (AWB) Flash Global Anda untuk memantau status pengiriman internasional secara real-time.
+          Masukkan Nomor Resi / AWB atau ID Order Flash Global Anda untuk memantau status pengiriman logistik (Domestik & Global) secara real-time.
         </p>
 
         <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
@@ -52,8 +52,8 @@ export default function TrackingSearchPage() {
               type="text" 
               value={resi}
               onChange={(e) => setResi(e.target.value)}
-              placeholder="Contoh: FG-9831A-SG" 
-              className="w-full pl-16 pr-40 py-6 rounded-3xl border-2 border-white shadow-xl shadow-[#7A171D]/5 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-white text-lg font-bold text-gray-800 placeholder-gray-400"
+              placeholder="Contoh: FGL-019283 / FFW-81923" 
+              className="w-full pl-16 pr-40 py-6 rounded-3xl border-2 border-white shadow-xl shadow-[#7A171D]/5 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-white text-lg font-bold text-gray-800 placeholder-gray-400 uppercase"
               required
             />
             <button 
@@ -72,7 +72,7 @@ export default function TrackingSearchPage() {
 
         <div className="mt-12 flex flex-wrap justify-center gap-6 text-sm font-semibold text-gray-500">
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
-            <ShieldCheck className="w-4 h-4 text-green-500" /> Data Aman & Terenkripsi
+            <ShieldCheck className="w-4 h-4 text-green-500" /> Manifes Transparan
           </div>
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-sm border border-gray-100">
             <MapPin className="w-4 h-4 text-[#C5A059]" /> Update Real-time

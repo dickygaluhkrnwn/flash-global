@@ -1,20 +1,28 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import { Inter } from "next/font/google";
+import "@/app/globals.css"; // Menggunakan absolute path (Aman dari error hantu TS)
+import AuthProvider from "@/components/AuthProvider";
+
+// Inisialisasi font bawaan Next.js
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Flash Global | Ekspedisi & Forwarder Internasional",
-  description: "Portal resmi Flash Global. Solusi pengiriman kargo dan paket ke luar negeri dengan cepat, aman, dan terpercaya.",
+  title: "Portal Flash Global",
+  description: "Solusi Logistik Domestik & Global",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="id">
-      <body className="antialiased">
-        {children}
+      <body className={inter.className}>
+        {/* Bungkus seluruh aplikasi dengan provider otentikasi global */}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
