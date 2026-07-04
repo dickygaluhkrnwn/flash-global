@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Save, CheckCircle2, Receipt, Mail, Camera, ShieldCheck } from "lucide-react";
+import { Save, CheckCircle2, Receipt, Mail, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -55,8 +55,12 @@ export default function OrdersTab() {
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    } catch (error: any) {
-      setErrorMsg(error.message || "Gagal menyimpan preferensi pesanan.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg("Gagal menyimpan preferensi pesanan.");
+      }
     } finally {
       setIsLoading(false);
     }

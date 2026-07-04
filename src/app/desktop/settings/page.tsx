@@ -13,7 +13,15 @@ import BusinessTab from "./tabs/BusinessTab";
 import OrdersTab from "./tabs/OrdersTab";
 import LocationLanguageTab from "./tabs/LocationLanguageTab";
 import NotificationsTab from "./tabs/NotificationsTab";
-import TermsTab from "./tabs/TermsTab"; // <-- IMPORT TAB TERAKHIR KITA
+import TermsTab from "./tabs/TermsTab"; 
+
+// --- INTERFACE UNTUK PROPS COMPONENT ---
+interface SidebarButtonProps {
+  icon: React.ElementType;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}
 
 export default function DesktopSettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
@@ -69,7 +77,6 @@ export default function DesktopSettingsPage() {
                 {activeTab === "orders" && <OrdersTab />}
                 {activeTab === "location" && <LocationLanguageTab />}
                 {activeTab === "notifications" && <NotificationsTab />}
-                {/* RENDER TERMS TAB DI SINI */}
                 {activeTab === "terms" && <TermsTab />} 
               </motion.div>
             </AnimatePresence>
@@ -81,7 +88,7 @@ export default function DesktopSettingsPage() {
 }
 
 // Komponen Helper untuk Tombol Sidebar
-function SidebarButton({ icon: Icon, label, isActive, onClick }: any) {
+function SidebarButton({ icon: Icon, label, isActive, onClick }: SidebarButtonProps) {
   return (
     <button onClick={onClick} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all w-full text-left ${isActive ? "bg-gray-100 text-[#7A171D]" : "text-gray-600 hover:bg-gray-50"}`}>
       <Icon className="w-5 h-5 shrink-0" /> {label}

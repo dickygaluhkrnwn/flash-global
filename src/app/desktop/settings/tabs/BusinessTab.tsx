@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Crown, ArrowRight, CheckCircle2, Building, 
+  Crown, ArrowRight, Building, 
   MapPin, User, Briefcase, TrendingUp, 
   FileCheck, ShieldAlert, MessageCircle 
 } from "lucide-react";
@@ -70,7 +70,9 @@ export default function BusinessTab() {
               legalCompanyName: data.companyName || "" 
             }));
           }
-        } catch (error) {}
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        }
       };
       fetchUserData();
     }
@@ -82,7 +84,7 @@ export default function BusinessTab() {
       await setDoc(doc(db, "users", user.uid), { ...formData, updatedAt: serverTimestamp() }, { merge: true });
       setIsEditing(false);
     } catch (error) {
-      console.error(error);
+      console.error("Error saving company data:", error);
     }
   };
 

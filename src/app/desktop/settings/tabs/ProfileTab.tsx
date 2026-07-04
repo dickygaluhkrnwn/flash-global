@@ -41,7 +41,9 @@ export default function ProfileTab() {
           if (userDoc.exists()) {
             setFormData(prev => ({ ...prev, phone: userDoc.data().phone || "" }));
           }
-        } catch (error) {}
+        } catch (error) {
+          console.error("Gagal menarik data user:", error);
+        }
       };
       fetchUserData();
     }
@@ -89,8 +91,12 @@ export default function ProfileTab() {
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    } catch (error: any) {
-      setErrorMsg(error.message || "Gagal menyimpan profil.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg("Gagal menyimpan profil.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +123,12 @@ export default function ProfileTab() {
         <div className="flex items-center gap-6">
           <div className="relative group">
             <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden bg-gray-100 flex items-center justify-center">
-              {avatarPreview ? <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" /> : <User className="w-10 h-10 text-gray-400" />}
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-10 h-10 text-gray-400" />
+              )}
             </div>
             <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 bg-gray-900 rounded-full border-2 border-white flex items-center justify-center text-white hover:bg-[#7A171D] transition-colors shadow">
               <Camera className="w-4 h-4" />

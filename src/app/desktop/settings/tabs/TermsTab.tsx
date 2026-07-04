@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  FileText, ShieldCheck, ChevronDown, 
+  ShieldCheck, ChevronDown, 
   ChevronUp, Scale, Download 
 } from "lucide-react";
 
@@ -59,7 +59,7 @@ export default function TermsTab() {
               >
                 <div className="p-6 md:p-8 bg-white max-h-[400px] overflow-y-auto custom-scrollbar text-sm text-gray-600 space-y-4">
                   <h4 className="font-black text-gray-900 text-base mb-2">1. Ketentuan Layanan Pengiriman</h4>
-                  <p>PT Flash Global Logistik ("Flash Global") bertindak sebagai perantara dan penyedia layanan pengiriman kargo dan logistik. Dengan menggunakan layanan kami, Anda ("Pengguna") setuju untuk tunduk pada seluruh syarat dan ketentuan ini.</p>
+                  <p>PT Flash Global Logistik (&quot;Flash Global&quot;) bertindak sebagai perantara dan penyedia layanan pengiriman kargo dan logistik. Dengan menggunakan layanan kami, Anda (&quot;Pengguna&quot;) setuju untuk tunduk pada seluruh syarat dan ketentuan ini.</p>
                   
                   <h4 className="font-black text-gray-900 text-base mt-4 mb-2">2. Barang yang Dilarang (Prohibited Items)</h4>
                   <p>Pengguna dilarang keras mengirimkan barang-barang berikut melalui jaringan Flash Global:</p>
@@ -132,7 +132,7 @@ export default function TermsTab() {
                   </ul>
 
                   <h4 className="font-black text-gray-900 text-base mt-4 mb-2">3. Perlindungan & Keamanan Data</h4>
-                  <p>Seluruh data Anda dienkripsi dan disimpan menggunakan infrastruktur server berstandar internasional. Kami <strong>tidak pernah menjual</strong> atau menyewakan data operasional maupun data pribadi pelanggan kepada pihak ketiga untuk tujuan pemasaran eksternal.</p>
+                  <p>Seluruh data Anda dienkripsi and disimpan menggunakan infrastruktur server berstandar internasional. Kami <strong>tidak pernah menjual</strong> atau menyewakan data operasional maupun data pribadi pelanggan kepada pihak ketiga untuk tujuan pemasaran eksternal.</p>
 
                   <h4 className="font-black text-gray-900 text-base mt-4 mb-2">4. Pembagian Data Kepada Pihak Ketiga</h4>
                   <p>Kami hanya membagikan informasi spesifik (seperti alamat dan nomor telepon penerima) secara terbatas kepada Mitra Pengemudi (Driver) semata-mata demi keberhasilan pengiriman kargo Anda ke tujuan.</p>

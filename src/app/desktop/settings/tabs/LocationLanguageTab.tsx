@@ -73,8 +73,12 @@ export default function LocationLanguageTab() {
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    } catch (error: any) {
-      setErrorMsg(error.message || "Gagal menyimpan pengaturan regional.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg("Gagal menyimpan pengaturan regional.");
+      }
     } finally {
       setIsLoading(false);
     }

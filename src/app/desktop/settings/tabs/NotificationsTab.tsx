@@ -11,6 +11,16 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
+// --- INTERFACE UNTUK PROPS TOGGLE ROW ---
+interface ToggleRowProps {
+  icon: React.ElementType;
+  label: string;
+  desc: string;
+  isChecked: boolean;
+  onChange: () => void;
+  locked?: boolean;
+}
+
 export default function NotificationsTab() {
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
@@ -68,15 +78,19 @@ export default function NotificationsTab() {
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    } catch (error: any) {
-      setErrorMsg(error.message || "Gagal menyimpan preferensi notifikasi.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg("Gagal menyimpan preferensi notifikasi.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Komponen Helper untuk Baris Toggle (Biar kode rapi)
-  const ToggleRow = ({ icon: Icon, label, desc, isChecked, onChange, locked = false }: any) => (
+  // Komponen Helper untuk Baris Toggle (Sudah Tipe Aman)
+  const ToggleRow = ({ icon: Icon, label, desc, isChecked, onChange, locked = false }: ToggleRowProps) => (
     <div className="flex items-center justify-between py-3">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-slate-100 text-gray-500 rounded-lg shrink-0">
