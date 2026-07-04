@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Building2, Lock, ArrowRight, 
-  ShieldCheck, QrCode, Upload, Copy, 
+  QrCode, Upload, Copy, 
   CheckCircle, MessageCircle, AlertCircle, ReceiptText
 } from "lucide-react";
 

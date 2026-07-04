@@ -7,7 +7,7 @@ import {
   ArrowUpRight, FileText, Truck, 
   MapPin, Calendar, Star, Search, 
   Download, MessageCircle, AlertCircle,
-  SlidersHorizontal, X, ArrowDownWideNarrow, ArrowUpWideNarrow
+  SlidersHorizontal, X, ArrowDownWideNarrow
 } from "lucide-react";
 import Link from "next/link"; 
 
@@ -159,7 +159,7 @@ export default function DesktopDashboardPage() {
   }, [user]);
 
   // LOGIKA ADVANCED FILTERING & SORTING (SUPER ENGINE)
-  let filteredOrders = orders.filter(order => {
+  const filteredOrders = orders.filter(order => {
     // 1. Filter Tab Status
     if (activeTab !== "Semua") {
       if (activeTab === "Sedang Diproses") {

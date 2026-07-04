@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
   User, Phone, Mail, MapPin, Box, 
-  DollarSign, Truck, Shield, Users, 
+  DollarSign, Shield, Users, 
   ArrowRight, CheckCircle, Navigation, 
-  HelpCircle, Plus, Trash2, Info, Clock, Route, Car, ArrowDown
+  HelpCircle, Plus, Trash2, Clock, Route, Car, ArrowDown
 } from "lucide-react";
 
 // --- IMPORT FIREBASE CORE ---
@@ -97,6 +97,7 @@ function BookingForm() {
           setVehicles(vData);
           setSelectedVehicle(vData[0]);
         } else {
+          // Jika admin belum mengatur armada, gunakan fallback
           setVehicles(FALLBACK_VEHICLES);
           setSelectedVehicle(FALLBACK_VEHICLES[0]);
         }
