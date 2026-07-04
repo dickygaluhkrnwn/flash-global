@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "@/app/globals.css"; // Menggunakan absolute path (Aman dari error hantu TS)
+// PERBAIKAN: Gunakan relative path khusus untuk file CSS global
+import "./globals.css"; 
 import AuthProvider from "@/components/AuthProvider";
 
 // Inisialisasi font bawaan Next.js

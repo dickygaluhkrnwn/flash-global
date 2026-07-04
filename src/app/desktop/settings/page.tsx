@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, Shield, Save, Building, MapPin, 
   Mail, Camera, Crown, CheckCircle2, 
-  ArrowRight, Lock, Edit3, X
+  ArrowRight, Lock, Edit3, X, Phone, ArrowLeft
 } from "lucide-react";
 import Link from "next/link";
 
@@ -22,6 +22,7 @@ export default function DesktopSettingsPage() {
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingCompany, setIsEditingCompany] = useState(false);
+  const [showB2bForm, setShowB2bForm] = useState(false); // State baru untuk kontrol form B2B
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -29,12 +30,20 @@ export default function DesktopSettingsPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State Form Data
+  // State Form Data Profil & Perusahaan
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     companyName: "",
     defaultAddress: "",
+  });
+
+  // State Form Khusus Pengajuan B2B
+  const [b2bForm, setB2bForm] = useState({
+    usaha: "",
+    pic: "",
+    hp: "",
+    email: ""
   });
 
   // State Foto Profil & File Cloudinary
@@ -44,6 +53,7 @@ export default function DesktopSettingsPage() {
   useEffect(() => {
     if (user?.uid) {
       setFormData(prev => ({ ...prev, name: user.name || "" }));
+      setB2bForm(prev => ({ ...prev, pic: user.name || "", email: user.email || "" }));
       setAvatarPreview(user.photoURL || null);
 
       const fetchUserData = async () => {
@@ -56,6 +66,12 @@ export default function DesktopSettingsPage() {
               phone: data.phone || "",
               companyName: data.companyName || "",
               defaultAddress: data.defaultAddress || ""
+            }));
+            // Auto-fill B2B form dari data yang ada di database
+            setB2bForm(prev => ({
+              ...prev,
+              usaha: data.companyName || "",
+              hp: data.phone || ""
             }));
           }
         } catch (error) {
@@ -71,12 +87,17 @@ export default function DesktopSettingsPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleB2bInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setB2bForm(prev => ({ ...prev, [name]: value }));
+  };
+
   // Handle Pilih Foto Profil
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setSelectedFile(file); // Menyimpan file untuk diupload ke Cloudinary
-      setAvatarPreview(URL.createObjectURL(file)); // Preview sementara di browser
+      setSelectedFile(file);
+      setAvatarPreview(URL.createObjectURL(file)); 
     }
   };
 
@@ -91,7 +112,6 @@ export default function DesktopSettingsPage() {
     try {
       let finalPhotoURL = user.photoURL || "";
 
-      // 1. Jika ada file gambar baru, Upload ke Cloudinary dulu
       if (selectedFile) {
         const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
         const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -118,14 +138,12 @@ export default function DesktopSettingsPage() {
         }
       }
 
-      // 2. Update Firebase Auth (Nama & URL Foto Cloudinary)
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, {
           displayName: formData.name,
           photoURL: finalPhotoURL || auth.currentUser.photoURL,
         });
 
-        // 3. Update Zustand Store agar Navbar otomatis berubah
         login({
           ...user,
           name: formData.name,
@@ -133,7 +151,6 @@ export default function DesktopSettingsPage() {
         });
       }
 
-      // 4. Simpan Data ke Firestore
       await setDoc(doc(db, "users", user.uid), {
         name: formData.name,
         phone: formData.phone,
@@ -143,7 +160,7 @@ export default function DesktopSettingsPage() {
 
       setIsSuccess(true);
       setIsEditingProfile(false); 
-      setSelectedFile(null); // Bersihkan antrean file
+      setSelectedFile(null);
       setTimeout(() => setIsSuccess(false), 4000);
       
     } catch (error: unknown) {
@@ -183,21 +200,34 @@ export default function DesktopSettingsPage() {
     }
   };
 
-  const handleUpgradeB2B = async () => {
+  // Fungsi Request Kemitraan B2B (Firestore + Direct WA)
+  const handleUpgradeB2B = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user?.uid) return;
+
     setIsLoading(true);
+    setErrorMsg("");
+
     try {
       await setDoc(doc(db, "b2b_requests", user.uid), {
         userId: user.uid,
-        email: user.email,
-        name: formData.name || user.name,
-        companyName: formData.companyName || "Belum Diisi",
+        email: b2bForm.email,
+        name: b2bForm.pic,
+        companyName: b2bForm.usaha,
+        phone: b2bForm.hp,
         status: "Menunggu Peninjauan",
         requestedAt: serverTimestamp()
       });
-      alert("Pengajuan Akun Bisnis (B2B) berhasil dikirim! Tim kami akan segera menghubungi Anda.");
-    } catch (error) {
+
+      const adminWhatsApp = "6281234567890"; 
+      const message = `Halo Tim Legal Flash Global,\n\nSaya tertarik untuk melakukan *Upgrade Akun Kemitraan Bisnis (B2B)*. Berikut adalah data awal usaha saya:\n\n🏢 *Nama Usaha:* ${b2bForm.usaha}\n👤 *Nama PIC:* ${b2bForm.pic}\n📱 *No. HP:* ${b2bForm.hp}\n✉️ *Email:* ${b2bForm.email}\n\nMohon panduannya untuk proses verifikasi dokumen legalitas lebih lanjut.\n\nTerima kasih.`;
+      
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/${adminWhatsApp}?text=${encodedMessage}`, "_blank");
+
+    } catch (error: unknown) {
       console.error("Gagal mengajukan B2B:", error);
+      setErrorMsg("Gagal mengirim pengajuan. Pastikan koneksi internet Anda stabil.");
     } finally {
       setIsLoading(false);
     }
@@ -240,7 +270,7 @@ export default function DesktopSettingsPage() {
               <button onClick={() => { setActiveTab("perusahaan"); setIsEditingCompany(false); }} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeTab === "perusahaan" ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" : "text-gray-600 hover:bg-slate-50"}`}>
                 <Building className="w-5 h-5" /> Data Perusahaan
               </button>
-              <button onClick={() => setActiveTab("b2b")} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeTab === "b2b" ? "bg-gradient-to-r from-[#C5A059] to-[#DFBE7B] text-gray-900 shadow-md shadow-[#C5A059]/30" : "text-gray-600 hover:bg-slate-50"}`}>
+              <button onClick={() => { setActiveTab("b2b"); setShowB2bForm(false); }} className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeTab === "b2b" ? "bg-gradient-to-r from-[#C5A059] to-[#DFBE7B] text-gray-900 shadow-md shadow-[#C5A059]/30" : "text-gray-600 hover:bg-slate-50"}`}>
                 <Crown className="w-5 h-5" /> Kemitraan Bisnis
               </button>
               <div className="my-2 border-t border-gray-100"></div>
@@ -428,28 +458,102 @@ export default function DesktopSettingsPage() {
               {/* KONTEN TAB: MODE BISNIS (UPGRADE B2B) */}
               {activeTab === "b2b" && (
                 <div className="space-y-6">
-                  <div className="bg-gradient-to-br from-gray-900 to-slate-800 rounded-3xl p-8 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
-                    <div className="w-16 h-16 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[#C5A059]/20 relative z-10">
-                      <Crown className="w-8 h-8 text-gray-900" />
-                    </div>
-                    <h2 className="text-3xl font-black mb-3 relative z-10">Upgrade ke Akun Korporat</h2>
-                    <p className="text-gray-300 leading-relaxed max-w-xl relative z-10 mb-8">
-                      Tingkatkan kapabilitas logistik bisnis Anda. Nikmati fitur eksklusif B2B yang dirancang khusus untuk pengiriman volume besar dan rutin.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10 mb-8">
-                      <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Pembayaran Tempo (Sistem Invoice)</span></div>
-                      <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Harga Grosir / Diskon Volume Khusus</span></div>
-                      <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Prioritas Armada & Customer Service</span></div>
-                      <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Laporan Manifes & Analitik Bulanan</span></div>
-                    </div>
-                    <button type="button" onClick={handleUpgradeB2B} disabled={isLoading} className="bg-gradient-to-r from-[#C5A059] to-[#DFBE7B] hover:from-[#b08d4a] hover:to-[#C5A059] text-gray-900 font-bold px-8 py-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-[#C5A059]/20 disabled:opacity-70 disabled:cursor-not-allowed">
-                      {isLoading ? "Mengirim Pengajuan..." : "Ajukan Kemitraan Sekarang"} <ArrowRight className="w-5 h-5" />
-                    </button>
-                  </div>
+                  <AnimatePresence mode="wait">
+                    {!showB2bForm ? (
+                      /* MODE VIEW: PENAWARAN & TOMBOL MENUJU FORM */
+                      <motion.div key="offer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-gradient-to-br from-gray-900 to-slate-800 rounded-3xl p-8 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
+                        
+                        <div className="w-16 h-16 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[#C5A059]/20 relative z-10">
+                          <Crown className="w-8 h-8 text-gray-900" />
+                        </div>
+                        
+                        <h2 className="text-3xl font-black mb-3 relative z-10">Upgrade ke Akun Korporat</h2>
+                        <p className="text-gray-300 leading-relaxed max-w-xl relative z-10 mb-8">
+                          Tingkatkan kapabilitas logistik bisnis Anda. Nikmati fitur eksklusif B2B yang dirancang khusus untuk pengiriman volume besar dan rutin.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10 mb-8">
+                          <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Pembayaran Tempo (Sistem Invoice)</span></div>
+                          <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Harga Grosir / Diskon Volume Khusus</span></div>
+                          <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Prioritas Armada & Customer Service</span></div>
+                          <div className="flex items-start gap-3"><CheckCircle2 className="w-5 h-5 text-[#C5A059] shrink-0" /><span className="text-sm font-medium">Laporan Manifes & Analitik Bulanan</span></div>
+                        </div>
+
+                        <button 
+                          type="button" 
+                          onClick={() => setShowB2bForm(true)} 
+                          className="bg-gradient-to-r from-[#C5A059] to-[#DFBE7B] hover:from-[#b08d4a] hover:to-[#C5A059] text-gray-900 font-bold px-8 py-4 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-[#C5A059]/20 relative z-10"
+                        >
+                          Ajukan Kemitraan Sekarang <ArrowRight className="w-5 h-5" />
+                        </button>
+                      </motion.div>
+                    ) : (
+                      /* MODE FORM: PENGISIAN DATA */
+                      <motion.div key="form" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm">
+                        <div className="flex items-center gap-3 mb-6">
+                          <button type="button" onClick={() => setShowB2bForm(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors">
+                            <ArrowLeft className="w-4 h-4" />
+                          </button>
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">Formulir Pengajuan Cepat</h3>
+                            <p className="text-xs text-gray-500">Lengkapi data awal untuk verifikasi via WhatsApp.</p>
+                          </div>
+                        </div>
+
+                        <form onSubmit={handleUpgradeB2B} className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-semibold text-gray-700">Nama Usaha / PT</label>
+                              <div className="relative">
+                                <Building className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" name="usaha" value={b2bForm.usaha} onChange={handleB2bInputChange} placeholder="PT. Logistik Maju" className="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#7A171D] text-gray-900 font-semibold" required />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-semibold text-gray-700">Nama Penanggung Jawab (PIC)</label>
+                              <div className="relative">
+                                <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" name="pic" value={b2bForm.pic} onChange={handleB2bInputChange} placeholder="Nama Anda" className="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#7A171D] text-gray-900 font-semibold" required />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-semibold text-gray-700">Nomor WhatsApp PIC</label>
+                              <div className="relative">
+                                <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="tel" name="hp" value={b2bForm.hp} onChange={handleB2bInputChange} placeholder="0812..." className="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#7A171D] text-gray-900 font-semibold" required />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-semibold text-gray-700">Email Perusahaan</label>
+                              <div className="relative">
+                                <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="email" name="email" value={b2bForm.email} onChange={handleB2bInputChange} placeholder="email@perusahaan.com" className="w-full pl-9 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-[#7A171D] text-gray-900 font-semibold" required />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-4 flex items-center justify-end gap-3">
+                            <button type="button" onClick={() => setShowB2bForm(false)} className="px-6 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
+                              Batal
+                            </button>
+                            <button type="submit" disabled={isLoading} className="bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-8 py-3 rounded-xl flex items-center gap-2 transition-all shadow-md disabled:opacity-70">
+                              {isLoading ? "Memproses Data..." : (
+                                <>Kirim via WhatsApp <ArrowRight className="w-5 h-5" /></>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl text-amber-800 text-xs leading-relaxed flex gap-3">
                     <Shield className="w-5 h-5 shrink-0" />
-                    <p><strong>Verifikasi Dokumen:</strong> Setelah pengajuan dikirim, tim Legal Flash Global akan menghubungi Anda untuk meminta dokumen legalitas perusahaan (NIB, NPWP, Akta) sebagai syarat validasi akun korporat.</p>
+                    <p><strong>Verifikasi Dokumen:</strong> Setelah form dikirim via WhatsApp, tim Legal Flash Global akan membalas pesan Anda untuk meminta kelengkapan dokumen legalitas (NIB, NPWP, Akta).</p>
                   </div>
                 </div>
               )}
