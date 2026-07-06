@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Camera, CheckCircle2, Lock, KeyRound, Trash2, Save } from "lucide-react";
+import { User, Camera, CheckCircle2, Lock, KeyRound, Trash2, Save, MailCheck } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { updateProfile } from "firebase/auth";
+import { updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 
 export default function ProfileTab() {
@@ -16,6 +16,9 @@ export default function ProfileTab() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   
+  const [isPasswordSent, setIsPasswordSent] = useState(false);
+  const [isSendingPassword, setIsSendingPassword] = useState(false);
+
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -102,6 +105,26 @@ export default function ProfileTab() {
     }
   };
 
+  const handleSetPassword = async () => {
+    if (!user?.email) return;
+    setIsSendingPassword(true);
+    setErrorMsg("");
+    
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      setIsPasswordSent(true);
+      setTimeout(() => setIsPasswordSent(false), 5000);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg("Gagal mengirim link password.");
+      }
+    } finally {
+      setIsSendingPassword(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-3xl shadow-xl shadow-[#7A171D]/5 border border-gray-100 overflow-hidden">
       <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
@@ -117,6 +140,7 @@ export default function ProfileTab() {
       <div className="p-8 space-y-10">
         <AnimatePresence>
           {isSuccess && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="p-4 bg-green-50 text-green-700 rounded-xl font-bold text-sm border border-green-200 flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Profile updated successfully!</motion.div>}
+          {isPasswordSent && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="p-4 bg-blue-50 text-blue-700 rounded-xl font-bold text-sm border border-blue-200 flex items-center gap-2"><MailCheck className="w-5 h-5"/> Link pembuatan/reset password telah dikirim ke email Anda!</motion.div>}
           {errorMsg && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="p-4 bg-red-50 text-red-600 rounded-xl font-bold text-sm border border-red-200">{errorMsg}</motion.div>}
         </AnimatePresence>
 
@@ -174,8 +198,12 @@ export default function ProfileTab() {
             <h4 className="font-bold text-gray-900">Password</h4>
             <p className="text-xs text-gray-500 mt-1">Secure your account with a strong password.</p>
           </div>
-          <button className="bg-white border border-gray-200 hover:border-gray-900 text-gray-900 px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm">
-            <KeyRound className="w-4 h-4" /> Set Password
+          <button 
+            onClick={handleSetPassword}
+            disabled={isSendingPassword}
+            className="bg-white border border-gray-200 hover:border-gray-900 text-gray-900 px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+          >
+            <KeyRound className="w-4 h-4" /> {isSendingPassword ? "Mengirim..." : "Set Password"}
           </button>
         </div>
 

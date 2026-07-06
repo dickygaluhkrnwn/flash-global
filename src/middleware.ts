@@ -5,12 +5,13 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl;
   const { device } = userAgent(request);
 
-  // Abaikan request untuk file statis, API, dan file internal Next.js (_next)
-  // Biar middleware nggak berjalan berkali-kali untuk nge-load gambar atau CSS
+  // Abaikan request untuk file statis, API, file internal Next.js, dan PORTAL ADMIN
+  // Biar middleware nggak berjalan berkali-kali atau memblokir akses Admin
   if (
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/static') ||
+    url.pathname.startsWith('/admin') || // <-- JALUR VIP: BYPASS FOLDER ADMIN
     url.pathname.includes('.')
   ) {
     return NextResponse.next();

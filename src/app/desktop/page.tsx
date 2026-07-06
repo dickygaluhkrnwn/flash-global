@@ -127,7 +127,7 @@ export default function DesktopLandingPage() {
               <div className="w-8 h-8 rounded-full bg-[#C5A059]/10 flex items-center justify-center">
                 <Globe2 className="text-[#C5A059] w-4 h-4"/>
               </div>
-              <span>Freight Forwarding</span>
+              <span>Freight Forwarder</span> {/* REVISI */}
             </div>
           </div>
         </motion.div>
@@ -151,8 +151,8 @@ export default function DesktopLandingPage() {
                   <Truck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-900 text-sm">Delivery Domestik</h4>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">Kurir & Darat Lokal</p>
+                  <h4 className="font-bold text-gray-900 text-sm">Delivery</h4> {/* REVISI */}
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">Instan & Sameday</p> {/* REVISI */}
                 </div>
                 <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#7A171D] absolute right-4 top-1/2 -translate-y-1/2 group-hover:translate-x-1 transition-all" />
               </button>
@@ -165,7 +165,7 @@ export default function DesktopLandingPage() {
                   <Globe2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-gray-900 text-sm">Freight Forwarding</h4>
+                  <h4 className="font-bold text-gray-900 text-sm">Freight Forwarder</h4> {/* REVISI */}
                   <p className="text-xs text-gray-500 font-medium mt-0.5">Kargo Internasional</p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-[#C5A059] absolute right-4 top-1/2 -translate-y-1/2 group-hover:translate-x-1 transition-all" />
@@ -228,7 +228,6 @@ export default function DesktopLandingPage() {
                             name="origin" 
                             value={formData.origin} 
                             onChange={handleInputChange} 
-                            // PERBAIKAN: Placeholder Dinamis
                             placeholder={activeTab === "domestik" ? "Cth: Jakarta Selatan" : "Negara / Kota Asal"} 
                             className={`w-full px-3 py-3 rounded-xl border border-gray-200 outline-none text-sm font-semibold bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} 
                             required 
@@ -243,7 +242,6 @@ export default function DesktopLandingPage() {
                             name="destination" 
                             value={formData.destination} 
                             onChange={handleInputChange} 
-                            // PERBAIKAN: Placeholder Dinamis
                             placeholder={activeTab === "domestik" ? "Cth: Surabaya" : "Negara / Kota Tujuan"} 
                             className={`w-full px-3 py-3 rounded-xl border border-gray-200 outline-none text-sm font-semibold bg-gray-50 transition-colors ${activeTab === "domestik" ? "focus:border-[#7A171D]" : "focus:border-[#C5A059]"}`} 
                             required 
@@ -301,7 +299,6 @@ export default function DesktopLandingPage() {
                           </h3>
                           <button 
                             onClick={handleProceed} 
-                            // PERBAIKAN: Tombol Lanjut berubah Emas jika tab Internasional
                             className={`w-full text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm transition-all ${activeTab === "domestik" ? "bg-[#7A171D] hover:bg-[#5A0E13]" : "bg-[#C5A059] hover:bg-[#b08d4a]"}`}
                           >
                             {activeTab === "domestik" ? "Lanjut Pesan Kurir" : "Lengkapi Data Forwarding"} <ArrowRight className="w-4 h-4"/>

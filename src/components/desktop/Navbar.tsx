@@ -14,14 +14,20 @@ import { useAuthStore } from "@/store/useAuthStore";
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  
+  // State untuk UI
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // State & Ref untuk Smart Scroll Navbar
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
   // Ambil state dari Zustand
   const { user, logout } = useAuthStore();
   const isLoggedIn = user !== null;
 
-  // Tutup dropdown jika klik di luar
+  // Handler: Tutup dropdown jika klik di luar
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -30,6 +36,27 @@ export default function Navbar() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Handler: Sembunyikan Navbar saat scroll ke bawah, munculkan saat scroll ke atas
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      // Jika scroll ke bawah melewati 80px, sembunyikan navbar
+      if (currentScrollY > lastScrollY.current && currentScrollY > 80) {
+        setIsVisible(false);
+        setIsProfileOpen(false); // Tutup dropdown otomatis biar rapi
+      } else {
+        // Jika scroll ke atas, munculkan navbar kembali
+        setIsVisible(true);
+      }
+
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   // Fungsi Logout Asli
@@ -45,7 +72,12 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="w-full bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50">
+    <motion.nav 
+      initial={{ y: 0 }}
+      animate={{ y: isVisible ? 0 : "-100%" }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="w-full bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-50"
+    >
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         
         {/* Logo Brand */}
@@ -64,7 +96,7 @@ export default function Navbar() {
             Beranda
           </Link>
           <Link href="/tracking" className={`text-sm font-semibold transition-colors hover:text-[#7A171D] flex items-center gap-1 ${pathname.includes("/tracking") ? "text-[#7A171D]" : "text-gray-600"}`}>
-            <Search className="w-4 h-4" /> Cek Resi
+            <Search className="w-4 h-4" /> Cek Pengiriman {/* REVISI */}
           </Link>
           <Link href="/layanan" className={`text-sm font-semibold transition-colors hover:text-[#7A171D] ${pathname === "/layanan" ? "text-[#7A171D]" : "text-gray-600"}`}>
             Layanan Kami
@@ -148,6 +180,6 @@ export default function Navbar() {
         </div>
 
       </div>
-    </nav>
+    </motion.nav>
   );
 }

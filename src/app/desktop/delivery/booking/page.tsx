@@ -4,45 +4,55 @@ import { useState, useEffect, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
-  User, Phone, Mail, MapPin, Box, 
+  User, Phone, MapPin, 
   DollarSign, Shield, Users, 
   ArrowRight, CheckCircle, Navigation, 
-  HelpCircle, Plus, Trash2, Clock, Route, Car, ArrowDown
+  Plus, Trash2, Clock, Route, Car, Map, Info, PackageOpen,
+  Building
 } from "lucide-react";
 
 // --- IMPORT FIREBASE CORE ---
 import { db } from "@/lib/firebase"; 
-import { collection, addDoc, getDocs, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 // --- INTERFACES ---
 interface DeliveryItem {
   id: string;
   name: string;
-  weight: number;
+  weightType: "Kecil" | "Sedang";
+  dimType: "S" | "M" | "L";
+  weightVal: number;
   length: number;
   width: number;
   height: number;
   value: number;
 }
 
-interface Vehicle {
+interface DropDestination {
   id: string;
-  name: string;
-  maxWeight: number;
-  price: number;
-  iconStr: string;
+  address: string;
+  detail: string;
+  receiverName: string;
+  receiverPhone: string;
+  receiverEmail: string;
+  items: DeliveryItem[];
 }
 
-const FALLBACK_VEHICLES: Vehicle[] = [
-  { id: "motor", name: "Motor Kurir", maxWeight: 20, price: 35000, iconStr: "motor" },
-  { id: "blind-van", name: "Mobil Blind Van", maxWeight: 500, price: 150000, iconStr: "van" },
-  { id: "engkel", name: "Truk Engkel (CDE)", maxWeight: 2000, price: 450000, iconStr: "truck" },
-];
+interface DynamicVehicle {
+  id: string;
+  name: string;
+  isMotor: boolean;
+  maxWeight: number;
+  baseFare: number;
+  minKm: number;
+  perKm: number;
+}
 
-// Reusable Input Style untuk UI yang lebih tegas dan profesional
-const inputStyle = "w-full rounded-xl border-2 border-gray-200 bg-white outline-none text-gray-900 shadow-sm transition-all placeholder:text-gray-400 placeholder:font-normal font-semibold focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10";
-const inputStyleGold = "w-full rounded-xl border-2 border-gray-200 bg-white outline-none text-gray-900 shadow-sm transition-all placeholder:text-gray-400 placeholder:font-normal font-semibold focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/10";
+// --- PREMIUM INPUT STYLES ---
+const inputBase = "w-full bg-gray-50/50 hover:bg-gray-50 focus:bg-white border-2 border-transparent rounded-2xl transition-all outline-none text-gray-900 font-semibold text-sm placeholder:text-gray-400 placeholder:font-medium";
+const inputRed = `${inputBase} focus:border-[#7A171D]/40 focus:ring-4 focus:ring-[#7A171D]/10`;
+const inputGold = `${inputBase} focus:border-[#C5A059]/50 focus:ring-4 focus:ring-[#C5A059]/15`;
 
 function BookingForm() {
   const router = useRouter();
@@ -50,120 +60,184 @@ function BookingForm() {
   const { user } = useAuthStore();
   
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingVehicles, setIsFetchingVehicles] = useState(true);
+  const [isFetchingData, setIsFetchingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // --- STATE 1: LAYANAN & ARMADA ---
+  // --- STATE CONFIG ADMIN (Hasil Fetch) ---
+  const [isB2BClient, setIsB2BClient] = useState(false);
+  const [b2bDiscountPercent, setB2bDiscountPercent] = useState(0);
+  
+  const [motorSettings, setMotorSettings] = useState({ weightSmall: 5, weightMedium: 20, warrantyPercent: 1.5, dimS: {p:20, l:20, t:20}, dimM: {p:40, l:40, t:40}, dimL: {p:50, l:50, t:50} });
+  const [mobilSettings, setMobilSettings] = useState({ insurancePercent: 0.2 });
+  
+  const [vehicles, setVehicles] = useState<DynamicVehicle[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<DynamicVehicle | null>(null);
+
+  // --- STATE TRANSAKSI ---
   const [selectedService, setSelectedService] = useState<"Instan" | "Sameday">("Instan");
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-
-  // --- STATE 2: LOKASI & KONTAK ---
-  const [locationData, setLocationData] = useState({
-    origin: searchParams.get("origin") || "",
-    originDetail: "",
-    destination: searchParams.get("destination") || "",
-    destDetail: "",
+  
+  const [originData, setOriginData] = useState({
+    address: searchParams.get("origin") || "",
+    detail: "",
     senderName: user?.name || "",
     senderPhone: "",
+  });
+
+  // MULTI-DROP STATE (Array Penerima)
+  const [drops, setDrops] = useState<DropDestination[]>([{
+    id: `DROP-${Math.floor(1000 + Math.random() * 9000)}`,
+    address: searchParams.get("destination") || "",
+    detail: "",
     receiverName: "",
     receiverPhone: "",
     receiverEmail: "",
-  });
+    items: [{ id: `ITM-1`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }]
+  }]);
 
-  const [debouncedOrigin, setDebouncedOrigin] = useState(locationData.origin);
-  const [debouncedDestination, setDebouncedDestination] = useState(locationData.destination);
-
-  // --- STATE 3: MULTI-ITEM & BIAYA EKSTRA ---
-  const [items, setItems] = useState<DeliveryItem[]>([
-    { id: `ITM-${Math.floor(1000 + Math.random() * 9000)}`, name: "", weight: Number(searchParams.get("weight")) || 0, length: 0, width: 0, height: 0, value: 0 }
-  ]);
-  
   const [addInsurance, setAddInsurance] = useState(false);
   const [addPorter, setAddPorter] = useState(false);
   const [tollFee, setTollFee] = useState<number>(0);
 
-  // --- EFFECTS ---
-
-  // 1. Fetch Armada Dinamis
+  // --- 1. FETCH DATA ADMIN & USER ROLE SECARA PARALEL ---
   useEffect(() => {
-    const fetchVehicles = async () => {
-      setIsFetchingVehicles(true);
+    const fetchCoreData = async () => {
+      setIsFetchingData(true);
       try {
-        const querySnapshot = await getDocs(collection(db, "vehicles"));
-        if (!querySnapshot.empty) {
-          const vData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vehicle));
-          setVehicles(vData);
-          setSelectedVehicle(vData[0]);
-        } else {
-          // Jika admin belum mengatur armada, gunakan fallback
-          setVehicles(FALLBACK_VEHICLES);
-          setSelectedVehicle(FALLBACK_VEHICLES[0]);
+        if (user?.uid) {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const role = userDoc.data().role;
+            if (role === "b2b_client" || userDoc.data().isB2B) setIsB2BClient(true);
+          }
+        }
+
+        const [vSnap, pSnap] = await Promise.all([
+          getDoc(doc(db, "settings", "vehicles")),
+          getDoc(doc(db, "settings", "pricing"))
+        ]);
+
+        if (vSnap.exists()) {
+          const vData = vSnap.data();
+          if (vData.motor) setMotorSettings(vData.motor);
+          if (vData.mobil) setMobilSettings(vData.mobil);
+        }
+
+        if (pSnap.exists()) {
+          const pData = pSnap.data();
+          setB2bDiscountPercent(pData.b2bDiscount || 0);
+
+          const dynamicV: DynamicVehicle[] = [
+            { id: "motor", name: "Armada Motor", isMotor: true, maxWeight: vSnap.data()?.motor?.weightMedium || 20, ...pData.motor },
+            { id: "mobil", name: "Mobil (Hatchback/MPV)", isMotor: false, maxWeight: 300, ...pData.mobil },
+            { id: "pickup", name: "Pickup (Bak/Box)", isMotor: false, maxWeight: 1000, ...pData.pickup },
+            { id: "truk", name: "Truk (Engkel)", isMotor: false, maxWeight: 2500, ...pData.truk },
+          ];
+          setVehicles(dynamicV);
+          setSelectedVehicle(dynamicV[0]);
         }
       } catch (error) {
-        console.error("Gagal menarik data armada:", error);
-        setVehicles(FALLBACK_VEHICLES);
-        setSelectedVehicle(FALLBACK_VEHICLES[0]);
+        console.error("Gagal menarik core data:", error);
       } finally {
-        setIsFetchingVehicles(false);
+        setIsFetchingData(false);
       }
     };
-    fetchVehicles();
-  }, []);
+    fetchCoreData();
+  }, [user]);
 
-  // 2. Debounce Peta
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedOrigin(locationData.origin);
-      setDebouncedDestination(locationData.destination);
-    }, 1000); 
-    return () => clearTimeout(timer);
-  }, [locationData.origin, locationData.destination]);
-
-  // --- HANDLERS ---
-  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setLocationData(prev => ({ ...prev, [name]: value }));
+  // --- HANDLERS MULTI-DROP ---
+  const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setOriginData({ ...originData, [e.target.name]: e.target.value });
   };
 
-  const handleItemChange = (index: number, field: keyof DeliveryItem, value: string | number) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setItems(newItems);
-  };
-
-  const addItem = () => {
-    setItems([...items, { 
-      id: `ITM-${Math.floor(1000 + Math.random() * 9000)}`, 
-      name: "", weight: 0, length: 0, width: 0, height: 0, value: 0 
+  const addDrop = () => {
+    setDrops([...drops, {
+      id: `DROP-${Math.floor(1000 + Math.random() * 9000)}`,
+      address: "", detail: "", receiverName: "", receiverPhone: "", receiverEmail: "",
+      items: [{ id: `ITM-1`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }]
     }]);
   };
 
-  const removeItem = (index: number) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index));
+  const removeDrop = (index: number) => {
+    if (drops.length > 1) {
+      setDrops(drops.filter((_, i) => i !== index));
     }
   };
 
-  // --- KALKULASI & VALIDASI ---
-  const totalWeight = items.reduce((sum, item) => sum + Number(item.weight), 0);
-  const isOverweight = selectedVehicle ? totalWeight > selectedVehicle.maxWeight : false;
+  const updateDropField = (dIndex: number, field: keyof DropDestination, val: string) => {
+    const newDrops = [...drops];
+    newDrops[dIndex] = { ...newDrops[dIndex], [field]: val };
+    setDrops(newDrops);
+  };
 
-  const baseVehiclePrice = selectedVehicle?.price || 0;
-  const insuranceCost = addInsurance ? 25000 : 0;
+  const addItemToDrop = (dIndex: number) => {
+    const newDrops = [...drops];
+    newDrops[dIndex].items.push({ id: `ITM-${Math.floor(1000 + Math.random() * 9000)}`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 });
+    setDrops(newDrops);
+  };
+
+  const removeItemFromDrop = (dIndex: number, iIndex: number) => {
+    const newDrops = [...drops];
+    if (newDrops[dIndex].items.length > 1) {
+      newDrops[dIndex].items = newDrops[dIndex].items.filter((_, i) => i !== iIndex);
+      setDrops(newDrops);
+    }
+  };
+
+  const updateItemField = (dIndex: number, iIndex: number, field: keyof DeliveryItem, val: string | number) => {
+    const newDrops = [...drops];
+    newDrops[dIndex].items[iIndex] = { ...newDrops[dIndex].items[iIndex], [field]: val };
+    setDrops(newDrops);
+  };
+
+  // --- KALKULASI PINTAR (SMART CALCULATION) ---
+  let totalWeight = 0;
+  let totalItemValue = 0;
+  let motorWarrantyTotal = 0;
+
+  drops.forEach(drop => {
+    drop.items.forEach(item => {
+      if (selectedVehicle?.isMotor) {
+        totalWeight += item.weightType === "Kecil" ? motorSettings.weightSmall : motorSettings.weightMedium;
+        motorWarrantyTotal += item.value * (motorSettings.warrantyPercent / 100);
+      } else {
+        totalWeight += Number(item.weightVal) || 0;
+      }
+      totalItemValue += Number(item.value) || 0;
+    });
+  });
+
+  const isOverweight = selectedVehicle ? totalWeight > selectedVehicle.maxWeight : false;
+  const estimatedDistance = drops.length > 0 ? 10 + ((drops.length - 1) * 5) : 0;
+  
+  let baseDeliveryCost = 0;
+  if (selectedVehicle) {
+    const extraKm = Math.max(0, estimatedDistance - selectedVehicle.minKm);
+    baseDeliveryCost = selectedVehicle.baseFare + (extraKm * selectedVehicle.perKm);
+  }
+
+  let finalInsuranceCost = 0;
+  if (selectedVehicle?.isMotor) {
+    finalInsuranceCost = motorWarrantyTotal; 
+  } else if (addInsurance) {
+    finalInsuranceCost = totalItemValue * (mobilSettings.insurancePercent / 100); 
+  }
+
   const porterCost = addPorter ? 50000 : 0;
-  const totalCost = baseVehiclePrice + insuranceCost + porterCost + Number(tollFee);
+  const subTotal = baseDeliveryCost + finalInsuranceCost + porterCost + Number(tollFee);
+  
+  const b2bDiscountAmount = isB2BClient ? subTotal * (b2bDiscountPercent / 100) : 0;
+  const grandTotal = subTotal - b2bDiscountAmount;
 
   const formatRupiah = (val: number) => {
+    if (isNaN(val)) return "Rp 0";
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
   };
 
-  // --- SUBMIT ---
+  // --- SUBMIT TRANSAKSI ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOverweight) {
-      setErrorMsg(`Total berat (${totalWeight} Kg) melebihi kapasitas ${selectedVehicle?.name} (${selectedVehicle?.maxWeight} Kg). Silakan kurangi barang atau ganti armada.`);
+      setErrorMsg(`Total estimasi berat (${totalWeight} Kg) melebihi kapasitas ${selectedVehicle?.name}.`);
       return;
     }
     
@@ -172,16 +246,22 @@ function BookingForm() {
 
     try {
       await addDoc(collection(db, "orders"), {
-        ...locationData,
-        email: user?.email || "guest@flashglobal.com",
+        origin: originData,
+        destinations: drops,
         serviceType: selectedService,
-        selectedVehicle: selectedVehicle?.name,
-        items: items,
-        totalWeight: totalWeight,
-        addInsurance,
-        addPorter,
-        tollFee: Number(tollFee),
-        totalCost,
+        vehicleId: selectedVehicle?.id,
+        vehicleName: selectedVehicle?.name,
+        totalWeight,
+        totalDistance: estimatedDistance,
+        isB2BApplied: isB2BClient,
+        breakdown: {
+          deliveryFee: baseDeliveryCost,
+          insuranceFee: finalInsuranceCost,
+          porterFee: porterCost,
+          tollFee: Number(tollFee),
+          b2bDiscount: b2bDiscountAmount,
+          grandTotal
+        },
         status: "Menunggu Pembayaran",
         createdAt: serverTimestamp(),
       });
@@ -189,400 +269,480 @@ function BookingForm() {
       router.push("/pembayaran?type=domestik");
     } catch (error) {
       console.error("Gagal menyimpan pesanan:", error);
-      setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda dan coba lagi.");
+      setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- RENDER MAP ---
-  const renderMapPreview = (value: string, type: "origin" | "destination") => {
-    if (!value || value.length < 5) return null;
-    const isLink = value.includes("http") || value.includes("maps.app");
-    const borderColor = type === "origin" ? "border-emerald-200" : "border-amber-200";
-    const bgColor = type === "origin" ? "bg-emerald-50" : "bg-amber-50";
-    const iconColor = type === "origin" ? "text-emerald-600" : "text-amber-600";
-
-    if (isLink) {
-      return (
-        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className={`mt-3 p-4 ${bgColor} border-2 ${borderColor} rounded-xl flex items-start gap-3 shadow-sm`}>
-          <MapPin className={`w-5 h-5 ${iconColor} shrink-0 mt-0.5`} />
-          <div className="text-xs">
-            <p className="font-bold text-gray-900 mb-0.5">Tautan Koordinat Peta Terdeteksi</p>
-            <p className="text-gray-600 truncate max-w-[250px]">{value}</p>
-            <p className={`mt-1 font-semibold ${iconColor}`}>Kurir akan menggunakan tautan ini sebagai navigasi.</p>
-          </div>
-        </motion.div>
-      );
-    }
-
-    return (
-      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className={`mt-3 w-full h-48 rounded-xl overflow-hidden border-2 ${borderColor} shadow-sm relative bg-gray-100`}>
-        <iframe width="100%" height="100%" frameBorder="0" style={{ border: 0 }} src={`https://maps.google.com/maps?q=${encodeURIComponent(value)}&output=embed`} allowFullScreen></iframe>
-      </motion.div>
-    );
-  };
-
   return (
-    <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8 relative z-10">
+    <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-8 relative z-10 px-4 md:px-8">
       
-      {/* Kolom Kiri: Form Input Utama */}
-      <div className="w-full lg:w-2/3">
-        <div className="mb-8">
-          <span className="text-xs font-bold uppercase tracking-widest text-[#7A171D] bg-[#7A171D]/5 px-4 py-2 rounded-full border border-[#7A171D]/10 inline-block mb-3">
-            Delivery Domestik
-          </span>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Formulir Pesanan Kurir</h1>
-          <p className="text-gray-500 mt-2 text-sm">Lengkapi detail pengiriman, sortir barang, dan pilih armada sesuai kebutuhan Anda.</p>
+      {/* ========================================================= */}
+      {/* KOLOM KIRI: FORM INPUT UTAMA (PREMIUM UI)                 */}
+      {/* ========================================================= */}
+      <div className="w-full lg:w-[65%] xl:w-[70%]">
+        
+        {/* Header Title */}
+        <div className="mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#7A171D]/10 to-transparent border border-[#7A171D]/10 mb-4">
+            <div className="w-2 h-2 rounded-full bg-[#7A171D] animate-pulse"></div>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#7A171D]">Pengiriman Terjadwal</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight leading-tight">
+            Formulir <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Kurir Logistik</span>
+          </h1>
+          <p className="text-gray-500 mt-3 text-base md:text-lg max-w-xl leading-relaxed">
+            Konfigurasi rute multi-drop Anda dengan mesin pintar kami. Pilih layanan, tentukan titik antaran, dan biarkan kami yang mengurus sisanya.
+          </p>
         </div>
 
         <AnimatePresence>
           {errorMsg && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm font-semibold rounded-2xl shadow-sm">
-              {errorMsg}
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-8 p-5 bg-red-50/80 backdrop-blur-sm border border-red-200/60 text-red-700 text-sm font-semibold rounded-2xl shadow-sm flex items-start gap-3">
+              <Info className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">{errorMsg}</p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <form id="booking-form" onSubmit={handleSubmit} className="space-y-8">
+        <form id="booking-form" onSubmit={handleSubmit} className="space-y-10">
           
           {/* STEP 1: LAYANAN & ARMADA */}
-          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-xl shadow-[#7A171D]/5">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2 border-b pb-3 border-gray-100">
-              <Route className="w-5 h-5 text-[#7A171D]" /> 1. Pilih Layanan & Armada
-            </h3>
-            
-            <div className="space-y-6">
-              {/* Opsi Layanan */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button type="button" onClick={() => setSelectedService("Instan")} className={`p-4 rounded-xl border-2 text-left transition-all ${selectedService === "Instan" ? "border-[#7A171D] bg-[#7A171D]/5 shadow-sm" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className={`font-bold ${selectedService === "Instan" ? "text-[#7A171D]" : "text-gray-900"}`}>Instan</h4>
-                    <Clock className={`w-4 h-4 ${selectedService === "Instan" ? "text-[#7A171D]" : "text-gray-400"}`} />
-                  </div>
-                  <p className="text-xs text-gray-500">1-3 Jam Tiba. Langsung ke tujuan.</p>
-                </button>
-
-                <button type="button" onClick={() => setSelectedService("Sameday")} className={`p-4 rounded-xl border-2 text-left transition-all ${selectedService === "Sameday" ? "border-[#7A171D] bg-[#7A171D]/5 shadow-sm" : "border-gray-100 bg-white hover:border-gray-200"}`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className={`font-bold ${selectedService === "Sameday" ? "text-[#7A171D]" : "text-gray-900"}`}>Sameday</h4>
-                    <Box className={`w-4 h-4 ${selectedService === "Sameday" ? "text-[#7A171D]" : "text-gray-400"}`} />
-                  </div>
-                  <p className="text-xs text-gray-500">Maks 8 Jam. Multi-drop & sortir rute.</p>
-                </button>
-
-                <button type="button" disabled className="p-4 rounded-xl border-2 border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed text-left relative overflow-hidden">
-                  <div className="absolute -right-6 top-2 bg-slate-800 text-white text-[9px] font-bold px-6 py-0.5 rotate-45">MAINTENANCE</div>
-                  <h4 className="font-bold text-gray-500 mb-1">Reguler / Kargo</h4>
-                  <p className="text-xs text-gray-400">Antarkota. Gudang sedang direnovasi.</p>
-                </button>
-              </div>
-
-              {/* Opsi Armada */}
-              {isFetchingVehicles ? (
-                <div className="h-32 bg-gray-100 rounded-2xl animate-pulse"></div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {vehicles.map((v) => (
-                    <label key={v.id} className={`relative p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedVehicle?.id === v.id ? 'border-[#C5A059] bg-[#C5A059]/5 shadow-sm' : 'border-gray-100 bg-white hover:border-[#C5A059]/50'}`}>
-                      <input type="radio" name="vehicle" value={v.id} checked={selectedVehicle?.id === v.id} onChange={() => setSelectedVehicle(v)} className="hidden" />
-                      {selectedVehicle?.id === v.id && (
-                        <div className="absolute top-3 right-3 text-[#C5A059]">
-                          <CheckCircle className="w-5 h-5 fill-current text-white" />
-                        </div>
-                      )}
-                      <Car className={`w-8 h-8 mb-3 ${selectedVehicle?.id === v.id ? 'text-[#C5A059]' : 'text-gray-400'}`} />
-                      <h4 className={`font-bold text-sm ${selectedVehicle?.id === v.id ? 'text-[#C5A059]' : 'text-gray-900'}`}>{v.name}</h4>
-                      <p className="text-xs text-gray-500 font-medium mt-1">Kapasitas: Maks {v.maxWeight} Kg</p>
-                      <p className="text-sm font-black text-gray-900 mt-3">{formatRupiah(v.price)}</p>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-
-          {/* STEP 2: LOKASI & KONTAK */}
-          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-xl shadow-[#7A171D]/5">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2 border-b pb-3 border-gray-100">
-              <MapPin className="w-5 h-5 text-[#C5A059]" /> 2. Rute & Detail Kontak
-            </h3>
-            
-            <div className="space-y-4">
-
-              {/* Titik Jemput (Asal) Card */}
-              <div className="p-5 md:p-6 bg-slate-50/50 border border-gray-200 rounded-2xl shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#7A171D]/10 flex items-center justify-center text-[#7A171D] shrink-0 border border-[#7A171D]/20">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900">Titik Penjemputan (Asal)</h4>
-                      <p className="text-xs text-gray-500">Detail lokasi dan data pengirim</p>
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <button type="button" onMouseEnter={() => setActiveTooltip("origin")} onMouseLeave={() => setActiveTooltip(null)} className="text-gray-400 hover:text-[#7A171D] transition-colors p-1 bg-white rounded-full border border-gray-200 shadow-sm">
-                      <HelpCircle className="w-4 h-4" />
-                    </button>
-                    <AnimatePresence>
-                      {activeTooltip === "origin" && (
-                        <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute right-0 bottom-8 w-64 bg-slate-900 text-white text-xs p-3 rounded-xl shadow-xl z-50 leading-relaxed border border-slate-800">
-                          <strong>Fitur Smart Map:</strong> Ketik alamat atau paste link Google Maps. Sistem akan menampilkan pratinjau peta otomatis.
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Navigation className="w-5 h-5 absolute left-4 top-4 text-gray-400" />
-                    <input type="text" name="origin" value={locationData.origin} onChange={handleLocationChange} placeholder="Ketik alamat atau paste link Google Maps..." className={`${inputStyle} pl-11 pr-4 py-3.5`} required />
-                  </div>
-                  {renderMapPreview(debouncedOrigin, "origin")}
-                  
-                  <textarea name="originDetail" onChange={handleLocationChange} rows={2} placeholder="Detail patokan alamat jemput (Cth: Dekat pos satpam, pagar hitam)..." className={`${inputStyle} px-4 py-3 resize-none text-sm`} required></textarea>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative">
-                      <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="text" name="senderName" value={locationData.senderName} onChange={handleLocationChange} placeholder="Nama Pengirim" className={`${inputStyle} pl-11 pr-3 py-3 text-sm`} required />
-                    </div>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="tel" name="senderPhone" onChange={handleLocationChange} placeholder="No. HP Pengirim" className={`${inputStyle} pl-11 pr-3 py-3 text-sm`} required />
-                    </div>
-                  </div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden relative">
+            <div className="p-8 md:p-10">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#7A171D] to-[#5A0E13] text-white flex items-center justify-center font-black shadow-lg shadow-[#7A171D]/20">1</div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Layanan & Armada</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Tentukan kecepatan dan kapasitas kendaraan.</p>
                 </div>
               </div>
-
-              {/* Panah Pemisah yang Elegan */}
-              <div className="flex justify-center -my-3 relative z-10 pointer-events-none">
-                <div className="w-10 h-10 bg-white border-2 border-gray-100 rounded-full flex items-center justify-center shadow-sm text-gray-400">
-                  <ArrowDown className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Titik Tujuan (Tujuan) Card */}
-              <div className="p-5 md:p-6 bg-slate-50/50 border border-gray-200 rounded-2xl shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#C5A059]/10 flex items-center justify-center text-[#C5A059] shrink-0 border border-[#C5A059]/20">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900">Titik Pengantaran (Tujuan)</h4>
-                      <p className="text-xs text-gray-500">Detail lokasi dan data penerima</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Navigation className="w-5 h-5 absolute left-4 top-4 text-gray-400" />
-                    <input type="text" name="destination" value={locationData.destination} onChange={handleLocationChange} placeholder="Ketik alamat tujuan pengantaran..." className={`${inputStyleGold} pl-11 pr-4 py-3.5`} required />
-                  </div>
-                  {renderMapPreview(debouncedDestination, "destination")}
-                  
-                  <textarea name="destDetail" onChange={handleLocationChange} rows={2} placeholder="Detail patokan drop-off..." className={`${inputStyleGold} px-4 py-3 resize-none text-sm`} required></textarea>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="relative">
-                      <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="text" name="receiverName" onChange={handleLocationChange} placeholder="Nama Penerima" className={`${inputStyleGold} pl-11 pr-3 py-3 text-sm`} required />
-                    </div>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="tel" name="receiverPhone" onChange={handleLocationChange} placeholder="No. HP Penerima" className={`${inputStyleGold} pl-11 pr-3 py-3 text-sm`} required />
-                    </div>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input type="email" name="receiverEmail" onChange={handleLocationChange} placeholder="Email (Opsional)" className={`${inputStyleGold} pl-11 pr-3 py-3 text-sm`} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </motion.div>
-
-          {/* STEP 3: SORTIR BARANG & ADD-ONS */}
-          <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-xl shadow-[#7A171D]/5">
-            <div className="flex justify-between items-center border-b pb-4 border-gray-100 mb-6">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Box className="w-5 h-5 text-[#7A171D]" /> 3. Daftar Barang
-              </h3>
-              <button type="button" onClick={addItem} className="text-xs font-bold text-[#7A171D] bg-[#7A171D]/10 hover:bg-[#7A171D]/20 border border-[#7A171D]/20 px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
-                <Plus className="w-4 h-4" /> Tambah Barang
-              </button>
-            </div>
-            
-            <div className="space-y-5 mb-8">
-              <AnimatePresence>
-                {items.map((item, index) => (
-                  <motion.div key={item.id} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="p-5 sm:p-6 border border-gray-200 rounded-2xl bg-gray-50/50 relative shadow-sm group">
-                    {items.length > 1 && (
-                      <button type="button" onClick={() => removeItem(index)} className="absolute top-5 right-5 text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                    
-                    <div className="flex items-center gap-2 mb-4">
-                      <span className="bg-gray-900 text-white text-[10px] font-mono px-2 py-1 rounded tracking-widest shadow-sm">{item.id}</span>
-                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Barang {index + 1}</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                      <div className="md:col-span-4 space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">Nama / Deskripsi Barang</label>
-                        <input type="text" value={item.name} onChange={(e) => handleItemChange(index, "name", e.target.value)} placeholder="Cth: Dokumen / Sparepart" className={`${inputStyle} px-4 py-3 text-sm`} required />
-                      </div>
-                      
-                      <div className="md:col-span-2 space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">Berat (Kg)</label>
-                        <input type="number" value={item.weight || ""} onChange={(e) => handleItemChange(index, "weight", Number(e.target.value))} placeholder="0" className={`${inputStyle} px-3 py-3 text-sm text-center font-bold`} required />
-                      </div>
-
-                      <div className="md:col-span-3 space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">P x L x T (cm)</label>
-                        <div className="flex gap-2">
-                          <input type="number" value={item.length || ""} onChange={(e) => handleItemChange(index, "length", Number(e.target.value))} placeholder="P" className={`${inputStyle} px-2 py-3 text-xs text-center`} />
-                          <input type="number" value={item.width || ""} onChange={(e) => handleItemChange(index, "width", Number(e.target.value))} placeholder="L" className={`${inputStyle} px-2 py-3 text-xs text-center`} />
-                          <input type="number" value={item.height || ""} onChange={(e) => handleItemChange(index, "height", Number(e.target.value))} placeholder="T" className={`${inputStyle} px-2 py-3 text-xs text-center`} />
-                        </div>
-                      </div>
-
-                      <div className="md:col-span-3 space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">Nilai (Rp) Asuransi</label>
-                        <input type="number" value={item.value || ""} onChange={(e) => handleItemChange(index, "value", Number(e.target.value))} placeholder="Opsional" className={`${inputStyle} px-4 py-3 text-sm`} />
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-gray-900 mb-3 border-t pt-5 border-gray-100">Biaya Tambahan (Opsional)</h4>
               
-              <label className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all shadow-sm ${addInsurance ? 'border-[#C5A059] bg-[#C5A059]/5' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+              <div className="space-y-8">
+                {/* Opsi Layanan */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button type="button" onClick={() => setSelectedService("Instan")} className={`relative p-5 rounded-2xl border-2 text-left transition-all duration-300 ${selectedService === "Instan" ? "border-[#7A171D] bg-[#7A171D]/[0.02] shadow-md shadow-[#7A171D]/5 scale-[1.02]" : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50"}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className={`text-lg font-black ${selectedService === "Instan" ? "text-[#7A171D]" : "text-gray-900"}`}>Instan</h4>
+                      <div className={`p-2 rounded-xl ${selectedService === "Instan" ? "bg-[#7A171D]/10 text-[#7A171D]" : "bg-gray-100 text-gray-400"}`}>
+                        <Clock className="w-5 h-5" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-500 font-medium leading-relaxed">Prioritas rute tunggal. Kurir langsung meluncur ke tujuan tanpa transit.</p>
+                  </button>
+
+                  <button type="button" onClick={() => setSelectedService("Sameday")} className={`relative p-5 rounded-2xl border-2 text-left transition-all duration-300 ${selectedService === "Sameday" ? "border-[#7A171D] bg-[#7A171D]/[0.02] shadow-md shadow-[#7A171D]/5 scale-[1.02]" : "border-gray-100 bg-white hover:border-gray-200 hover:bg-gray-50"}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className={`text-lg font-black ${selectedService === "Sameday" ? "text-[#7A171D]" : "text-gray-900"}`}>Sameday</h4>
+                      <div className={`p-2 rounded-xl ${selectedService === "Sameday" ? "bg-[#7A171D]/10 text-[#7A171D]" : "bg-gray-100 text-gray-400"}`}>
+                        <Route className="w-5 h-5" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-500 font-medium leading-relaxed">Sangat cocok untuk <strong className="text-gray-700">Multi-drop</strong>. Hemat biaya dengan sistem sortir rute pintar.</p>
+                  </button>
+                </div>
+
+                {/* Opsi Armada */}
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2"><Car className="w-4 h-4 text-gray-400"/> Pilih Kendaraan</h4>
+                  {isFetchingData ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                      {[1,2,3,4].map(i => <div key={i} className="h-32 bg-gray-100 rounded-2xl animate-pulse"></div>)}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {vehicles.map((v) => (
+                        <label key={v.id} className={`group relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 flex items-center gap-4 ${selectedVehicle?.id === v.id ? 'border-[#C5A059] bg-[#C5A059]/[0.03] shadow-md shadow-[#C5A059]/10' : 'border-gray-100 bg-white hover:border-[#C5A059]/30 hover:shadow-sm'}`}>
+                          <input type="radio" name="vehicle" value={v.id} checked={selectedVehicle?.id === v.id} onChange={() => setSelectedVehicle(v)} className="hidden" />
+                          <div className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center transition-colors ${selectedVehicle?.id === v.id ? 'bg-[#C5A059] text-white shadow-inner' : 'bg-gray-100 text-gray-400 group-hover:bg-[#C5A059]/10 group-hover:text-[#C5A059]'}`}>
+                            <Car className="w-7 h-7" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`font-black text-base ${selectedVehicle?.id === v.id ? 'text-[#C5A059]' : 'text-gray-900'}`}>{v.name}</h4>
+                            <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider mt-0.5">Maks {v.maxWeight} Kg</p>
+                          </div>
+                          {selectedVehicle?.id === v.id && (
+                            <div className="absolute top-4 right-4 text-[#C5A059] animate-in zoom-in">
+                              <CheckCircle className="w-5 h-5 fill-current text-white" />
+                            </div>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* MOCKUP MAPBOX PREVIEW (PREMIUM UI) */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-slate-900 p-1.5 rounded-[2rem] overflow-hidden shadow-[0_20px_50px_rgb(0,0,0,0.15)] relative group">
+            <div className="absolute top-5 left-5 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 z-10 flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+              <span className="text-white text-[10px] font-bold uppercase tracking-widest">Mapbox Live Routing</span>
+            </div>
+            
+            <div className="w-full h-56 bg-[#0B0F19] rounded-[1.75rem] flex flex-col items-center justify-center border border-slate-800 relative overflow-hidden">
+              {/* Grid Pattern Background */}
+              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay"></div>
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+              
+              <Map className="w-12 h-12 text-slate-700 mb-3 opacity-60 group-hover:scale-110 transition-transform duration-700" />
+              <p className="text-slate-500 text-xs font-semibold tracking-wide z-10 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800 backdrop-blur-md">Pratinjau Rute Dinamis Tersedia Saat Alamat Diisi</p>
+              
+              {/* Glowing Route Line Simulasi */}
+              <div className="absolute w-[150%] h-[1px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent rotate-12 opacity-30 shadow-[0_0_20px_rgba(16,185,129,0.5)]"></div>
+            </div>
+          </motion.div>
+
+          {/* STEP 2: TITIK JEMPUT (ORIGIN) */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-2 h-full bg-[#7A171D]"></div>
+            <div className="p-8 md:p-10 pl-10 md:pl-12">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 rounded-2xl bg-[#7A171D]/10 text-[#7A171D] flex items-center justify-center font-black">2</div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Titik Penjemputan (Asal)</h3>
+                  <p className="text-sm text-gray-500 mt-0.5">Lokasi pengambilan barang dan data pengirim.</p>
+                </div>
+              </div>
+              
+              <div className="space-y-5">
+                <div className="relative">
+                  <Navigation className="w-5 h-5 absolute left-5 top-[18px] text-gray-400" />
+                  <input type="text" name="address" value={originData.address} onChange={handleOriginChange} placeholder="Ketik alamat atau paste link Google Maps..." className={`${inputRed} pl-14 pr-5 py-4`} required />
+                </div>
+                <div className="relative">
+                  <MapPin className="w-5 h-5 absolute left-5 top-[18px] text-gray-400" />
+                  <textarea name="detail" value={originData.detail} onChange={handleOriginChange} rows={2} placeholder="Detail patokan alamat jemput (Cth: Dekat pos satpam)..." className={`${inputRed} pl-14 pr-5 py-4 resize-none`} required></textarea>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="relative">
+                    <User className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" name="senderName" value={originData.senderName} onChange={handleOriginChange} placeholder="Nama Pengirim" className={`${inputRed} pl-14 pr-5 py-4`} required />
+                  </div>
+                  <div className="relative">
+                    <Phone className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="tel" name="senderPhone" value={originData.senderPhone} onChange={handleOriginChange} placeholder="No. HP Pengirim Aktif" className={`${inputRed} pl-14 pr-5 py-4`} required />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* STEP 3: MULTI-DROP DESTINATIONS */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/80 overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-2 h-full bg-[#C5A059]"></div>
+            <div className="p-8 md:p-10 pl-10 md:pl-12">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-2xl bg-[#C5A059]/10 text-[#C5A059] flex items-center justify-center font-black">3</div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Tujuan Pengantaran</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Lokasi drop-off dan rincian paket.</p>
+                  </div>
+                </div>
+                {selectedService === "Sameday" && (
+                  <button type="button" onClick={addDrop} className="text-sm font-bold text-[#C5A059] bg-[#C5A059]/10 hover:bg-[#C5A059]/20 px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all">
+                    <Plus className="w-4 h-4" /> Tambah Tujuan (Multi-Drop)
+                  </button>
+                )}
+              </div>
+              
+              {/* TIMELINE NODE UI UNTUK DROPS */}
+              <div className="relative">
+                {/* Garis vertikal timeline */}
+                {drops.length > 1 && (
+                  <div className="absolute left-6 top-10 bottom-10 w-[2px] bg-gradient-to-b from-[#C5A059]/50 via-[#C5A059]/20 to-transparent dashed-line z-0 hidden md:block"></div>
+                )}
+
+                <div className="space-y-10 relative z-10">
+                  <AnimatePresence>
+                    {drops.map((drop, dIndex) => (
+                      <motion.div key={drop.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }} className="relative">
+                        
+                        {/* Bulatan Timeline di kiri */}
+                        <div className="absolute -left-[54px] top-6 w-8 h-8 rounded-full bg-white border-4 border-[#C5A059] shadow-sm hidden md:flex items-center justify-center z-10">
+                          <span className="text-[10px] font-black text-[#C5A059]">{dIndex + 1}</span>
+                        </div>
+
+                        <div className="bg-gray-50/40 border border-gray-100 rounded-3xl p-6 md:p-8 hover:border-[#C5A059]/30 transition-colors shadow-sm">
+                          {/* Header Drop */}
+                          <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-[#C5A059] text-white flex items-center justify-center font-black text-sm shadow-md md:hidden">{dIndex + 1}</div>
+                              <h4 className="font-black text-gray-900 tracking-wide uppercase text-sm">Penerima {dIndex + 1}</h4>
+                            </div>
+                            {drops.length > 1 && (
+                              <button type="button" onClick={() => removeDrop(dIndex)} className="text-gray-400 hover:text-red-500 bg-white p-2 rounded-xl border border-gray-200 shadow-sm transition-all hover:bg-red-50 hover:border-red-200"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+
+                          {/* Form Alamat Drop */}
+                          <div className="space-y-4 mb-8">
+                            <div className="relative">
+                              <Navigation className="w-5 h-5 absolute left-5 top-[18px] text-gray-400" />
+                              <input type="text" value={drop.address} onChange={(e) => updateDropField(dIndex, "address", e.target.value)} placeholder="Alamat tujuan pengantaran..." className={`${inputGold} pl-14 pr-5 py-4`} required />
+                            </div>
+                            <div className="relative">
+                              <MapPin className="w-5 h-5 absolute left-5 top-[18px] text-gray-400" />
+                              <textarea value={drop.detail} onChange={(e) => updateDropField(dIndex, "detail", e.target.value)} rows={2} placeholder="Detail patokan drop-off..." className={`${inputGold} pl-14 pr-5 py-4 resize-none`} required></textarea>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="relative">
+                                <User className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="text" value={drop.receiverName} onChange={(e) => updateDropField(dIndex, "receiverName", e.target.value)} placeholder="Nama Penerima" className={`${inputGold} pl-14 pr-5 py-4`} required />
+                              </div>
+                              <div className="relative">
+                                <Phone className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input type="tel" value={drop.receiverPhone} onChange={(e) => updateDropField(dIndex, "receiverPhone", e.target.value)} placeholder="No. HP Penerima" className={`${inputGold} pl-14 pr-5 py-4`} required />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* INNER CARD: Rincian Paket */}
+                          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-200 to-gray-50"></div>
+                            <div className="flex justify-between items-center mb-6">
+                              <h5 className="text-sm font-black text-gray-800 uppercase flex items-center gap-2 tracking-wider"><PackageOpen className="w-4 h-4 text-[#C5A059]"/> Rincian Paket</h5>
+                              <button type="button" onClick={() => addItemToDrop(dIndex)} className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"><Plus className="w-3.5 h-3.5"/> Tambah Barang</button>
+                            </div>
+
+                            <div className="space-y-6">
+                              {drop.items.map((item, iIndex) => (
+                                <div key={item.id} className="relative bg-gray-50/50 p-4 rounded-xl border border-gray-100 group">
+                                  {drop.items.length > 1 && (
+                                    <button type="button" onClick={() => removeItemFromDrop(dIndex, iIndex)} className="absolute -right-2 -top-2 w-7 h-7 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 shadow-sm opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
+                                  )}
+                                  
+                                  <div className="mb-4">
+                                    <label className="text-xs font-bold text-gray-500 block mb-1.5 ml-1">Deskripsi Isi Paket</label>
+                                    <input type="text" value={item.name} onChange={(e) => updateItemField(dIndex, iIndex, "name", e.target.value)} placeholder="Cth: Dokumen rahasia / Sparepart mobil" className={`${inputBase} bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/10 px-4 py-3`} required />
+                                  </div>
+
+                                  {/* LOGIKA BERSYARAT: MOTOR VS MOBIL */}
+                                  {selectedVehicle?.isMotor ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Kategori Berat</label>
+                                        <select value={item.weightType} onChange={(e) => updateItemField(dIndex, iIndex, "weightType", e.target.value)} className={`${inputBase} bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/10 px-4 py-3`}>
+                                          <option value="Kecil">Kecil (Maks {motorSettings.weightSmall}Kg)</option>
+                                          <option value="Sedang">Sedang (Maks {motorSettings.weightMedium}Kg)</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Estimasi Dimensi</label>
+                                        <select value={item.dimType} onChange={(e) => updateItemField(dIndex, iIndex, "dimType", e.target.value)} className={`${inputBase} bg-white border-gray-200 focus:border-blue-500 focus:ring-blue-500/10 px-4 py-3`}>
+                                          <option value="S">Size S ({motorSettings.dimS.p}x{motorSettings.dimS.l}x{motorSettings.dimS.t}cm)</option>
+                                          <option value="M">Size M ({motorSettings.dimM.p}x{motorSettings.dimM.l}x{motorSettings.dimM.t}cm)</option>
+                                          <option value="L">Size L ({motorSettings.dimL.p}x{motorSettings.dimL.l}x{motorSettings.dimL.t}cm)</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Nilai Barang (Rp)</label>
+                                        <input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="0 (Opsional)" className={`${inputBase} bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500/10 px-4 py-3 font-mono`} />
+                                        {item.value > 0 && (
+                                          <p className="text-[10px] text-purple-600 font-bold mt-1.5 ml-1 flex items-center gap-1"><Shield className="w-3 h-3"/> Garansi: {formatRupiah(item.value * (motorSettings.warrantyPercent / 100))}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                      <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Berat Aktual (Kg)</label>
+                                        <input type="number" value={item.weightVal || ""} onChange={(e) => updateItemField(dIndex, iIndex, "weightVal", Number(e.target.value))} placeholder="0" className={`${inputBase} bg-white border-gray-200 focus:border-amber-500 focus:ring-amber-500/10 px-4 py-3 text-center font-black`} required />
+                                      </div>
+                                      <div className="col-span-2">
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Dimensi Custom (P x L x T cm)</label>
+                                        <div className="flex gap-2">
+                                          <input type="number" value={item.length || ""} onChange={(e) => updateItemField(dIndex, iIndex, "length", Number(e.target.value))} placeholder="P" className={`${inputBase} bg-white border-gray-200 focus:border-amber-500 focus:ring-amber-500/10 px-2 py-3 text-center font-mono`} />
+                                          <input type="number" value={item.width || ""} onChange={(e) => updateItemField(dIndex, iIndex, "width", Number(e.target.value))} placeholder="L" className={`${inputBase} bg-white border-gray-200 focus:border-amber-500 focus:ring-amber-500/10 px-2 py-3 text-center font-mono`} />
+                                          <input type="number" value={item.height || ""} onChange={(e) => updateItemField(dIndex, iIndex, "height", Number(e.target.value))} placeholder="T" className={`${inputBase} bg-white border-gray-200 focus:border-amber-500 focus:ring-amber-500/10 px-2 py-3 text-center font-mono`} />
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1.5 ml-1">Nilai Barang (Rp)</label>
+                                        <input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="0 (Opsional)" className={`${inputBase} bg-white border-gray-200 focus:border-purple-500 focus:ring-purple-500/10 px-4 py-3 font-mono`} />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* OPSI TAMBAHAN GLOBAL */}
+          <div className="space-y-4 pt-6">
+            <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest pl-2 mb-4">Opsi Layanan Ekstra</h4>
+            
+            {!selectedVehicle?.isMotor && (
+              <label className={`group flex items-center gap-5 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${addInsurance ? 'border-[#C5A059] bg-[#C5A059]/5 shadow-md shadow-[#C5A059]/5' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
                 <input type="checkbox" checked={addInsurance} onChange={() => setAddInsurance(!addInsurance)} className="w-5 h-5 accent-[#C5A059] rounded" />
                 <div className="flex-1 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <Shield className={`w-5 h-5 ${addInsurance ? 'text-[#C5A059]' : 'text-gray-400'}`} />
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2.5 rounded-xl transition-colors ${addInsurance ? 'bg-[#C5A059] text-white' : 'bg-gray-100 text-gray-400 group-hover:text-gray-600'}`}>
+                      <Shield className="w-6 h-6" />
+                    </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900">Proteksi Asuransi Pengiriman</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">Jaminan ganti rugi kerusakan/kehilangan hingga Rp 10 Juta.</p>
+                      <p className={`text-base font-bold transition-colors ${addInsurance ? 'text-[#C5A059]' : 'text-gray-900'}`}>Proteksi Asuransi Pengiriman ({mobilSettings.insurancePercent}%)</p>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">Asuransi otomatis dikalkulasi dari total nilai seluruh barang Anda.</p>
                     </div>
                   </div>
-                  <span className="font-bold text-gray-900 text-sm">+Rp 25.000</span>
                 </div>
               </label>
+            )}
 
-              <label className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all shadow-sm ${addPorter ? 'border-[#C5A059] bg-[#C5A059]/5' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                <input type="checkbox" checked={addPorter} onChange={() => setAddPorter(!addPorter)} className="w-5 h-5 accent-[#C5A059] rounded" />
-                <div className="flex-1 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <Users className={`w-5 h-5 ${addPorter ? 'text-[#C5A059]' : 'text-gray-400'}`} />
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">Tenaga Bantuan Angkut (Porter)</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">Bantuan menaikkan dan menurunkan barang dari armada.</p>
-                    </div>
+            <label className={`group flex items-center gap-5 p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${addPorter ? 'border-[#C5A059] bg-[#C5A059]/5 shadow-md shadow-[#C5A059]/5' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
+              <input type="checkbox" checked={addPorter} onChange={() => setAddPorter(!addPorter)} className="w-5 h-5 accent-[#C5A059] rounded" />
+              <div className="flex-1 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-xl transition-colors ${addPorter ? 'bg-[#C5A059] text-white' : 'bg-gray-100 text-gray-400 group-hover:text-gray-600'}`}>
+                    <Users className="w-6 h-6" />
                   </div>
-                  <span className="font-bold text-gray-900 text-sm">+Rp 50.000</span>
-                </div>
-              </label>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border-2 border-gray-200 bg-white focus-within:border-[#C5A059] focus-within:ring-4 focus-within:ring-[#C5A059]/10 transition-all shadow-sm">
-                <div className="flex items-center gap-3">
-                  <DollarSign className="w-5 h-5 text-gray-400 shrink-0" />
                   <div>
-                    <p className="text-sm font-bold text-gray-900">Uang Tol / Parkir Gedung</p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">Berikan saldo jika rute melintasi tol/gedung berbayar.</p>
+                    <p className={`text-base font-bold transition-colors ${addPorter ? 'text-[#C5A059]' : 'text-gray-900'}`}>Tenaga Bantuan Angkut (Porter)</p>
+                    <p className="text-xs text-gray-500 font-medium mt-0.5">Sopir membantu bongkar muat barang hingga ke dalam gedung/rumah.</p>
                   </div>
                 </div>
-                <div className="relative w-full sm:w-40">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                  <input type="number" value={tollFee || ""} onChange={(e) => setTollFee(Number(e.target.value))} placeholder="0" className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 outline-none text-sm font-bold text-right bg-gray-50 focus:bg-white focus:border-[#C5A059] transition-colors" />
+                <span className="font-black text-gray-900 bg-gray-100 px-3 py-1.5 rounded-lg">+Rp 50K</span>
+              </div>
+            </label>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl border-2 border-gray-200 bg-white focus-within:border-[#C5A059] focus-within:shadow-md focus-within:shadow-[#C5A059]/5 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-gray-100 text-gray-400">
+                  <DollarSign className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-gray-900">Uang Tol / Parkir Gedung</p>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">Berikan saldo deposit jalan untuk kurir (Opsional).</p>
                 </div>
               </div>
-
+              <div className="relative w-full md:w-48">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">Rp</span>
+                <input type="number" value={tollFee || ""} onChange={(e) => setTollFee(Number(e.target.value))} placeholder="0" className="w-full pl-11 pr-4 py-3 rounded-xl border-2 border-gray-100 outline-none text-base font-black text-right bg-gray-50 hover:bg-gray-100 focus:bg-white focus:border-[#C5A059] transition-all" />
+              </div>
             </div>
-          </motion.div>
+
+          </div>
+
         </form>
       </div>
 
-      {/* Kolom Kanan: Summary */}
-      <div className="w-full lg:w-1/3">
-        <div className="bg-[#111] text-white rounded-3xl p-6 md:p-8 shadow-2xl sticky top-28">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 border-b border-gray-800 pb-4">
-            Ringkasan Pesanan
+      {/* ========================================================= */}
+      {/* KOLOM KANAN: RINGKASAN SMART CALCULATION (DARK RECEIPT UI)*/}
+      {/* ========================================================= */}
+      <div className="w-full lg:w-[35%] xl:w-[30%]">
+        <div className="bg-slate-900 text-white rounded-[2.5rem] p-8 md:p-10 shadow-[0_20px_50px_rgb(0,0,0,0.2)] sticky top-28 border border-slate-800 relative overflow-hidden">
+          
+          {/* Aksen Emas di background */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#C5A059] rounded-full blur-[100px] opacity-10 pointer-events-none"></div>
+
+          {isB2BClient && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 bg-gradient-to-r from-emerald-900/40 to-emerald-900/10 border border-emerald-500/30 p-4 rounded-2xl flex items-start gap-3 shadow-inner">
+              <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-emerald-100 font-medium leading-relaxed"><strong className="text-emerald-400 block mb-0.5 text-xs uppercase tracking-wider">Corporate Mode</strong> Akun B2B aktif. Anda mendapatkan potongan grosir otomatis sebesar {b2bDiscountPercent}%.</p>
+            </motion.div>
+          )}
+
+          <h3 className="text-xl font-black mb-8 flex items-center gap-3">
+            Ringkasan Biaya <div className="h-1 flex-1 bg-slate-800 rounded-full"></div>
           </h3>
           
-          <div className="space-y-4 mb-6">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-400">Armada</span>
-              <span className="font-bold text-right">{selectedVehicle?.name || "-"}</span>
+          <div className="space-y-5 mb-8">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 text-sm font-medium">Jenis Armada</span>
+              <span className="font-bold text-white bg-slate-800 px-3 py-1 rounded-lg text-xs tracking-wide">{selectedVehicle?.name || "-"}</span>
             </div>
 
-            <div className={`flex justify-between items-center text-sm p-3 rounded-xl border ${isOverweight ? 'bg-red-900/30 border-red-500/50' : 'bg-gray-800/50 border-gray-800'}`}>
-              <span className={isOverweight ? "text-red-300 font-bold" : "text-gray-400"}>Total Berat</span>
-              <span className={`font-bold ${isOverweight ? "text-red-400" : "text-white"}`}>
-                {totalWeight} Kg <span className="text-xs text-gray-500 font-normal">/ {selectedVehicle?.maxWeight} Kg</span>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 text-sm font-medium">Total Titik Rute</span>
+              <span className="font-bold text-white">{drops.length} Lokasi</span>
+            </div>
+
+            <div className={`flex justify-between items-center p-4 rounded-2xl border transition-colors ${isOverweight ? 'bg-red-950/30 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'bg-slate-800/50 border-slate-700/50'}`}>
+              <span className={`text-sm font-bold ${isOverweight ? "text-red-400" : "text-slate-300"}`}>Estimasi Berat</span>
+              <span className={`font-black tracking-wide ${isOverweight ? "text-red-400" : "text-[#C5A059]"}`}>
+                {totalWeight} <span className="text-xs font-semibold opacity-70">/ {selectedVehicle?.maxWeight} Kg</span>
               </span>
             </div>
             
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-400">Tarif Dasar</span>
-              <span className="font-bold">{formatRupiah(baseVehiclePrice)}</span>
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-slate-400 text-sm font-medium">Tarif Dasar Rute</span>
+              <span className="font-black text-white">{formatRupiah(baseDeliveryCost)}</span>
             </div>
             
-            {(addInsurance || addPorter || tollFee > 0) && (
-              <div className="pt-4 mt-4 border-t border-dashed border-gray-800 space-y-3">
-                <p className="text-xs font-bold text-gray-500 uppercase">Biaya Tambahan</p>
-                {addInsurance && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Asuransi</span>
-                    <span className="font-bold text-[#C5A059]">+ {formatRupiah(insuranceCost)}</span>
+            {(finalInsuranceCost > 0 || addPorter || tollFee > 0) && (
+              <div className="pt-5 mt-5 border-t border-dashed border-slate-700/80 space-y-4">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Komponen Ekstra</p>
+                {finalInsuranceCost > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 text-sm">Asuransi Proteksi</span>
+                    <span className="font-bold text-emerald-400">+ {formatRupiah(finalInsuranceCost)}</span>
                   </div>
                 )}
                 {addPorter && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Tenaga Angkut</span>
-                    <span className="font-bold text-[#C5A059]">+ {formatRupiah(porterCost)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 text-sm">Tenaga Angkut</span>
+                    <span className="font-bold text-emerald-400">+ {formatRupiah(porterCost)}</span>
                   </div>
                 )}
                 {tollFee > 0 && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-400">Tol / Parkir</span>
-                    <span className="font-bold text-[#C5A059]">+ {formatRupiah(tollFee)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-300 text-sm">Tol & Parkir</span>
+                    <span className="font-bold text-emerald-400">+ {formatRupiah(tollFee)}</span>
                   </div>
                 )}
               </div>
             )}
+            
+            {/* Baris Diskon B2B */}
+            {isB2BClient && b2bDiscountAmount > 0 && (
+              <div className="pt-5 mt-5 border-t border-slate-700/80">
+                <div className="flex justify-between items-center bg-emerald-950/20 p-3 -mx-3 rounded-xl border border-emerald-900/30">
+                  <span className="text-emerald-400 text-sm font-bold flex items-center gap-1.5"><Building className="w-4 h-4"/> Diskon B2B ({b2bDiscountPercent}%)</span>
+                  <span className="font-black text-emerald-400">- {formatRupiah(b2bDiscountAmount)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="border-t border-gray-800 pt-6 mb-6">
-            <p className="text-xs text-gray-400 mb-1">Total Estimasi Biaya</p>
-            <p className="text-3xl font-black text-[#C5A059]">{formatRupiah(totalCost)}</p>
+          <div className="bg-gradient-to-br from-[#C5A059]/20 to-transparent p-6 rounded-2xl border border-[#C5A059]/30 mb-8 backdrop-blur-sm">
+            <p className="text-[11px] text-[#C5A059] font-black uppercase tracking-widest mb-1.5">Total Tagihan Final</p>
+            <p className="text-4xl font-black text-white tracking-tight">{formatRupiah(grandTotal)}</p>
           </div>
 
           <button 
             type="submit" 
             form="booking-form"
-            disabled={isLoading || isOverweight}
-            className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-[#7A171D]/30 disabled:opacity-50 group disabled:cursor-not-allowed"
+            disabled={isLoading || isOverweight || isFetchingData}
+            className="w-full relative overflow-hidden bg-gradient-to-r from-[#7A171D] to-[#5A0E13] hover:from-[#942128] hover:to-[#7A171D] text-white font-black text-base py-5 rounded-2xl flex items-center justify-center gap-3 transition-all duration-300 shadow-[0_10px_20px_rgba(122,23,29,0.3)] disabled:opacity-50 group disabled:cursor-not-allowed transform hover:-translate-y-0.5 active:translate-y-0"
           >
+            {/* Shimmer Effect */}
+            <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+            
             {isLoading ? (
-              <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Memproses...</>
+              <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Memproses...</>
             ) : isOverweight ? (
               "Kapasitas Melebihi Batas"
             ) : (
-              <>Lanjut Pembayaran <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>
+              <span className="flex items-center gap-2 relative z-10">Bayar Pesanan <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform duration-300" /></span>
             )}
           </button>
+          
+          <p className="text-center text-[10px] text-slate-500 font-medium mt-5 flex items-center justify-center gap-1.5">
+            <Shield className="w-3 h-3"/> Pembayaran diproses dengan aman & terenkripsi
+          </p>
         </div>
       </div>
     </div>
@@ -591,14 +751,16 @@ function BookingForm() {
 
 export default function DesktopBookingPage() {
   return (
-    <main className="min-h-screen bg-slate-50 py-12 px-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[40%] h-[40%] bg-[#7A171D]/5 rounded-full blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-[#C5A059]/10 rounded-full blur-[150px] pointer-events-none" />
+    <main className="min-h-screen bg-[#F8F9FA] py-16 relative overflow-hidden">
+      {/* Premium Background Elements */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.015] pointer-events-none mix-blend-overlay"></div>
       
       <Suspense fallback={
-        <div className="min-h-[50vh] flex flex-col items-center justify-center z-10 relative">
-          <div className="w-10 h-10 border-4 border-gray-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-500 font-bold animate-pulse">Menyiapkan Form Pemesanan...</p>
+        <div className="min-h-[60vh] flex flex-col items-center justify-center z-10 relative">
+          <div className="w-12 h-12 border-4 border-gray-200 border-t-[#C5A059] rounded-full animate-spin mb-5 shadow-lg shadow-[#C5A059]/20"></div>
+          <p className="text-gray-600 font-black tracking-widest uppercase text-xs animate-pulse">Inisialisasi Sistem Logistik...</p>
         </div>
       }>
         <BookingForm />
