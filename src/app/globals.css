@@ -3,31 +3,48 @@
 @tailwind utilities;
 
 :root {
+  /* Background utama dominan putih bersih & light gray agar luas dan eksklusif */
   --background: #ffffff;
-  --foreground: #171717;
+  --background-alt: #F8F9FA;
   
-  /* Flash Global Brand Colors */
+  /* Warna teks utama menggunakan Slate yang mewah, bukan hitam kaku */
+  --foreground: #1E293B; 
+  --foreground-muted: #64748B;
+  
+  /* Flash Global Brand Colors Murni */
   --brand-maroon: #7A171D;
   --brand-maroon-dark: #5A0E13;
+  --brand-maroon-light: #9A242B;
+  
   --brand-gold: #C5A059;
+  --brand-gold-dark: #A68345;
   --brand-gold-light: #DFBE7B;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  
+  /* Glassmorphism Premium Effect khusus Light Mode */
+  .glass-card {
+    @apply bg-white/75 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.02)];
+  }
+  
+  /* Efek semi-transparan premium untuk aksen brand */
+  .glass-maroon {
+    @apply bg-[#7A171D]/5 backdrop-blur-md border border-[#7A171D]/10;
+  }
+  
+  .glass-gold {
+    @apply bg-[#C5A059]/5 backdrop-blur-md border border-[#C5A059]/10;
   }
 }

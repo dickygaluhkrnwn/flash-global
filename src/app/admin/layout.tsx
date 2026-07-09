@@ -9,7 +9,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-const allowedRoles = ["superadmin", "admin_finance", "admin_operational"];
+const allowedRoles = ["superadmin", "admin_finance", "admin_operational", "admin_cs"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -56,7 +56,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       } catch (error) {
         console.error("Auth verification failed:", error);
         router.push("/admin/login");
-      } final: {
+      } finally {
         setCheckingAuth(false);
       }
     });
@@ -64,11 +64,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => unsubscribe();
   }, [pathname, router]);
 
-  // State Loading Guard Screen
+  // State Loading Guard Screen Premium
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-bold text-sm animate-pulse">
-        Memverifikasi Otoritas Administrator...
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center text-gray-500 font-bold text-sm">
+        <div className="w-12 h-12 border-4 border-gray-100 border-t-brand-maroon rounded-full animate-spin mb-4"></div>
+        <span className="animate-pulse">Memverifikasi Otoritas Administrator...</span>
       </div>
     );
   }
@@ -78,16 +79,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  // Jika lolos guard perlindungan, render sistem Admin Workspace lengkap dengan Sidebar Baru
+  // Jika lolos guard perlindungan, render sistem Admin Workspace
   if (allowedRoles.includes(currentRole)) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col md:flex-row">
+      <div className="min-h-screen bg-background-alt text-foreground flex relative overflow-hidden">
         
-        {/* SIDEBAR WORKSPACE ADMIN (DARI COMPONENT TERPISAH) */}
-        <AdminSidebar currentRole={currentRole} pathname={pathname} />
+        {/* Ornamen Premium Background Khusus Admin */}
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-maroon rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-brand-gold rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
 
-        {/* WORKSPACE AREA */}
-        <main className="flex-1 p-6 md:p-10 max-h-screen overflow-y-auto">
+        {/* SIDEBAR WORKSPACE ADMIN (COLLAPSIBLE/HOVERABLE) */}
+        <div className="z-50">
+          <AdminSidebar currentRole={currentRole} pathname={pathname} />
+        </div>
+
+        {/* WORKSPACE AREA - Padding kiri disesuaikan dengan lebar Sidebar collapsed */}
+        <main className="flex-1 max-h-screen overflow-y-auto w-full md:pl-20 transition-all duration-300">
           {children}
         </main>
 
