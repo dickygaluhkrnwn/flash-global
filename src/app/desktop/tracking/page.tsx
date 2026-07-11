@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Search, MapPin, Package, ArrowRight, ShieldCheck, 
-  Truck, Globe2, Activity, CheckCircle2, Star 
+  MapPin, Package, ArrowRight, ShieldCheck, 
+  Globe2, Activity, Star 
 } from "lucide-react";
 import { motion, Variants } from "framer-motion";
 
@@ -151,7 +151,7 @@ export default function TrackingSearchPage() {
 }
 
 // Sub-Komponen Kartu Fitur Promosional
-function FeatureCard({ icon: Icon, color, bg, title, desc }: { icon: any, color: string, bg: string, title: string, desc: string }) {
+function FeatureCard({ icon: Icon, color, bg, title, desc }: { icon: React.ElementType, color: string, bg: string, title: string, desc: string }) {
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 text-left group">
       <div className={`w-12 h-12 rounded-2xl ${bg} ${color} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300 border border-slate-100`}>

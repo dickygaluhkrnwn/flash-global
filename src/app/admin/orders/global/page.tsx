@@ -3,7 +3,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Globe, Search, CheckCircle2, AlertCircle, Filter, ArrowUpDown, DollarSign, Weight, FileText, X, Send, ShieldAlert } from "lucide-react";
+import { 
+  Globe, Search, CheckCircle2, AlertCircle, Filter, 
+  ArrowUpDown, DollarSign, Weight, FileText, X, ShieldAlert 
+} from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
@@ -12,11 +15,29 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+// =======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
+// =======================================================================
+interface QuoteData {
+  id: string;
+  originCountry?: string;
+  destCountry?: string;
+  weight?: number;
+  length?: number;
+  width?: number;
+  height?: number;
+  status: string;
+  offeredPrice?: number;
+  customsDocUrl?: string;
+  createdAt?: unknown;
+  [key: string]: unknown; // Izinkan field opsional lain dari DB
+}
+
 export default function GlobalOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [quotes, setQuotes] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<QuoteData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -33,23 +54,11 @@ export default function GlobalOrdersPage() {
   useEffect(() => {
     const q = query(collection(db, "quotes"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setQuotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setQuotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as QuoteData)));
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, []);
-
-  // RBAC GUARD (Hanya Superadmin & Admin Operasional)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -57,11 +66,6 @@ export default function GlobalOrdersPage() {
   };
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "-";
-    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  };
 
   const handleSubmitQuote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,11 +77,15 @@ export default function GlobalOrdersPage() {
       });
       showToast("success", "Penawaran Bea Cukai berhasil diterbitkan!");
       setShowQuoteModal(false);
-    } catch (err) {
+    } catch (error) {
+      console.error(error);
       showToast("error", "Gagal menerbitkan penawaran.");
     }
   };
 
+  // =======================================================================
+  // HOOKS USEMEMO (Ditempatkan SEBELUM block guard/return)
+  // =======================================================================
   const processedQuotes = useMemo(() => {
     let result = [...quotes];
     if (searchQuery) {
@@ -87,9 +95,12 @@ export default function GlobalOrdersPage() {
     if (filterStatus !== "All") result = result.filter(o => o.status.includes(filterStatus));
     
     result.sort((a, b) => {
-      const wA = a.weight || 0; const wB = b.weight || 0;
-      const cA = a.offeredPrice || 0; const cB = b.offeredPrice || 0;
-      const tA = a.createdAt?.seconds || 0; const tB = b.createdAt?.seconds || 0;
+      const wA = a.weight || 0; 
+      const wB = b.weight || 0;
+      const cA = a.offeredPrice || 0; 
+      const cB = b.offeredPrice || 0;
+      const tA = (a.createdAt as { seconds?: number })?.seconds || 0; 
+      const tB = (b.createdAt as { seconds?: number })?.seconds || 0;
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -102,6 +113,20 @@ export default function GlobalOrdersPage() {
 
   const totalQuotes = quotes.length;
   const pendingQuotes = quotes.filter(q => !q.offeredPrice).length;
+
+  // =======================================================================
+  // GUARDS: RBAC & LOADING (Mencegah "Hook called conditionally" error)
+  // =======================================================================
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Building2, Search, Filter, ArrowUpDown, 
+  Building2, Search, ArrowUpDown, 
   AlertCircle, FileSpreadsheet, ShieldAlert,
   Eye, X, Receipt, MapPin, CalendarClock, Download, CheckCircle2
 } from "lucide-react";
@@ -107,25 +107,14 @@ export default function FinanceReceivablesPage() {
         });
 
         setB2bDebts(finalDebts);
-      } catch (error) {
-        console.error("Gagal menarik data piutang:", error);
+      } catch (err) {
+        console.error("Gagal menarik data piutang:", err);
       } finally {
         setIsLoading(false);
       }
     };
     fetchDebts();
   }, []);
-
-  // RBAC GUARD
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -135,6 +124,7 @@ export default function FinanceReceivablesPage() {
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   const escapeCsv = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
 
+  // USEMEMO HARUS DI ATAS GUARD RETURN
   const processedData = useMemo(() => {
     let result = [...b2bDebts];
     if (searchQuery) {
@@ -179,10 +169,26 @@ export default function FinanceReceivablesPage() {
       document.body.removeChild(link);
       
       showToast("success", `Invoice tagihan untuk ${client.name} berhasil diunduh.`);
-    } catch (error) {
+    } catch (err) {
+      console.error(err);
       showToast("error", "Gagal mengunduh invoice.");
     }
   };
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

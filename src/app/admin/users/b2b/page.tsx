@@ -24,21 +24,23 @@ export default function B2BManagementPage() {
   const [sortBy, setSortBy] = useState("name_asc");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-      setUsers(allUsers.filter(u => u.role === "business" || u.npwp));
-    } catch (error) {
-      console.error(error);
-      showToast("error", "Gagal memuat data Korporat B2B.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
+  // MENDAPATKAN DATA (Dibungkus dalam useEffect agar aman dari dependensi loop)
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
+        setUsers(allUsers.filter(u => u.role === "business" || u.npwp));
+      } catch (error) {
+        console.error(error);
+        showToast("error", "Gagal memuat data Korporat B2B.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -53,8 +55,13 @@ export default function B2BManagementPage() {
         role: status === "Approved" ? "business" : "user"
       });
       showToast("success", `Berkas kontrak perusahaan berhasil diperbarui.`);
-      loadData();
-    } catch {
+      
+      // Update state lokal tanpa harus refetch ulang seluruh database (Optimization)
+      setUsers(prevUsers => prevUsers.map(u => 
+        u.id === userId ? { ...u, contractStatus: status, b2bLimit: limitVal, role: status === "Approved" ? "business" : "user" } : u
+      ));
+    } catch (error) {
+      console.error(error);
       showToast("error", "Gagal memproses validasi berkas B2B.");
     }
   };

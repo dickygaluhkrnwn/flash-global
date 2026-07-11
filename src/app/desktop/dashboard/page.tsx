@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, Download, Package, AlertCircle } from "lucide-react";
+import { Search, SlidersHorizontal, Package, AlertCircle } from "lucide-react";
 import Link from "next/link"; 
 import { useRouter } from "next/navigation";
 
@@ -231,41 +231,8 @@ export default function DesktopDashboardPage() {
     setSearchQuery("");
   };
 
-  const handleExportCSV = () => {
-    if (filteredOrders.length === 0) {
-      alert("Tidak ada data yang bisa diekspor.");
-      return;
-    }
-
-    const headers = ["ID Pesanan", "Nomor Resi", "Kategori", "Layanan", "Asal", "Tujuan", "Berat (Kg)", "Harga Final (Rp)", "Promo", "Status", "Tanggal"];
-    
-    const rows = filteredOrders.map(o => [
-      o.id,
-      `"${o.resi}"`,
-      o.category.toUpperCase(),
-      o.type,
-      `"${o.origin}"`, 
-      `"${o.destination}"`,
-      o.weight,
-      o.finalPrice || o.price,
-      `"${o.promoCode || "-"}"`,
-      o.status,
-      `"${o.date}"`
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Laporan_FlashGlobal_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleWAConfirm = (orderId: string, price: number) => {
+  // Menghapus parameter `price` yang tidak dipakai linter
+  const handleWAConfirm = (orderId: string) => {
     const adminWhatsApp = "6281234567890"; 
     const message = `Halo Tim CS Flash Global,\n\nSaya ingin menanyakan status untuk pesanan saya:\n\n🧾 *ID Pesanan:* ${orderId}\n\nMohon dibantu pengecekannya. Terima kasih.`;
     window.open(`https://wa.me/${adminWhatsApp}?text=${encodeURIComponent(message)}`, "_blank");

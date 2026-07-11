@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  TicketPercent, Copy, CheckCircle2, AlertCircle, 
+  TicketPercent, Copy, CheckCircle2, 
   Clock, ShieldAlert, Percent, DollarSign, Globe2, Truck
 } from "lucide-react";
 

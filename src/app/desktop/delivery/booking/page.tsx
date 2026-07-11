@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Truck, Globe2, Info, X } from "lucide-react";
+import { AlertCircle, Truck, Globe2, Info } from "lucide-react";
 
 import { db } from "@/lib/firebase"; 
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -19,6 +19,25 @@ import BookingReceipt from "./components/BookingReceipt";
 import { DropDestination, DynamicVehicle } from "./components/types";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
+
+// === TYPE DEFINITIONS UNTUK MENGHILANGKAN ANY ===
+interface Coordinates {
+  lng: number;
+  lat: number;
+}
+
+interface MapViewState {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}
+
+interface OriginData {
+  address: string;
+  detail: string;
+  senderName: string;
+  senderPhone: string;
+}
 
 function BookingForm() {
   const router = useRouter();
@@ -38,8 +57,8 @@ function BookingForm() {
   const [selectedVehicle, setSelectedVehicle] = useState<DynamicVehicle | null>(null);
 
   const [selectedService, setSelectedService] = useState<"Instan" | "Sameday">("Instan");
-  const [originData, setOriginData] = useState({ address: searchParams.get("origin") || "", detail: "", senderName: user?.name || "", senderPhone: "" });
-  const [originCoords, setOriginCoords] = useState<{lng: number, lat: number} | null>(null);
+  const [originData, setOriginData] = useState<OriginData>({ address: searchParams.get("origin") || "", detail: "", senderName: user?.name || "", senderPhone: "" });
+  const [originCoords, setOriginCoords] = useState<Coordinates | null>(null);
 
   const initialDropId = `DROP-${Math.floor(1000 + Math.random() * 9000)}`;
   const [drops, setDrops] = useState<DropDestination[]>([{
@@ -52,10 +71,10 @@ function BookingForm() {
   const [porterCount, setPorterCount] = useState<number>(0);
   const [tollFee, setTollFee] = useState<number>(0);
 
-  const [routeData, setRouteData] = useState<any>(null);
+  const [routeData, setRouteData] = useState<unknown>(null); // Type-Safe untuk Data Geometri Route dari Mapbox
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
   const [activeDraggable, setActiveDraggable] = useState<"origin" | string | null>(null);
-  const [mapViewState, setMapViewState] = useState({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
+  const [mapViewState, setMapViewState] = useState<MapViewState>({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
 
   useEffect(() => {
     if (isHydrated && !user) router.push("/login");
@@ -124,7 +143,8 @@ function BookingForm() {
           if (pData.tarifPorter) setTarifPerPorter(pData.tarifPorter);
 
           if (pData.customVehicles && Array.isArray(pData.customVehicles) && pData.customVehicles.length > 0) {
-            const sortedVehicles = pData.customVehicles.sort((a: any, b: any) => a.maxWeight - b.maxWeight);
+            // Type-Safe Sorting
+            const sortedVehicles = (pData.customVehicles as DynamicVehicle[]).sort((a, b) => a.maxWeight - b.maxWeight);
             setVehicles(sortedVehicles);
             setSelectedVehicle(sortedVehicles[0]);
           }
@@ -147,10 +167,10 @@ function BookingForm() {
     drop.items.forEach(item => { 
       if (selectedVehicle?.isMotor) { 
         totalWeight += item.weightType === "Kecil" ? motorSettings.weightSmall : motorSettings.weightMedium; 
-        motorWarrantyTotal += item.value * (motorSettings.warrantyPercent / 100); 
+        motorWarrantyTotal += (Number(item.value) || 0) * (motorSettings.warrantyPercent / 100); 
       } else { 
-        const volumeWeight = (item.length * item.width * item.height) / 6000;
-        const chargeableWeight = Math.max(item.weightVal, volumeWeight);
+        const volumeWeight = ((Number(item.length) || 0) * (Number(item.width) || 0) * (Number(item.height) || 0)) / 6000;
+        const chargeableWeight = Math.max(Number(item.weightVal) || 0, volumeWeight);
         totalWeight += chargeableWeight; 
       } 
       totalItemValue += Number(item.value) || 0; 
@@ -196,9 +216,9 @@ function BookingForm() {
 
           let midLng = originCoords.lng;
           let midLat = originCoords.lat;
-          if (maxAllowedDrops.length === 1) {
-            midLng = (originCoords.lng + maxAllowedDrops[0].lng!) / 2;
-            midLat = (originCoords.lat + maxAllowedDrops[0].lat!) / 2;
+          if (maxAllowedDrops.length === 1 && maxAllowedDrops[0].lng !== undefined && maxAllowedDrops[0].lat !== undefined) {
+            midLng = (originCoords.lng + maxAllowedDrops[0].lng) / 2;
+            midLat = (originCoords.lat + maxAllowedDrops[0].lat) / 2;
           }
 
           let dynamicZoom = 4;
@@ -224,7 +244,9 @@ function BookingForm() {
   }, [activeInfo]);
 
   const handleInfoClick = (title: string, text: string) => setActiveInfo({ title, text });
-  const handleOriginChange = (e: any) => setOriginData({ ...originData, [e.target.name]: e.target.value });
+  
+  // Handler Event Type-Safe
+  const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setOriginData({ ...originData, [e.target.name]: e.target.value });
   
   const handleMarkerDragEnd = useCallback((lng: number, lat: number, type: "origin" | string) => {
     if (type === "origin") setOriginCoords({ lng, lat });
@@ -282,8 +304,9 @@ function BookingForm() {
         createdAt: serverTimestamp(),
         porterCount 
       });
-      router.push("/pembayaran?type=domestik");
+      router.push("/desktop/pembayaran");
     } catch (error) { 
+      console.error("Kesalahan sistem submit order", error); // Linter lolos (Digunakan di console.log)
       setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda."); 
     } finally { 
       setIsLoading(false); 
@@ -308,10 +331,10 @@ function BookingForm() {
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <Button onClick={() => router.push("/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
+            <Button onClick={() => router.push("/desktop/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
               <Truck className="w-4 h-4 mr-1.5"/> Pesan Kurir
             </Button>
-            <Button onClick={() => router.push("/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
+            <Button onClick={() => router.push("/desktop/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
               <Globe2 className="w-4 h-4 mr-1.5 text-slate-500"/> Kargo Global
             </Button>
           </div>
@@ -343,7 +366,6 @@ function BookingForm() {
                 originData={originData} setOriginData={setOriginData} setOriginCoords={setOriginCoords}
                 handleOriginChange={handleOriginChange} handleInfoClick={handleInfoClick}
               />
-              {/* PERBAIKAN: Hapus fileInputRef dari sini */}
               <DropsAccordion 
                 drops={drops} setDrops={setDrops} selectedService={selectedService} selectedVehicle={selectedVehicle}
                 motorSettings={motorSettings} activeDropId={activeDropId} setActiveDropId={setActiveDropId}

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  MessageSquare, Search, Filter, ArrowUpDown, 
+  Search, Filter, ArrowUpDown, 
   Clock, CheckCircle2, AlertCircle, LifeBuoy
 } from "lucide-react";
 import { db } from "@/lib/firebase";
@@ -29,20 +29,22 @@ export default function AdminTicketsPage() {
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const fetchTickets = async () => {
-    setIsLoading(true);
-    try {
-      const q = query(collection(db, "support_tickets"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() } as SupportTicket)));
-    } catch (error) {
-      console.error("Gagal menarik tiket:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchTickets(); }, []);
+  useEffect(() => {
+    const fetchTickets = async () => {
+      setIsLoading(true);
+      try {
+        const q = query(collection(db, "support_tickets"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() } as SupportTicket)));
+      } catch (error) {
+        console.error("Gagal menarik tiket:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchTickets();
+  }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -53,7 +55,11 @@ export default function AdminTicketsPage() {
     try {
       await updateDoc(doc(db, "support_tickets", id), { status: newStatus });
       showToast("success", `Status tiket diperbarui menjadi ${newStatus}`);
-      fetchTickets();
+      
+      // Update state lokal untuk optimalisasi agar tidak fetch ulang
+      setTickets(prev => prev.map(t => 
+        t.id === id ? { ...t, status: newStatus } : t
+      ));
     } catch (error) {
       console.error(error);
       showToast("error", "Gagal memperbarui tiket.");

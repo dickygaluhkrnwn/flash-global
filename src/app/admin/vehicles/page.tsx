@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Save, CheckCircle2, Truck, ShieldCheck, 
-  Box, Scale, AlertCircle, RefreshCw, Plus, 
+  Save, CheckCircle2, Truck, 
+  Box, Scale, AlertCircle, Plus, 
   Trash2, X, Search, Filter, ArrowUpDown, ShieldAlert, Activity, Edit2
 } from "lucide-react";
 
@@ -37,6 +37,12 @@ export interface VehiclePricing {
   dimL?: { p: number, l: number, t: number };
 }
 
+// Interface tambahan untuk membungkus pricingConfig agar tidak menggunakan any
+interface PricingConfig {
+  customVehicles: VehiclePricing[];
+  [key: string]: unknown;
+}
+
 export default function AdminVehiclesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -58,8 +64,8 @@ export default function AdminVehiclesPage() {
     dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
   });
 
-  // Data Global Pricing Config (karena fleet ada di dalam dokumen ini)
-  const [pricingConfig, setPricingConfig] = useState<any>({ customVehicles: [] });
+  // Data Global Pricing Config 
+  const [pricingConfig, setPricingConfig] = useState<PricingConfig>({ customVehicles: [] });
 
   // Tarik data saat halaman dimuat
   useEffect(() => {
@@ -69,7 +75,7 @@ export default function AdminVehiclesPage() {
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          const data = docSnap.data();
+          const data = docSnap.data() as PricingConfig;
           setPricingConfig(data);
         }
       } catch (error) {
@@ -82,19 +88,7 @@ export default function AdminVehiclesPage() {
     fetchSettings();
   }, []);
 
-  // RBAC GUARD (Hanya Superadmin & Operasional)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Master Data Kendaraan ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
-
-  // Mencegah scroll body saat modal terbuka
+  // Mencegah scroll body saat modal terbuka (HARUS DI ATAS GUARD)
   useEffect(() => {
     if (isModalOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "auto";
@@ -111,7 +105,7 @@ export default function AdminVehiclesPage() {
     try {
       const newConfig = { ...pricingConfig, customVehicles: updatedVehicles, updatedAt: serverTimestamp() };
       await setDoc(doc(db, "settings", "pricing"), newConfig, { merge: true });
-      setPricingConfig(newConfig);
+      setPricingConfig(newConfig as PricingConfig);
       showToast("success", "Spesifikasi armada berhasil diperbarui!");
       setIsModalOpen(false);
     } catch (error) {
@@ -134,7 +128,7 @@ export default function AdminVehiclesPage() {
   const handleOpenEditModal = (vehicle: VehiclePricing) => {
     setModalMode("edit");
     // Cari index global asli berdasarkan ID
-    const globalIndex = pricingConfig.customVehicles.findIndex((v: any) => v.id === vehicle.id);
+    const globalIndex = pricingConfig.customVehicles.findIndex((v: VehiclePricing) => v.id === vehicle.id);
     setEditingIndex(globalIndex);
     
     setCurrentVehicle({
@@ -170,7 +164,8 @@ export default function AdminVehiclesPage() {
       vehicleData.dimL = currentVehicle.dimL;
     }
 
-    let updatedVehicles = [...(pricingConfig.customVehicles || [])];
+    // Menggunakan const karena kita tidak me-reassign variablenya, melainkan memutasi isinya
+    const updatedVehicles = [...(pricingConfig.customVehicles || [])];
     
     if (modalMode === "add") {
       // Cek apakah ID sudah ada
@@ -188,7 +183,7 @@ export default function AdminVehiclesPage() {
 
   const handleDeleteVehicle = (vehicleId: string) => {
     if (confirm("Perhatian! Menghapus armada dapat berdampak pada operasional. Yakin ingin menghapus armada ini dari sistem?")) {
-      const updatedVehicles = pricingConfig.customVehicles.filter((v: any) => v.id !== vehicleId);
+      const updatedVehicles = pricingConfig.customVehicles.filter((v: VehiclePricing) => v.id !== vehicleId);
       handleSaveToDatabase(updatedVehicles);
     }
   };
@@ -197,12 +192,12 @@ export default function AdminVehiclesPage() {
 
   // Logic Advanced Filter & Sort
   const processedData = vehiclesArray
-    .filter((v: any) => {
+    .filter((v: VehiclePricing) => {
       const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchType = filterType === "all" ? true : filterType === "motor" ? v.isMotor : !v.isMotor;
       return matchSearch && matchType;
     })
-    .sort((a: any, b: any) => {
+    .sort((a: VehiclePricing, b: VehiclePricing) => {
       if (sortBy === "weight_asc") return a.maxWeight - b.maxWeight;
       if (sortBy === "weight_desc") return b.maxWeight - a.maxWeight;
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
@@ -211,8 +206,24 @@ export default function AdminVehiclesPage() {
 
   // Statistik
   const totalVehicles = vehiclesArray.length;
-  const totalMotor = vehiclesArray.filter((v: any) => v.isMotor).length;
-  const totalMobil = vehiclesArray.filter((v: any) => !v.isMotor).length;
+  const totalMotor = vehiclesArray.filter((v: VehiclePricing) => v.isMotor).length;
+  const totalMobil = vehiclesArray.filter((v: VehiclePricing) => !v.isMotor).length;
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+  
+  // RBAC GUARD (Hanya Superadmin & Operasional)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Master Data Kendaraan ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -306,7 +317,7 @@ export default function AdminVehiclesPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>
-            {processedData.map((vehicle: any) => (
+            {processedData.map((vehicle: VehiclePricing) => (
               <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                 <VehicleCard 
                   data={vehicle} 
@@ -432,7 +443,7 @@ export default function AdminVehiclesPage() {
 
               {/* Modal Footer */}
               <div className="p-6 border-t border-slate-100 bg-white shrink-0 flex gap-4">
-                <Button onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1">Batal</Button>
+                <Button onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1 border-slate-300">Batal</Button>
                 <Button onClick={handleSubmitModal} className="flex-1 bg-[#7A171D] hover:bg-[#5A0E13] text-white">
                   {isSaving ? "Memproses..." : <><Save className="w-4 h-4 mr-2" /> Simpan Data</>}
                 </Button>
@@ -450,7 +461,7 @@ export default function AdminVehiclesPage() {
 // KOMPONEN CARD ARMADA DINAMIS
 // ======================================================================
 interface VehicleCardProps {
-  data: any;
+  data: VehiclePricing;
   onEdit: () => void;
   onDelete: () => void;
 }

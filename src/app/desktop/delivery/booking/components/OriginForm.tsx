@@ -13,11 +13,26 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const inputRed = "focus-visible:border-[#7A171D] focus-visible:ring-[#7A171D]/10";
 
+// =======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
+// =======================================================================
+export interface OriginData {
+  address: string;
+  detail: string;
+  senderName: string;
+  senderPhone: string;
+}
+
+export interface OriginCoords {
+  lng: number;
+  lat: number;
+}
+
 interface Props {
-  originData: any;
-  setOriginData: React.Dispatch<React.SetStateAction<any>>;
-  setOriginCoords: React.Dispatch<React.SetStateAction<any>>;
-  handleOriginChange: (e: any) => void;
+  originData: OriginData;
+  setOriginData: React.Dispatch<React.SetStateAction<OriginData>>;
+  setOriginCoords: React.Dispatch<React.SetStateAction<OriginCoords | null>>;
+  handleOriginChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   handleInfoClick: (t: string, text: string) => void;
 }
 
@@ -42,8 +57,14 @@ export default function OriginForm({ originData, setOriginData, setOriginCoords,
               placeholder="Ketik alamat jemput..."
               onRetrieve={(res) => {
                 const feature = res.features[0];
-                setOriginData((prev: any) => ({ ...prev, address: feature.properties.full_address || feature.properties.name }));
-                setOriginCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
+                setOriginData((prev: OriginData) => ({ 
+                  ...prev, 
+                  address: feature.properties.full_address || feature.properties.name 
+                }));
+                setOriginCoords({ 
+                  lng: feature.geometry.coordinates[0], 
+                  lat: feature.geometry.coordinates[1] 
+                });
               }}
               theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '10px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '500' } }}
             />

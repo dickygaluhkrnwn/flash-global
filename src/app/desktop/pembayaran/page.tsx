@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Building2, Lock, ArrowRight, 
+  Building2, ArrowRight, 
   QrCode, Upload, Copy, 
   CheckCircle, MessageCircle, AlertCircle, 
   ReceiptText, ChevronLeft, CreditCard, 
@@ -196,8 +196,12 @@ export default function PaymentPage() {
 
       setDiscountAmount(discount);
       setAppliedPromo(code);
-    } catch (err: any) {
-      setPromoError(err.message);
+    } catch (err: unknown) { // Perbaikan Linter Error di sini
+      if (err instanceof Error) {
+        setPromoError(err.message);
+      } else {
+        setPromoError("Terjadi kesalahan saat memvalidasi kode voucher.");
+      }
       setDiscountAmount(0);
       setAppliedPromo(null);
     } finally {
@@ -281,7 +285,7 @@ export default function PaymentPage() {
       const encodedMessage = encodeURIComponent(message);
       window.open(`https://wa.me/${adminWhatsApp}?text=${encodedMessage}`, "_blank");
 
-      router.push("/dashboard");
+      router.push("/desktop/dashboard");
 
     } catch (error: unknown) {
       console.error("Gagal memproses pembayaran:", error);
@@ -296,7 +300,7 @@ export default function PaymentPage() {
   };
 
   const handlePayLater = () => {
-    router.push("/dashboard");
+    router.push("/desktop/dashboard");
   };
 
   const formatRupiah = (val: number) => {

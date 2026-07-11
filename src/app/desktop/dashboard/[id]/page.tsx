@@ -21,13 +21,69 @@ import { cn } from "@/lib/utils";
 
 type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
 
+// === TYPE DEFINITIONS UNTUK MENGHILANGKAN ANY ===
+interface TrackingHistoryItem {
+  id: string;
+  status: string;
+  description: string;
+  location?: string;
+  date: string;
+}
+
+interface DestinationItem {
+  address: string;
+  receiverName?: string;
+  receiverPhone?: string;
+}
+
+interface OrderDetailData {
+  id: string;
+  category: string;
+  userId?: string;
+  status: string;
+  statusSub?: string;
+  paymentStatus?: string;
+  createdAt?: FirebaseTimestamp;
+  resi?: string;
+  quoteId?: string;
+  origin?: { address: string; senderName?: string; senderPhone?: string } | string;
+  senderName?: string;
+  senderPhone?: string;
+  destinations?: DestinationItem[];
+  destination?: string;
+  serviceType?: string;
+  vehicleName?: string;
+  vehicle?: string;
+  totalWeight?: number;
+  weight?: number;
+  totalDistance?: number;
+  driverName?: string;
+  driverPhone?: string;
+  totalItemValue?: number;
+  breakdown?: {
+    deliveryFee: number;
+    insuranceFee: number;
+    porterFee: number;
+    tollFee: number;
+    b2bDiscount: number;
+    grandTotal?: number;
+  };
+  finalGrandTotal?: number;
+  totalCost?: number;
+  offeredPrice?: number;
+  appliedPromoCode?: string;
+  discountPromoAmount?: number;
+  trackingHistory?: TrackingHistoryItem[];
+  [key: string]: unknown; // Extra fields
+}
+
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams();
   const orderId = params.id as string;
   const { user, isHydrated } = useAuthStore();
 
-  const [order, setOrder] = useState<any>(null);
+  const [order, setOrder] = useState<OrderDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedResi, setCopiedResi] = useState(false);
@@ -76,7 +132,7 @@ export default function OrderDetailPage() {
           }
 
           fetchedOrderDocId = docSnap.id;
-          setOrder({ id: docSnap.id, category, ...data });
+          setOrder({ id: docSnap.id, category, ...data } as OrderDetailData);
         } else {
           setErrorMsg("Data pesanan tidak ditemukan di sistem.");
           setIsLoading(false);
@@ -115,7 +171,7 @@ export default function OrderDetailPage() {
     fetchOrderDetail();
   }, [orderId, user]);
 
-  const formatIDR = (val: number) => {
+  const formatIDR = (val?: number) => {
     if (!val) return "Rp 0";
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
   };
@@ -227,7 +283,7 @@ export default function OrderDetailPage() {
   const calculateMaxClaim = () => {
     if (!order.breakdown) return 0;
     if (order.totalItemValue) return order.totalItemValue; 
-    return order.breakdown.deliveryFee * 10;
+    return (order.breakdown.deliveryFee || 0) * 10;
   };
   const maxClaimAllowed = calculateMaxClaim();
 
@@ -375,11 +431,11 @@ export default function OrderDetailPage() {
                     <div className="mt-1 bg-white p-1 rounded-full shrink-0"><MapPin className="w-4 h-4 text-[#7A171D]" /></div>
                     <div className="w-full">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Alamat Penerima</p>
-                      {order.destinations ? order.destinations.map((dest: any, idx: number) => (
+                      {order.destinations ? order.destinations.map((dest: DestinationItem, idx: number) => (
                         <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-3 last:mb-0">
                           <div className="flex justify-between items-start mb-2">
                             <p className="font-bold text-slate-900 text-sm leading-relaxed pr-4">{dest.address}</p>
-                            {order.destinations.length > 1 && <Badge className="shrink-0 text-[10px] bg-white">Drop {idx + 1}</Badge>}
+                            {order.destinations && order.destinations.length > 1 && <Badge className="shrink-0 text-[10px] bg-white">Drop {idx + 1}</Badge>}
                           </div>
                           {dest.receiverName && (
                             <div className="mt-3 pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold text-slate-600">
@@ -390,7 +446,7 @@ export default function OrderDetailPage() {
                         </div>
                       )) : (
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                           <p className="font-bold text-slate-900 text-sm leading-relaxed">{order.destination}</p>
+                           <p className="font-bold text-slate-900 text-sm leading-relaxed">{order.destination || "-"}</p>
                         </div>
                       )}
                     </div>
@@ -433,25 +489,25 @@ export default function OrderDetailPage() {
                         <span>Subtotal Produk/Jarak</span>
                         <span className="text-white">{formatIDR(order.breakdown.deliveryFee)}</span>
                       </div>
-                      {order.breakdown.insuranceFee > 0 && (
+                      {(order.breakdown.insuranceFee || 0) > 0 && (
                         <div className="flex justify-between items-center text-slate-400">
                           <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400"/> Asuransi Muatan</span>
                           <span className="text-white">{formatIDR(order.breakdown.insuranceFee)}</span>
                         </div>
                       )}
-                      {order.breakdown.porterFee > 0 && (
+                      {(order.breakdown.porterFee || 0) > 0 && (
                         <div className="flex justify-between items-center text-slate-400">
                           <span>Jasa Porter</span>
                           <span className="text-white">{formatIDR(order.breakdown.porterFee)}</span>
                         </div>
                       )}
-                      {order.breakdown.tollFee > 0 && (
+                      {(order.breakdown.tollFee || 0) > 0 && (
                         <div className="flex justify-between items-center text-slate-400">
                           <span>Deposit Tol/Parkir</span>
                           <span className="text-white">{formatIDR(order.breakdown.tollFee)}</span>
                         </div>
                       )}
-                      {order.breakdown.b2bDiscount > 0 && (
+                      {(order.breakdown.b2bDiscount || 0) > 0 && (
                         <div className="flex justify-between items-center text-emerald-400">
                           <span className="flex items-center gap-1.5"><Building className="w-3.5 h-3.5"/> Diskon Korporat</span>
                           <span>- {formatIDR(order.breakdown.b2bDiscount)}</span>
@@ -504,7 +560,7 @@ export default function OrderDetailPage() {
                 </Button>
                 
                 {order.status === "Menunggu Pembayaran" ? (
-                  <Button onClick={() => router.push("/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
+                  <Button onClick={() => router.push("/desktop/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
                     <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
                   </Button>
                 ) : (

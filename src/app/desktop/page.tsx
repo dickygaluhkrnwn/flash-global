@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { 
-  MapPin, Box, ArrowRight, Maximize, 
+  MapPin, Box, Maximize, 
   Globe2, Calculator, Truck, Lock, X, ChevronRight, 
-  User, PackageSearch, BarChart3, Scale, Navigation, Zap, Activity
+  User, PackageSearch, Scale, Navigation, Zap
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -37,6 +37,36 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
 // ======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
+// ======================================================================
+
+interface AdminPricingConfig {
+  domestik?: {
+    motor?: { baseFare: number; minKm: number; perKm: number; maxWeight: number };
+    mobil?: { baseFare: number; minKm: number; perKm: number; maxWeight: number };
+  };
+  internasional?: {
+    basePerKg?: number;
+  };
+  discounts?: {
+    thresholdKg?: number;
+    rate?: number;
+  };
+}
+
+interface EstimateData {
+  chargeableWeight: number;
+  finalEstimate: number;
+  parameters: {
+    actualWeight: number;
+    volumeWeight: number;
+    distanceTraveled: number;
+    category: string;
+    vehicleName: string;
+  };
+}
+
+// ======================================================================
 // LOGIKA KALKULASI TARIF MENGGUNAKAN DATA DINAMIS DARI ADMIN FIRESTORE
 // ======================================================================
 const getDynamicPricingSimulation = async (params: {
@@ -47,8 +77,8 @@ const getDynamicPricingSimulation = async (params: {
   height: number;
   distanceKm: number; 
   vehicle: string;
-  adminConfig: any;
-}) => {
+  adminConfig: AdminPricingConfig | null;
+}): Promise<EstimateData> => {
   await new Promise(resolve => setTimeout(resolve, 800));
 
   const volumeWeight = (params.length * params.width * params.height) / 6000;
@@ -113,11 +143,11 @@ export default function DesktopLandingPage() {
   const { user, isHydrated } = useAuthStore();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [estimateData, setEstimateData] = useState<any | null>(null);
+  const [estimateData, setEstimateData] = useState<EstimateData | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   const [activeTab, setActiveTab] = useState<"domestik" | "internasional">("domestik");
-  const [adminPricing, setAdminPricing] = useState<any>(null);
+  const [adminPricing, setAdminPricing] = useState<AdminPricingConfig | null>(null);
 
   const [formData, setFormData] = useState({ 
     origin: "", destination: "", weight: "", length: "", width: "", height: "", vehicle: "auto" 
@@ -125,7 +155,7 @@ export default function DesktopLandingPage() {
   
   const [originCoords, setOriginCoords] = useState<{lng: number, lat: number} | null>(null);
   const [destCoords, setDestCoords] = useState<{lng: number, lat: number} | null>(null);
-  const [routeData, setRouteData] = useState<any>(null);
+  const [routeData, setRouteData] = useState<unknown>(null); // unknown is safer than any for Mapbox geometry
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
   
   const [mapViewState, setMapViewState] = useState({
@@ -139,7 +169,7 @@ export default function DesktopLandingPage() {
       try {
         const docRef = doc(db, "settings", "pricing");
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setAdminPricing(docSnap.data());
+        if (docSnap.exists()) setAdminPricing(docSnap.data() as AdminPricingConfig);
       } catch (error) { 
         console.error("Gagal sinkronisasi master data tarif:", error); 
       }
@@ -202,6 +232,12 @@ export default function DesktopLandingPage() {
     setEstimateData(null); 
   };
 
+  // Helper function to update state securely from Mapbox SearchBox without mocking "any" event
+  const handleSmartMapChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setEstimateData(null);
+  };
+
   const handleCalculate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -239,7 +275,7 @@ export default function DesktopLandingPage() {
       origin: formData.origin, destination: formData.destination, weight: formData.weight.toString(),
       l: formData.length.toString(), w: formData.width.toString(), h: formData.height.toString()
     }).toString();
-    return activeTab === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`;
+    return activeTab === "domestik" ? `/desktop/delivery/booking?${params}` : `/desktop/forwarding/quote?${params}`;
   };
 
   const handleDirectRoute = (route: string) => {
@@ -287,14 +323,14 @@ export default function DesktopLandingPage() {
           {/* QUICK ACCESS BUTTONS: Pindah ke kanan atas agar rapi */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto shrink-0 pb-1">
             <Button 
-              onClick={() => handleDirectRoute("/delivery/booking")}
+              onClick={() => handleDirectRoute("/desktop/delivery/booking")}
               variant="primary" 
               className="w-full sm:w-auto h-12 px-6 text-sm font-bold shadow-lg shadow-[#7A171D]/20 rounded-xl flex items-center justify-center gap-2"
             >
               <Truck className="w-4 h-4" /> Pesan Domestik Langsung
             </Button>
             <Button 
-              onClick={() => handleDirectRoute("/forwarding/quote")}
+              onClick={() => handleDirectRoute("/desktop/forwarding/quote")}
               variant="outline" 
               className="w-full sm:w-auto h-12 px-6 text-sm font-bold bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm rounded-xl flex items-center justify-center gap-2"
             >
@@ -339,9 +375,8 @@ export default function DesktopLandingPage() {
                           placeholder="Titik Penjemputan..."
                           onRetrieve={(res) => {
                             const feature = res.features[0];
-                            handleInputChange({ target: { name: "origin", value: feature.properties.full_address || feature.properties.name } } as any);
+                            handleSmartMapChange("origin", feature.properties.full_address || feature.properties.name);
                             setOriginCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
-                            setEstimateData(null);
                           }}
                           theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '15px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '600' } }}
                         />
@@ -358,9 +393,8 @@ export default function DesktopLandingPage() {
                           placeholder="Lokasi Pengiriman..."
                           onRetrieve={(res) => {
                             const feature = res.features[0];
-                            handleInputChange({ target: { name: "destination", value: feature.properties.full_address || feature.properties.name } } as any);
+                            handleSmartMapChange("destination", feature.properties.full_address || feature.properties.name);
                             setDestCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
-                            setEstimateData(null);
                           }}
                           theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '15px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '600' } }}
                         />
@@ -493,7 +527,7 @@ export default function DesktopLandingPage() {
               </div>
 
               <div className="absolute bottom-6 right-6 z-20">
-                <button onClick={() => router.push("/tracking")} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
+                <button onClick={() => router.push("/desktop/tracking")} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
                   <div className="bg-[#7A171D]/10 p-2 rounded-xl text-[#7A171D] group-hover:scale-110 transition-transform"><PackageSearch className="w-4 h-4"/></div>
                   <span className="text-slate-800 text-xs font-bold tracking-wide">Cek Pengiriman</span>
                 </button>

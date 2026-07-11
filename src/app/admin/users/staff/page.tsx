@@ -26,22 +26,25 @@ export default function StaffManagementPage() {
 
   const [newStaff, setNewStaff] = useState({ name: "", email: "", role: "admin_cs" as UserRole });
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-      const adminRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
-      setUsers(allUsers.filter(u => adminRoles.includes(u.role)));
-    } catch (error) {
-      console.error(error);
-      showToast("error", "Gagal memuat data Staf Internal.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    // MENDAPATKAN DATA (Dibungkus dalam useEffect agar aman dari dependensi loop linter)
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
+        const adminRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
+        setUsers(allUsers.filter(u => adminRoles.includes(u.role)));
+      } catch (error) {
+        console.error(error);
+        showToast("error", "Gagal memuat data Staf Internal.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   // RBAC GUARD
   if (currentUser?.role !== 'superadmin') {
@@ -67,7 +70,11 @@ export default function StaffManagementPage() {
     try {
       await updateDoc(doc(db, "users", userId), { isSuspended: !currentStatus });
       showToast("success", "Status otorisasi staf diperbarui.");
-      loadData();
+      
+      // Update state React lokal untuk menghindari fetch ulang (Optimization)
+      setUsers(prevUsers => prevUsers.map(u => 
+        u.id === userId ? { ...u, isSuspended: !currentStatus } : u
+      ));
     } catch {
       showToast("error", "Gagal merubah status staf.");
     }
@@ -78,16 +85,21 @@ export default function StaffManagementPage() {
     setIsProcessing(true);
     try {
       const staffMockId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
-      await setDoc(doc(db, "users", staffMockId), {
+      
+      const newStaffData = {
         name: newStaff.name,
         email: newStaff.email,
         role: newStaff.role,
         isSuspended: false,
         createdAt: serverTimestamp()
-      });
+      };
+
+      await setDoc(doc(db, "users", staffMockId), newStaffData);
       showToast("success", `Hak akses internal staf ${newStaff.name} berhasil didaftarkan.`);
+      
+      // Update tabel secara lokal dengan data baru tanpa query ulang ke Firebase
+      setUsers(prev => [{ id: staffMockId, ...newStaffData, createdAt: undefined }, ...prev]);
       setNewStaff({ name: "", email: "", role: "admin_cs" });
-      loadData();
     } catch {
       showToast("error", "Gagal menyimpan entitas staf baru.");
     } finally {

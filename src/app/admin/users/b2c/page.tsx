@@ -24,21 +24,24 @@ export default function B2CManagementPage() {
   const [sortBy, setSortBy] = useState("name_asc"); 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-      setUsers(allUsers.filter(u => u.role === "user"));
-    } catch (error) {
-      console.error(error);
-      showToast("error", "Gagal memuat data B2C.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
+  // MENDAPATKAN DATA (Dibungkus dalam useEffect agar aman dari dependensi loop linter)
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
+        setUsers(allUsers.filter(u => u.role === "user"));
+      } catch (error) {
+        console.error(error);
+        showToast("error", "Gagal memuat data B2C.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -49,7 +52,11 @@ export default function B2CManagementPage() {
     try {
       await updateDoc(doc(db, "users", userId), { isSuspended: !currentStatus });
       showToast("success", "Status pengguna diperbarui.");
-      loadData();
+      
+      // Update state React lokal untuk menghindari fetch ulang yang berat
+      setUsers(prevUsers => prevUsers.map(u => 
+        u.id === userId ? { ...u, isSuspended: !currentStatus } : u
+      ));
     } catch {
       showToast("error", "Gagal merubah status suspensi.");
     }

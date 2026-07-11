@@ -1,13 +1,22 @@
 import dynamic from "next/dynamic";
 import { Building, Scale, ArrowRight, MapPinned } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { DropDestination, DynamicVehicle } from "./types";
-import { cn } from "@/lib/utils";
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
   loading: () => <div className="w-full h-full bg-slate-100 animate-pulse flex flex-col items-center justify-center rounded-[1.5rem]"><div className="w-8 h-8 border-4 border-slate-300 border-t-[#7A171D] rounded-full animate-spin mb-3"></div><p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Menyiapkan Peta</p></div> 
 });
+
+interface Coordinate {
+  lng: number;
+  lat: number;
+}
+
+interface MapViewState {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}
 
 interface Props {
   selectedVehicle: DynamicVehicle | null;
@@ -26,9 +35,9 @@ interface Props {
   isLoading: boolean;
   isFetchingData: boolean;
   routeDistanceKm: number;
-  mapViewState: any;
-  originCoords: any;
-  routeData: any;
+  mapViewState: MapViewState;
+  originCoords: Coordinate | null;
+  routeData: unknown; // Lebih aman dari any, routeData dari Mapbox
   activeDraggable: string | null;
   handleMarkerDragEnd: (lng: number, lat: number, type: string) => void;
   formatRupiah: (val: number) => string;
@@ -60,7 +69,8 @@ export default function BookingReceipt({
             interactive={true}
             className="w-full h-full"
             originCoords={originCoords}
-            drops={drops}
+            // Type Casting yang aman untuk mengatasi konflik Index Signature antara DropDestination dan MapBase
+            drops={drops as unknown as Array<{ id: string; lng?: number; lat?: number; [key: string]: unknown }>}
             routeData={routeData}
             activeDraggable={activeDraggable}
             onMarkerDragEnd={handleMarkerDragEnd}
@@ -151,11 +161,11 @@ export default function BookingReceipt({
           <p className="text-3xl font-black text-white tracking-tight">{formatRupiah(grandTotal)}</p>
         </div>
 
-        <Button 
+        <button 
           type="submit" 
           form="booking-form"
           disabled={isLoading || isOverweight || isFetchingData || routeDistanceKm === 0}
-          className="w-full h-14 bg-[#7A171D] hover:bg-[#5A0E13] text-white font-black text-sm rounded-xl shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+          className="w-full h-14 bg-[#7A171D] hover:bg-[#5A0E13] text-white font-black text-sm rounded-xl shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 transition-all"
         >
           {isLoading ? (
             <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Memproses...</>
@@ -166,7 +176,7 @@ export default function BookingReceipt({
           ) : (
             <>Lanjut Pembayaran <ArrowRight className="w-4 h-4" /></>
           )}
-        </Button>
+        </button>
       </div>
     </>
   );

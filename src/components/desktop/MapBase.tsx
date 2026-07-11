@@ -8,8 +8,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 interface MapBaseProps extends Omit<React.ComponentProps<typeof Map>, 'originCoords' | 'drops' | 'routeData'> {
   className?: string;
   originCoords?: { lng: number; lat: number } | null;
-  drops?: { id: string; lng?: number; lat?: number; [key: string]: any }[];
-  routeData?: any;
+  drops?: { id: string; lng?: number; lat?: number; [key: string]: unknown }[];
+  routeData?: unknown;
   activeDraggable?: "origin" | string | null;
   onMarkerDragEnd?: (lng: number, lat: number, type: "origin" | string) => void;
   driverCoords?: { lng: number; lat: number } | null;
@@ -31,7 +31,7 @@ export default function MapBase({
   driverCoords,
   ...restProps 
 }: MapBaseProps) {
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<React.ElementRef<typeof Map> | null>(null);
 
   const [viewState, setViewState] = useState({
     longitude: longitude || 118.0149,
@@ -70,7 +70,7 @@ export default function MapBase({
         ref={mapRef}
         {...viewState}
         interactive={interactive}
-        onMove={(evt: any) => setViewState(evt.viewState)}
+        onMove={(evt: { viewState: { longitude: number; latitude: number; zoom: number } }) => setViewState(evt.viewState)}
         mapStyle={mapStyle}
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: "100%", height: "100%" }}
@@ -84,7 +84,7 @@ export default function MapBase({
             latitude={originCoords.lat} 
             anchor="bottom"
             draggable={activeDraggable === "origin"}
-            onDragEnd={(e: any) => onMarkerDragEnd && onMarkerDragEnd(e.lngLat.lng, e.lngLat.lat, "origin")}
+            onDragEnd={(e: { lngLat: { lng: number; lat: number } }) => onMarkerDragEnd && onMarkerDragEnd(e.lngLat.lng, e.lngLat.lat, "origin")}
             style={{ zIndex: activeDraggable === "origin" ? 50 : 10 }}
           >
             <div className="relative flex flex-col items-center group">
@@ -109,7 +109,7 @@ export default function MapBase({
             latitude={drop.lat!} 
             anchor="bottom"
             draggable={activeDraggable === drop.id}
-            onDragEnd={(e: any) => onMarkerDragEnd && onMarkerDragEnd(e.lngLat.lng, e.lngLat.lat, drop.id)}
+            onDragEnd={(e: { lngLat: { lng: number; lat: number } }) => onMarkerDragEnd && onMarkerDragEnd(e.lngLat.lng, e.lngLat.lat, drop.id)}
             style={{ zIndex: activeDraggable === drop.id ? 50 : 15 }}
           >
             <div className="relative flex flex-col items-center group">
@@ -142,7 +142,7 @@ export default function MapBase({
         )}
 
         {/* 4. ROUTE POLYLINE (GARIS RUTE SOLID) - Bypass Bug Mapbox */}
-        <Source id="route-source" type="geojson" data={geojsonData as any}>
+        <Source id="route-source" type="geojson" data={geojsonData as never}>
           <Layer
             id="route-layer"
             type="line"

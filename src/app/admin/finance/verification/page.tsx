@@ -7,7 +7,7 @@ import {
   Receipt, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, XCircle, Eye, Image as ImageIcon,
   ShieldAlert, Clock, FileText, User, MapPin, Package, 
-  Truck, ArrowRight, X, ChevronRight, Scale, TicketPercent
+  Truck, X, Scale, TicketPercent
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -15,14 +15,39 @@ import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
+
+// =======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
+// =======================================================================
+interface OrderData {
+  id: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  email?: string;
+  origin?: { senderName?: string; senderPhone?: string; address?: string } | string;
+  destination?: string;
+  destinations?: { address: string; receiverName?: string; receiverPhone?: string }[];
+  breakdown?: { grandTotal?: number; deliveryFee?: number; insuranceFee?: number; porterFee?: number; tollFee?: number; b2bDiscount?: number };
+  finalGrandTotal?: number;
+  totalCost?: number;
+  offeredPrice?: number;
+  appliedPromoCode?: string;
+  discountPromoAmount?: number;
+  createdAt?: unknown; // FIXED: Diganti dari any ke unknown agar lolos strict mode
+  status?: string;
+  vehicleName?: string;
+  vehicle?: string;
+  totalWeight?: number;
+  weight?: number;
+  receiptUrl?: string | null;
+  [key: string]: unknown; // Allow additional fields if any
+}
 
 export default function FinanceVerificationPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -32,31 +57,19 @@ export default function FinanceVerificationPage() {
   const [sortOrder, setSortOrder] = useState("newest");
 
   // State Detail Order
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     // Tarik data order untuk diverifikasi
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderData)));
       setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
-
-  // RBAC GUARD
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Keuangan & Tagihan ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -65,9 +78,14 @@ export default function FinanceVerificationPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
-  const formatDate = (timestamp: any) => {
+  // Ganti parameter "any" dengan "unknown" dan pastikan bisa mengecek properti toDate
+  const formatDate = (timestamp: unknown) => {
     if (!timestamp) return "-";
-    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    
+    // Perlakuan aman untuk Firebase Timestamp (yang memiliki fungsi toDate)
+    const t = timestamp as { toDate?: () => Date };
+    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(timestamp as string | number);
+    
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
@@ -128,19 +146,27 @@ export default function FinanceVerificationPage() {
     }
   };
 
+  // USEMEMO HARUS DI ATAS SEMUA GUARD RETURN
   const processedData = useMemo(() => {
     let result = orders.filter(o => o.paymentMethod === "Transfer Bank Manual" || o.paymentStatus === "Menunggu Verifikasi Finance" || o.paymentStatus === "Lunas" || o.paymentStatus === "Ditolak");
     
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(o => o.id.toLowerCase().includes(q) || (o.email || "").toLowerCase().includes(q) || (o.origin?.senderName || "").toLowerCase().includes(q));
+      result = result.filter(o => {
+        const originName = typeof o.origin === 'object' ? o.origin?.senderName : "";
+        return o.id.toLowerCase().includes(q) || (o.email || "").toLowerCase().includes(q) || (originName || "").toLowerCase().includes(q);
+      });
     }
     if (filterStatus !== "All") result = result.filter(o => o.paymentStatus === filterStatus);
     
     result.sort((a, b) => {
       const cA = a.breakdown?.grandTotal || a.finalGrandTotal || a.totalCost || 0; 
       const cB = b.breakdown?.grandTotal || b.finalGrandTotal || b.totalCost || 0;
-      const tA = a.createdAt?.seconds || 0; const tB = b.createdAt?.seconds || 0;
+      
+      const aTime = a.createdAt as { seconds?: number };
+      const bTime = b.createdAt as { seconds?: number };
+      const tA = aTime?.seconds || 0; 
+      const tB = bTime?.seconds || 0;
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -152,6 +178,22 @@ export default function FinanceVerificationPage() {
 
   const totalMenunggu = orders.filter(o => o.paymentStatus === "Menunggu Verifikasi Finance").length;
   const totalDanaDiverifikasiHariIni = orders.filter(o => o.paymentStatus === "Lunas").reduce((acc, curr) => acc + (curr.finalGrandTotal || curr.breakdown?.grandTotal || 0), 0);
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Keuangan & Tagihan ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -239,12 +281,14 @@ export default function FinanceVerificationPage() {
                   <tr key={v.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-5 pl-6 align-top">
                       <p className="font-mono font-black text-slate-900 text-sm uppercase">#{v.id}</p>
-                      <p className="text-xs text-slate-500 font-semibold mt-1">{v.email || v.origin?.senderName || "Klien"}</p>
+                      <p className="text-xs text-slate-500 font-semibold mt-1">
+                        {v.email || (typeof v.origin === 'object' ? v.origin?.senderName : "") || "Klien"}
+                      </p>
                       <p className="text-[10px] text-slate-400 mt-1">{formatDate(v.createdAt)}</p>
                     </td>
                     <td className="p-5 align-top">
                       <div className="flex flex-col">
-                        <p className="text-base font-black text-emerald-600">{formatRupiah(v.finalGrandTotal || v.breakdown?.grandTotal || v.totalCost)}</p>
+                        <p className="text-base font-black text-emerald-600">{formatRupiah(v.finalGrandTotal || v.breakdown?.grandTotal || v.totalCost || 0)}</p>
                         {v.appliedPromoCode && (
                           <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded w-fit mt-1.5 font-bold flex items-center gap-1"><TicketPercent className="w-3 h-3"/> Promo Aktif</span>
                         )}
@@ -277,7 +321,7 @@ export default function FinanceVerificationPage() {
         </div>
       </div>
 
-      {/* MODAL / PANEL DETAIL ORDER (LARGE) */}
+      {/* MODAL VIEWER READ-ONLY */}
       <AnimatePresence>
         {selectedOrderDetail && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
@@ -336,7 +380,7 @@ export default function FinanceVerificationPage() {
                             <div className="mt-1 bg-white p-1 rounded-full"><MapPin className="w-5 h-5 text-[#7A171D]" /></div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Titik Tujuan (Destinasi)</p>
-                              {selectedOrderDetail.destinations ? selectedOrderDetail.destinations.map((dest: any, idx: number) => (
+                              {selectedOrderDetail.destinations ? selectedOrderDetail.destinations.map((dest: { address: string; receiverName?: string; receiverPhone?: string; }, idx: number) => (
                                 <div key={idx} className="mb-3 last:mb-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                   <p className="font-bold text-slate-900 text-sm">{dest.address}</p>
                                   {dest.receiverName && <p className="text-xs text-slate-500 font-medium mt-1">{dest.receiverName} ({dest.receiverPhone})</p>}
@@ -356,7 +400,7 @@ export default function FinanceVerificationPage() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Berat</p>
-                          <p className="text-lg font-black text-slate-900 flex items-center gap-2"><Scale className="w-4 h-4 text-slate-400"/> {selectedOrderDetail.totalWeight || selectedOrderDetail.weight} Kg</p>
+                          <p className="text-lg font-black text-slate-900 flex items-center gap-2"><Scale className="w-4 h-4 text-slate-400"/> {selectedOrderDetail.totalWeight || selectedOrderDetail.weight || 0} Kg</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tipe Kendaraan</p>
@@ -401,30 +445,30 @@ export default function FinanceVerificationPage() {
                           <>
                             <div className="flex justify-between items-center text-slate-400">
                               <span>Tarif Dasar Rute</span>
-                              <span className="text-white">{formatRupiah(selectedOrderDetail.breakdown.deliveryFee)}</span>
+                              <span className="text-white">{formatRupiah(selectedOrderDetail.breakdown.deliveryFee || 0)}</span>
                             </div>
-                            {selectedOrderDetail.breakdown.insuranceFee > 0 && (
+                            {(selectedOrderDetail.breakdown.insuranceFee || 0) > 0 && (
                               <div className="flex justify-between items-center text-slate-400">
                                 <span>Asuransi</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.insuranceFee)}</span>
+                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.insuranceFee || 0)}</span>
                               </div>
                             )}
-                            {selectedOrderDetail.breakdown.porterFee > 0 && (
+                            {(selectedOrderDetail.breakdown.porterFee || 0) > 0 && (
                               <div className="flex justify-between items-center text-slate-400">
                                 <span>Jasa Porter</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.porterFee)}</span>
+                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.porterFee || 0)}</span>
                               </div>
                             )}
-                            {selectedOrderDetail.breakdown.tollFee > 0 && (
+                            {(selectedOrderDetail.breakdown.tollFee || 0) > 0 && (
                               <div className="flex justify-between items-center text-slate-400">
                                 <span>Deposit Tol/Parkir</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.tollFee)}</span>
+                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.tollFee || 0)}</span>
                               </div>
                             )}
-                            {selectedOrderDetail.breakdown.b2bDiscount > 0 && (
+                            {(selectedOrderDetail.breakdown.b2bDiscount || 0) > 0 && (
                               <div className="flex justify-between items-center text-amber-400">
                                 <span>Diskon Klien (B2B)</span>
-                                <span>- {formatRupiah(selectedOrderDetail.breakdown.b2bDiscount)}</span>
+                                <span>- {formatRupiah(selectedOrderDetail.breakdown.b2bDiscount || 0)}</span>
                               </div>
                             )}
                             
@@ -432,14 +476,14 @@ export default function FinanceVerificationPage() {
                             {selectedOrderDetail.appliedPromoCode && (
                               <div className="flex justify-between items-center text-pink-400 border-t border-slate-700/50 pt-2 mt-2">
                                 <span className="flex items-center gap-1.5"><TicketPercent className="w-3.5 h-3.5"/> Promo: {selectedOrderDetail.appliedPromoCode}</span>
-                                <span>- {formatRupiah(selectedOrderDetail.discountPromoAmount)}</span>
+                                <span>- {formatRupiah(selectedOrderDetail.discountPromoAmount || 0)}</span>
                               </div>
                             )}
                           </>
                         ) : (
                           <div className="flex justify-between items-center text-slate-400">
                             <span>Total Harga Global</span>
-                            <span className="text-white">{formatRupiah(selectedOrderDetail.totalCost || selectedOrderDetail.offeredPrice)}</span>
+                            <span className="text-white">{formatRupiah(selectedOrderDetail.totalCost || selectedOrderDetail.offeredPrice || 0)}</span>
                           </div>
                         )}
                       </div>

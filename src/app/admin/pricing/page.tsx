@@ -80,19 +80,8 @@ export default function AdminPricingPage() {
       }
     };
     fetchSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // RBAC GUARD (Hanya Superadmin & Finance)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Tarif ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
@@ -116,13 +105,14 @@ export default function AdminPricingPage() {
     }
   };
 
-  const handleVehicleChange = (index: number, field: keyof VehiclePricing, value: any) => {
+  const handleVehicleChange = (index: number, field: keyof VehiclePricing, value: number) => {
     // Kita harus mencari index asli di dalam array global berdasarkan ID armada yang diedit di hasil filter
     const vehicleId = processedData[index].id;
     const globalIndex = pricingConfig.customVehicles.findIndex(v => v.id === vehicleId);
     
     if (globalIndex !== -1) {
       const updatedVehicles = [...pricingConfig.customVehicles];
+      // Menyalin item dan mengupdate nilainya
       updatedVehicles[globalIndex] = { ...updatedVehicles[globalIndex], [field]: value };
       setPricingConfig({ ...pricingConfig, customVehicles: updatedVehicles });
     }
@@ -141,6 +131,22 @@ export default function AdminPricingPage() {
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
       return 0;
     });
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin & Finance)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Tarif ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -312,7 +318,7 @@ export default function AdminPricingPage() {
 interface PricingCardProps {
   index: number;
   data: VehiclePricing;
-  onChange: (index: number, field: keyof VehiclePricing, val: any) => void;
+  onChange: (index: number, field: keyof VehiclePricing, val: number) => void;
 }
 
 function PricingCard({ index, data, onChange }: PricingCardProps) {

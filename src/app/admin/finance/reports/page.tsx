@@ -17,6 +17,19 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
 
+// Interface untuk mengatasi strict typing pada rawObj
+interface RawOrderData {
+  breakdown?: {
+    deliveryFee?: number;
+    insuranceFee?: number;
+    porterFee?: number;
+    tollFee?: number;
+    b2bDiscount?: number;
+    grandTotal?: number;
+  };
+  [key: string]: unknown;
+}
+
 interface FinanceReport {
   id: string;
   date: string;
@@ -38,9 +51,9 @@ interface FinanceReport {
   b2bDiscount: number;
   promoCode: string;
   promoDiscount: number;
-  amount: number; // Final Grand Total
+  amount: number; 
   timestamp: number;
-  rawObj: any; // Simpan data asli untuk modal
+  rawObj: RawOrderData; 
 }
 
 export default function FinanceReportsPage() {
@@ -102,11 +115,11 @@ export default function FinanceReportsPage() {
             
             amount: Number(data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost || data.offeredPrice) || 0,
             timestamp: dateObj.getTime(),
-            rawObj: data
+            rawObj: data as RawOrderData
           };
         }));
-      } catch (error) {
-        console.error("Gagal menarik data laporan:", error);
+      } catch (err) {
+        console.error("Gagal menarik data laporan:", err);
       } finally {
         setIsLoading(false);
       }
@@ -114,26 +127,15 @@ export default function FinanceReportsPage() {
     fetchReports();
   }, []);
 
-  // RBAC GUARD
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
-
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   };
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-
   const escapeCsv = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
 
+  // USEMEMO HARUS DI ATAS GUARD RETURN
   const processedData = useMemo(() => {
     let result = [...reports];
     if (searchQuery) {
@@ -153,6 +155,8 @@ export default function FinanceReportsPage() {
     
     return result;
   }, [reports, searchQuery, filterStatus, dateStart, dateEnd]);
+
+  const totalIncome = processedData.filter(r => r.paymentStatus === "Lunas").reduce((acc, curr) => acc + curr.amount, 0);
 
   // HANDLER: Export CSV SUPER DETAIL
   const handleExportCSV = () => {
@@ -190,12 +194,27 @@ export default function FinanceReportsPage() {
       document.body.removeChild(link);
       
       showToast("success", "File CSV Laporan Keuangan (Format Detail) berhasil diunduh.");
-    } catch (error) {
+    } catch (err) {
+      console.error(err);
       showToast("error", "Gagal mengekspor file CSV.");
     }
   };
 
-  const totalIncome = processedData.filter(r => r.paymentStatus === "Lunas").reduce((acc, curr) => acc + curr.amount, 0);
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -17,7 +17,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
-import { cn } from "@/lib/utils";
 
 interface PromoData {
   id: string; // Kode Promo
@@ -90,18 +89,6 @@ export default function AdminPromoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // RBAC GUARD (Hanya Superadmin & Finance)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Master Promo ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
-
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
@@ -170,7 +157,7 @@ export default function AdminPromoPage() {
     }
   };
 
-  // LOGIKA FILTER CERDAS DENGAN FALLBACK UNTUK DATA LAMA
+  // LOGIKA FILTER CERDAS DENGAN FALLBACK UNTUK DATA LAMA (USEMEMO DITARIK KE ATAS)
   const processedPromos = useMemo(() => {
     let result = [...promos];
     if (searchQuery) {
@@ -184,6 +171,31 @@ export default function AdminPromoPage() {
   }, [promos, searchQuery, filterService]);
 
   const activePromoCount = promos.filter(p => p.isActive && new Date(p.expiresAt) >= new Date() && p.usedCount < p.quota).length;
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin & Finance)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Master Promo ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
+        <Activity className="w-10 h-10 text-[#C5A059] animate-pulse mb-4" />
+        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Menarik Data Voucher...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10 font-sans">
@@ -255,12 +267,7 @@ export default function AdminPromoPage() {
         </div>
 
         <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-20 flex flex-col items-center justify-center text-center">
-               <Activity className="w-8 h-8 text-[#C5A059] animate-pulse mb-3" />
-               <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Menarik Data Voucher...</p>
-            </div>
-          ) : processedPromos.length === 0 ? (
+          {processedPromos.length === 0 ? (
             <div className="p-20 text-center text-slate-500 font-medium">Belum ada kode promo yang didaftarkan.</div>
           ) : (
             <table className="w-full text-left border-collapse text-sm">
@@ -418,8 +425,8 @@ export default function AdminPromoPage() {
                 </div>
 
                 <div className="flex gap-3 pt-6 border-t border-slate-100">
-                  <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} className="flex-1 h-12">Batal</Button>
-                  <Button type="submit" variant="gold" disabled={isProcessing} className="flex-1 h-12">
+                  <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} className="flex-1 h-12 border-slate-300">Batal</Button>
+                  <Button type="submit" variant="gold" disabled={isProcessing} className="flex-1 h-12 shadow-md">
                     {isProcessing ? "Menyimpan..." : "Terbitkan Promo"}
                   </Button>
                 </div>

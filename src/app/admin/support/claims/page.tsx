@@ -31,20 +31,22 @@ export default function AdminClaimsPage() {
   
   const [showImageModal, setShowImageModal] = useState<string | null>(null);
 
-  const fetchClaims = async () => {
-    setIsLoading(true);
-    try {
-      const q = query(collection(db, "insurance_claims"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(q);
-      setClaims(snap.docs.map(d => ({ id: d.id, ...d.data() } as InsuranceClaim)));
-    } catch (error) {
-      console.error("Gagal menarik klaim:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => { 
+    const fetchClaims = async () => {
+      setIsLoading(true);
+      try {
+        const q = query(collection(db, "insurance_claims"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        setClaims(snap.docs.map(d => ({ id: d.id, ...d.data() } as InsuranceClaim)));
+      } catch (error) {
+        console.error("Gagal menarik klaim:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  useEffect(() => { fetchClaims(); }, []);
+    fetchClaims(); 
+  }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -58,6 +60,11 @@ export default function AdminClaimsPage() {
   const formatTime = (ts?: Timestamp) => {
     if (!ts) return "Unknown";
     return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Fungsi refresh lokal untuk optimize (di passing ke props component anak)
+  const handleUpdateClaimState = (id: string, newStatus: "Approved" | "Rejected") => {
+    setClaims(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
   };
 
   const processedClaims = useMemo(() => {
@@ -144,7 +151,7 @@ export default function AdminClaimsPage() {
                     formatRupiah={formatRupiah} 
                     setShowImageModal={setShowImageModal} 
                     showToast={showToast} 
-                    refreshData={fetchClaims}
+                    updateLocalState={handleUpdateClaimState}
                   />
                 ))}
               </tbody>
@@ -175,9 +182,35 @@ export default function AdminClaimsPage() {
 }
 
 // === KOMPONEN BARIS EXPANDABLE (LAZY LOADING) ===
-function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal, showToast, refreshData }: any) {
+// Membuat interface eksplisit agar tidak terkena linter rule "no-explicit-any"
+interface OrderReferenceData {
+  vehicleName?: string;
+  serviceType?: string;
+  totalWeight?: number;
+  weight?: number;
+  breakdown?: {
+    deliveryFee?: number;
+    insuranceFee?: number;
+  };
+  totalDistance?: number;
+  origin?: { address: string } | string;
+  destination?: string;
+  destinations?: { address: string }[];
+  [key: string]: unknown;
+}
+
+interface ExpandableClaimRowProps {
+  claim: InsuranceClaim;
+  formatTime: (ts?: Timestamp) => string;
+  formatRupiah: (val: number) => string;
+  setShowImageModal: (url: string) => void;
+  showToast: (type: "success" | "error", msg: string) => void;
+  updateLocalState: (id: string, newStatus: "Approved" | "Rejected") => void;
+}
+
+function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal, showToast, updateLocalState }: ExpandableClaimRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [orderData, setOrderData] = useState<any>(null);
+  const [orderData, setOrderData] = useState<OrderReferenceData | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -193,7 +226,7 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
           docSnap = await getDoc(docRef);
         }
         if (docSnap.exists()) {
-          setOrderData(docSnap.data());
+          setOrderData(docSnap.data() as OrderReferenceData);
         }
       } catch (e) {
         console.error("Gagal menarik detail order:", e);
@@ -209,7 +242,7 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
     try {
       await updateDoc(doc(db, "insurance_claims", claim.id), { status: newStatus });
       showToast("success", `Klaim berhasil diproses (${newStatus})`);
-      refreshData();
+      updateLocalState(claim.id, newStatus);
     } catch (error) {
       console.error(error);
       showToast("error", "Gagal memproses klaim.");

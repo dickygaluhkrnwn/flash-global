@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRef } from "react";
-import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FieldLabel } from "./FieldLabel";
@@ -17,12 +17,19 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const inputGold = "focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/10";
 
+// Tipe spesifik untuk pengaturan motor, menggantikan `any`
+interface MotorSettings {
+  weightSmall?: number;
+  weightMedium?: number;
+  [key: string]: unknown;
+}
+
 interface Props {
   drops: DropDestination[];
   setDrops: React.Dispatch<React.SetStateAction<DropDestination[]>>;
   selectedService: string;
   selectedVehicle: DynamicVehicle | null;
-  motorSettings: any;
+  motorSettings: MotorSettings | null; 
   activeDropId: string | null;
   setActiveDropId: (id: string | null) => void;
   activeDraggable: string | null;
@@ -49,7 +56,10 @@ export default function DropsAccordion({
   };
 
   const removeDrop = (index: number) => setDrops(prev => prev.filter((_, i) => i !== index));
-  const updateDropField = (dIndex: number, field: keyof DropDestination, val: any) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], [field]: val }; return newDrops; });
+  
+  // Perbaikan tipe `val` dari `any` menjadi `string` karena semua input untuk updateDropField saat ini berupa string (address, detail, receiverName, dll)
+  const updateDropField = (dIndex: number, field: keyof DropDestination, val: string) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], [field]: val }; return newDrops; });
+  
   const updateDropFieldsMulti = (dIndex: number, updates: Partial<DropDestination>) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], ...updates }; return newDrops; });
   const addItemToDrop = (dIndex: number) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex].items.push({ id: `ITM-${Math.floor(1000 + Math.random() * 9000)}`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }); return newDrops; });
   const removeItemFromDrop = (dIndex: number, iIndex: number) => setDrops(prev => { const newDrops = [...prev]; if (newDrops[dIndex].items.length > 1) { newDrops[dIndex].items = newDrops[dIndex].items.filter((_, i) => i !== iIndex); } return newDrops; });

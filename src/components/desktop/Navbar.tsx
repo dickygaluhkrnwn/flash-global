@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { 
   Package, Search, User, Menu, Settings, 
   LogOut, LayoutDashboard, ChevronDown, 
-  MapPin, X, TicketPercent, LifeBuoy 
+  X, TicketPercent, LifeBuoy 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 

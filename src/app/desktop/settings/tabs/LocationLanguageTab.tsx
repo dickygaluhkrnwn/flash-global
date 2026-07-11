@@ -7,7 +7,7 @@ import {
   Clock, Languages, Coins, Scale, AlertCircle, Info, Lock, Hammer
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -60,8 +60,12 @@ export default function LocationLanguageTab() {
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    } catch (error: any) {
-      setErrorMsg("Gagal menyimpan ke server: " + error.message);
+    } catch (error: unknown) { // Perbaikan Linter Error any di sini
+      if (error instanceof Error) {
+        setErrorMsg("Gagal menyimpan ke server: " + error.message);
+      } else {
+        setErrorMsg("Gagal menyimpan ke server karena kesalahan yang tidak diketahui.");
+      }
     } finally {
       setIsLoading(false);
     }

@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Package, Truck, Search, CheckCircle2, AlertCircle, Filter, 
-  ArrowUpDown, DollarSign, Weight, MapPin, UserPlus, X, Clock, ShieldAlert, 
+  Package, Search, CheckCircle2, AlertCircle, Filter, 
+  ArrowUpDown, DollarSign, Weight, UserPlus, X, Clock, ShieldAlert, 
   Calendar
 } from "lucide-react";
 
@@ -16,12 +16,41 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+// =======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
+// =======================================================================
+interface OrderData {
+  id: string;
+  origin?: { address?: string; senderName?: string; senderPhone?: string } | string;
+  destinations?: { address: string; receiverName?: string; receiverPhone?: string }[];
+  destination?: string;
+  serviceType?: string;
+  vehicleName?: string;
+  vehicle?: string;
+  totalWeight?: number;
+  weight?: number;
+  breakdown?: { grandTotal?: number };
+  createdAt?: unknown;
+  status: string;
+  driverName?: string;
+  driverId?: string;
+  [key: string]: unknown; // Mengizinkan properti tambahan dengan aman
+}
+
+interface DriverData {
+  id: string;
+  name: string;
+  vehicleType: string;
+  isSuspended?: boolean;
+  [key: string]: unknown;
+}
+
 export default function DomesticOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [orders, setOrders] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [drivers, setDrivers] = useState<DriverData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -41,30 +70,23 @@ export default function DomesticOrdersPage() {
 
   useEffect(() => {
     const fetchDrivers = async () => {
-      const snap = await getDocs(collection(db, "driver_wallets"));
-      setDrivers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      try {
+        const snap = await getDocs(collection(db, "driver_wallets"));
+        setDrivers(snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData)));
+      } catch (error) {
+        console.error("Gagal menarik data sopir:", error);
+      }
     };
     fetchDrivers();
 
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderData)));
       setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
-
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -72,15 +94,16 @@ export default function DomesticOrdersPage() {
   };
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-  const formatDate = (timestamp: any) => {
+  
+  const formatDate = (timestamp: unknown) => {
     if (!timestamp) return "-";
-    const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const t = timestamp as { toDate?: () => Date };
+    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(timestamp as string | number);
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  const openStatusModal = (order: any) => {
+  const openStatusModal = (order: OrderData) => {
     setSelectedOrderId(order.id);
-    // KUNCI PERBAIKAN: Default Form adalah Menuju Jemput (Bukan Menunggu Pembayaran lagi)
     setStatusForm({ status: "Menuju Lokasi Jemput", location: "Pusat Hub Penjemputan", description: "", timeMode: "auto", customDate: "" });
     setShowStatusModal(true);
   };
@@ -122,7 +145,8 @@ export default function DomesticOrdersPage() {
 
       showToast("success", "Status & log riwayat berhasil diperbarui!");
       setShowStatusModal(false);
-    } catch (err) {
+    } catch (error) {
+      console.error(error);
       showToast("error", "Gagal memperbarui status order.");
     }
   };
@@ -145,23 +169,33 @@ export default function DomesticOrdersPage() {
       });
       showToast("success", `Sopir ${driverName} berhasil ditugaskan!`);
       setShowDriverModal(false);
-    } catch (err) { showToast("error", "Gagal menugaskan sopir."); }
+    } catch (error) { 
+      console.error(error);
+      showToast("error", "Gagal menugaskan sopir."); 
+    }
   };
 
+  // USEMEMO HARUS DI ATAS GUARD RETURN
   const processedOrders = useMemo(() => {
-    // Tampilkan hanya yang sudah bukan status "Menunggu Pembayaran"
-    // Opsional: Kamu bisa menghapus filter ini jika Admin Ops perlu melihat SEMUA order
     let result = [...orders];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(o => o.id.toLowerCase().includes(q) || (o.origin?.address || "").toLowerCase().includes(q) || (o.origin?.senderName || "").toLowerCase().includes(q));
+      result = result.filter(o => {
+        const originAddr = typeof o.origin === 'object' ? o.origin?.address : o.origin;
+        const originName = typeof o.origin === 'object' ? o.origin?.senderName : "";
+        return o.id.toLowerCase().includes(q) || (originAddr || "").toLowerCase().includes(q) || (originName || "").toLowerCase().includes(q);
+      });
     }
     if (filterStatus !== "All") result = result.filter(o => o.status.includes(filterStatus));
     
     result.sort((a, b) => {
-      const wA = a.totalWeight || 0; const wB = b.totalWeight || 0;
-      const cA = a.breakdown?.grandTotal || 0; const cB = b.breakdown?.grandTotal || 0;
-      const tA = a.createdAt?.seconds || 0; const tB = b.createdAt?.seconds || 0;
+      const wA = a.totalWeight || a.weight || 0; 
+      const wB = b.totalWeight || b.weight || 0;
+      const cA = a.breakdown?.grandTotal || 0; 
+      const cB = b.breakdown?.grandTotal || 0;
+      
+      const tA = (a.createdAt as { seconds?: number })?.seconds || 0; 
+      const tB = (b.createdAt as { seconds?: number })?.seconds || 0;
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -173,8 +207,22 @@ export default function DomesticOrdersPage() {
   }, [orders, searchQuery, filterStatus, sortOrder]);
 
   const totalOmset = orders.reduce((acc, o) => acc + (o.breakdown?.grandTotal || 0), 0);
-  // Total pending di operasional = Menunggu Kurir
   const totalPending = orders.filter(o => o.status.includes("Menunggu Kurir")).length;
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+  
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -274,20 +322,22 @@ export default function DomesticOrdersPage() {
                       <div className="space-y-3">
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase">Pengirim</p>
-                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={o.origin?.address}>{o.origin?.senderName || "Klien"}</p>
+                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={typeof o.origin === 'object' ? o.origin?.address : o.origin}>
+                            {typeof o.origin === 'object' ? o.origin?.senderName || "Klien" : "Klien"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase">Tujuan</p>
-                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={o.destinations?.[0]?.address}>
-                            {o.destinations?.length > 1 ? `${o.destinations.length} Titik Tujuan` : (o.destinations?.[0]?.receiverName || "Penerima")}
+                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={o.destinations?.[0]?.address || o.destination}>
+                            {o.destinations && o.destinations.length > 1 ? `${o.destinations.length} Titik Tujuan` : (o.destinations?.[0]?.receiverName || "Penerima")}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="p-5 align-top">
-                       <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded text-[10px] uppercase border border-slate-200 mb-2 inline-block">{o.serviceType} - {o.vehicleName}</span>
-                       <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5"><Weight className="w-3.5 h-3.5"/> {o.totalWeight} Kg</p>
-                       <p className="text-sm text-emerald-600 font-black mt-1">{formatRupiah(o.breakdown?.grandTotal)}</p>
+                       <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded text-[10px] uppercase border border-slate-200 mb-2 inline-block">{o.serviceType} - {o.vehicleName || o.vehicle}</span>
+                       <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5"><Weight className="w-3.5 h-3.5"/> {o.totalWeight || o.weight} Kg</p>
+                       <p className="text-sm text-emerald-600 font-black mt-1">{formatRupiah(o.breakdown?.grandTotal || 0)}</p>
                     </td>
                     <td className="p-5 align-top">
                       <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block border ${
@@ -327,7 +377,6 @@ export default function DomesticOrdersPage() {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Manifes (Operasional)</label>
                   <select value={statusForm.status} onChange={(e) => setStatusForm({...statusForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 text-sm font-bold outline-none focus:border-[#7A171D]">
-                    {/* KUNCI: Opsi Pembayaran / Verifikasi sudah dibuang! */}
                     <option value="Menuju Lokasi Jemput">Sopir Menuju Lokasi Jemput</option>
                     <option value="Picked Up (In Transit)">In Transit (Paket Dibawa Armada)</option>
                     <option value="Tiba di Hub Transit">Tiba di Hub Transit</option>

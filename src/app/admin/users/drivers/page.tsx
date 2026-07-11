@@ -23,21 +23,23 @@ export default function DriversManagementPage() {
   const [sortBy, setSortBy] = useState("name_asc");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "driver_wallets"));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverSystemData[];
-      setDrivers(list);
-    } catch (error) {
-      console.error(error);
-      showToast("error", "Gagal memuat data Driver.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "driver_wallets"));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverSystemData[];
+        setDrivers(list);
+      } catch (error) {
+        console.error(error);
+        showToast("error", "Gagal memuat data Driver.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -48,7 +50,11 @@ export default function DriversManagementPage() {
     try {
       await updateDoc(doc(db, "driver_wallets", driverId), { isSuspended: !currentStatus });
       showToast("success", "Status operasional armada diperbarui.");
-      loadData();
+      
+      // Update state React lokal untuk menghindari fetch ulang yang berat (Optimization)
+      setDrivers(prevDrivers => prevDrivers.map(d => 
+        d.id === driverId ? { ...d, isSuspended: !currentStatus } : d
+      ));
     } catch {
       showToast("error", "Gagal merubah status armada.");
     }
@@ -63,7 +69,7 @@ export default function DriversManagementPage() {
     .sort((a, b) => {
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
       if (sortBy === "name_desc") return b.name.localeCompare(a.name);
-      if (sortBy === "balance_desc") return b.balance - a.balance;
+      if (sortBy === "balance_desc") return (b.balance || 0) - (a.balance || 0);
       return 0;
     });
 
@@ -168,7 +174,7 @@ export default function DriversManagementPage() {
                       <p className="text-slate-500 mt-0.5">{d.phone}</p>
                     </td>
                     <td className="p-5 text-slate-700 font-medium">{d.vehicleType}</td>
-                    <td className="p-5 font-black text-emerald-600">Rp {d.balance.toLocaleString('id-ID')}</td>
+                    <td className="p-5 font-black text-emerald-600">Rp {(d.balance || 0).toLocaleString('id-ID')}</td>
                     <td className="p-5">
                       <span className={`px-3 py-1.5 rounded-lg font-bold text-xs ${d.isSuspended ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
                         {d.isSuspended ? "SUSPENDED" : "READY DISPATCH"}

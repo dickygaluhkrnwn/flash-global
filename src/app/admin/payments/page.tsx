@@ -98,19 +98,8 @@ export default function AdminPaymentsPage() {
       }
     };
     fetchSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // RBAC GUARD (Hanya Superadmin & Finance)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
-        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
-        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Pembayaran ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
-      </div>
-    );
-  }
 
   // Mencegah scroll body saat modal terbuka
   useEffect(() => {
@@ -182,9 +171,10 @@ export default function AdminPaymentsPage() {
       setQrisFile(null); // Reset state file karena sudah tersimpan
 
       showToast("success", "Konfigurasi metode pembayaran berhasil diperbarui!");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Gagal menyimpan konfigurasi:", error);
-      showToast("error", error.message || "Gagal menyimpan konfigurasi ke database.");
+      const errMsg = error instanceof Error ? error.message : "Gagal menyimpan konfigurasi ke database.";
+      showToast("error", errMsg);
     } finally {
       setIsSaving(false);
     }
@@ -211,6 +201,22 @@ export default function AdminPaymentsPage() {
       setPaymentConfig(prev => ({ ...prev, transferBank: updatedBanks }));
     }
   };
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin & Finance)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Pembayaran ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

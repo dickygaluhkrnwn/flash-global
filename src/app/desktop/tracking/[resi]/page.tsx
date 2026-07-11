@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { 
   CheckCircle2, Clock, MapPin, Plane, 
-  Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, FileText, User, Banknote
+  Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, User, Banknote
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -26,7 +26,36 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
+// =======================================================================
+// INTERFACES (Menghilangkan Tipe 'any' secara Massal)
+// =======================================================================
 type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
+
+interface Coordinate {
+  lat: number;
+  lng: number;
+}
+
+interface LocationDetail {
+  address?: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
+  lat?: number;
+  lng?: number;
+  resi?: string;
+  [key: string]: unknown;
+}
+
+// PERBAIKAN: Menambahkan index signature agar sejalan dengan MapBaseProps
+interface MapDropItem {
+  id: string;
+  lng: number;
+  lat: number;
+  address: string;
+  [key: string]: unknown;
+}
 
 interface TrackingHistoryItem {
   id?: string | number;
@@ -42,12 +71,12 @@ interface TrackingData {
   category: "Domestik" | "Internasional";
   status?: string;
   statusSub?: string;
-  origin?: any; 
-  destination?: any; 
-  destinations?: any[];
+  origin?: LocationDetail | string; 
+  destination?: LocationDetail | string; 
+  destinations?: LocationDetail[];
   createdAt?: FirebaseTimestamp;
   trackingHistory?: TrackingHistoryItem[];
-  driverCoords?: { lat: number; lng: number };
+  driverCoords?: Coordinate;
   vehicleName?: string;
   serviceType?: string;
   resi?: string;
@@ -61,26 +90,33 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isNotFound, setIsNotFound] = useState(false);
-  const [routeData, setRouteData] = useState<any>(null);
+  const [routeData, setRouteData] = useState<unknown>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
 
   const [mapViewState, setMapViewState] = useState({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
 
-  const getCoords = (locationData: any) => {
-    if (locationData && typeof locationData === "object" && locationData.lng && locationData.lat) {
-      return { lng: Number(locationData.lng), lat: Number(locationData.lat) };
+  // Type-Safe getCoords
+  const getCoords = (locationData: unknown): Coordinate | null => {
+    if (locationData && typeof locationData === "object" && "lng" in locationData && "lat" in locationData) {
+      const loc = locationData as Record<string, unknown>;
+      if (typeof loc.lng === "number" && typeof loc.lat === "number") {
+        return { lng: loc.lng, lat: loc.lat };
+      }
     }
     return null;
   };
 
   const originLatLng = trackingData ? getCoords(trackingData.origin) : null;
   
-  // Format array destinations untuk MapBase
-  const dropsForMap = trackingData?.destinations ? trackingData.destinations.map((d: any, idx: number) => ({
-    id: `dest-${idx}`, lng: d.lng, lat: d.lat, address: d.address
+  // Format array destinations untuk MapBase secara Type-Safe
+  const dropsForMap: MapDropItem[] = trackingData?.destinations ? trackingData.destinations.map((d, idx) => ({
+    id: `dest-${idx}`, 
+    lng: d.lng || 0, 
+    lat: d.lat || 0, 
+    address: d.address || ""
   })) : [];
 
-  if (dropsForMap.length === 0 && trackingData?.destination) {
+  if (dropsForMap.length === 0 && trackingData?.destination && typeof trackingData.destination === 'object') {
     const dCoord = getCoords(trackingData.destination);
     if (dCoord) dropsForMap.push({ id: "dest-single", lng: dCoord.lng, lat: dCoord.lat, address: trackingData.destination.address || "" });
   }
@@ -120,7 +156,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
               // Cek ID Dokumen
               const matchId = d.id.toUpperCase().includes(queryUpper);
               // Cek Resi di Array Destinations
-              const matchResiArray = data.destinations?.some((dest: any) => dest.resi?.toUpperCase().includes(queryUpper));
+              const matchResiArray = data.destinations?.some((dest: LocationDetail) => dest.resi?.toUpperCase().includes(queryUpper));
               // Cek Resi di Induk
               const matchResiMain = data.resi?.toUpperCase().includes(queryUpper);
               
@@ -187,7 +223,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   // Kalkulasi Garis Rute Mapbox & AUTO ZOOM
   useEffect(() => {
     const fetchRealRoute = async () => {
-      const validDrops = dropsForMap.filter((d: any) => d.lng !== undefined && d.lat !== undefined);
+      const validDrops = dropsForMap.filter((d) => d.lng !== 0 && d.lat !== 0);
       if (!originLatLng || validDrops.length === 0) {
         setRouteData(null);
         if (originLatLng) setMapViewState({ longitude: originLatLng.lng, latitude: originLatLng.lat, zoom: 12 });
@@ -195,7 +231,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       }
       
       const maxAllowedDrops = validDrops.slice(0, 24);
-      const waypoints = [`${originLatLng.lng},${originLatLng.lat}`, ...maxAllowedDrops.map((d: any) => `${d.lng},${d.lat}`)].join(";");
+      const waypoints = [`${originLatLng.lng},${originLatLng.lat}`, ...maxAllowedDrops.map((d) => `${d.lng},${d.lat}`)].join(";");
       
       try {
         const response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`);
@@ -208,7 +244,10 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
           setRouteDistanceKm(distanceKm);
 
           let midLng = originLatLng.lng; let midLat = originLatLng.lat;
-          if (maxAllowedDrops.length === 1) { midLng = (originLatLng.lng + maxAllowedDrops[0].lng!) / 2; midLat = (originLatLng.lat + maxAllowedDrops[0].lat!) / 2; }
+          if (maxAllowedDrops.length === 1) { 
+            midLng = (originLatLng.lng + maxAllowedDrops[0].lng) / 2; 
+            midLat = (originLatLng.lat + maxAllowedDrops[0].lat) / 2; 
+          }
 
           let dynamicZoom = 4;
           if (distanceKm < 5) dynamicZoom = 12.5;
@@ -353,7 +392,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                     originCoords={originLatLng}
                     drops={dropsForMap}
                     routeData={routeData}
-                    driverCoords={trackingData.driverCoords as any}
+                    driverCoords={trackingData.driverCoords}
                   />
 
                   {!originLatLng && (
@@ -378,7 +417,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                       <p className="text-sm font-black text-slate-900 truncate" title={typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "Titik Koordinat Asal")}>
                         {typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "Titik Koordinat Asal")}
                       </p>
-                      {trackingData.origin?.senderName && (
+                      {typeof trackingData.origin === 'object' && trackingData.origin?.senderName && (
                         <p className="text-xs text-slate-500 font-medium mt-1 flex items-center gap-1.5"><User className="w-3 h-3"/> {trackingData.origin.senderName}</p>
                       )}
                     </div>
@@ -400,8 +439,8 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                       <p className="text-sm font-black text-slate-900 truncate" title={dropsForMap.length > 1 ? "Multi-Drop Destinations" : (dropsForMap[0]?.address || "Tujuan")}>
                         {dropsForMap.length > 1 ? `${dropsForMap.length} Titik Tujuan` : (dropsForMap[0]?.address || "Titik Koordinat Tujuan")}
                       </p>
-                      {(trackingData.destinations?.[0]?.receiverName || trackingData.destination?.receiverName) && (
-                        <p className="text-xs text-slate-500 font-medium mt-1 flex items-center md:justify-end gap-1.5"><User className="w-3 h-3"/> {trackingData.destinations?.[0]?.receiverName || trackingData.destination?.receiverName}</p>
+                      {((trackingData.destinations && trackingData.destinations[0]?.receiverName) || (typeof trackingData.destination === 'object' && trackingData.destination?.receiverName)) && (
+                        <p className="text-xs text-slate-500 font-medium mt-1 flex items-center md:justify-end gap-1.5"><User className="w-3 h-3"/> {trackingData.destinations?.[0]?.receiverName || (typeof trackingData.destination === 'object' ? trackingData.destination?.receiverName : "")}</p>
                       )}
                     </div>
                   </div>

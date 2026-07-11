@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { 
-  User, Phone, Mail, MapPin, Box, 
-  Globe2, ArrowRight, ShieldCheck, 
+  User, Phone, Mail, Box, 
+  Globe2, ShieldCheck, 
   MessageCircle, Info, Maximize, Zap,
-  Anchor, Plane, Truck
+  Anchor, Plane
 } from "lucide-react";
 import { db } from "@/lib/firebase"; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
 
 // ======================================================================
 // DYNAMIC IMPORT SSR: FALSE (FOR INDEPENDENT MAPBOX)
@@ -31,8 +30,8 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
-// Helper Component for Labels
-const FieldLabel = ({ label, icon: Icon }: { label: string, icon?: any }) => (
+// Helper Component for Labels - Didefinisikan dengan Tipe yang Aman
+const FieldLabel = ({ label, icon: Icon }: { label: string, icon?: React.ElementType }) => (
   <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2">
     {Icon && <Icon className="w-3.5 h-3.5 text-[#C5A059]" />} {label}
   </label>
@@ -122,7 +121,7 @@ function QuoteForm() {
       window.open(`https://wa.me/${adminWA}?text=${waText}`, "_blank");
       
       // Redirect to Dashboard
-      router.push("/dashboard");
+      router.push("/desktop/dashboard");
 
     } catch (error) {
       console.error("Failed to save quote:", error);
@@ -171,8 +170,8 @@ function QuoteForm() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <Button onClick={() => router.push("/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
-            <Truck className="w-4 h-4 mr-1.5"/> Domestic Cargo
+          <Button onClick={() => router.push("/desktop/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
+             Domestic Cargo
           </Button>
           <Button variant="gold" className="shadow-md h-11 text-xs px-5 cursor-default hover:scale-100">
             <Globe2 className="w-4 h-4 mr-1.5"/> Global Cargo
