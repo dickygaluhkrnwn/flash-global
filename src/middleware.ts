@@ -5,13 +5,14 @@ export function middleware(request: NextRequest) {
   const url = request.nextUrl;
   const { device } = userAgent(request);
 
-  // Abaikan request untuk file statis, API, file internal Next.js, dan PORTAL ADMIN
-  // Biar middleware nggak berjalan berkali-kali atau memblokir akses Admin
+  // Abaikan request untuk file statis, API, file internal Next.js, dan PORTAL ADMIN/AUTH
+  // Biar middleware nggak berjalan berkali-kali atau memblokir akses
   if (
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/static') ||
-    url.pathname.startsWith('/admin') || // <-- JALUR VIP: BYPASS FOLDER ADMIN SEPENUHNYA
+    url.pathname.startsWith('/admin') || // <-- JALUR VIP: BYPASS FOLDER ADMIN
+    url.pathname.startsWith('/reset-password') || // <-- TAMBAHKAN INI: BYPASS RESET PASSWORD
     url.pathname.includes('.')
   ) {
     return NextResponse.next();
