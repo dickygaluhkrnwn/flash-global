@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Mail, Eye, EyeOff, ShieldAlert, Package, ArrowRight } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, ShieldAlert, Package, ArrowRight, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
 
 // --- IMPORT FIREBASE CORE ---
 import { auth, db } from "@/lib/firebase";
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { UserRole } from "@/store/useAuthStore"; // Menggunakan tipe role dari store
 
@@ -21,7 +21,10 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   // Logic verifikasi otorisasi dari Firestore
   const verifyAdminRole = async (uid: string) => {
@@ -55,6 +58,7 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg("");
+    setSuccessMsg("");
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -77,6 +81,7 @@ export default function AdminLoginPage() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setErrorMsg("");
+    setSuccessMsg("");
     
     try {
       const provider = new GoogleAuthProvider();
@@ -93,6 +98,35 @@ export default function AdminLoginPage() {
         setErrorMsg("Gagal login dengan Google.");
       }
       setIsLoading(false);
+    }
+  };
+
+  // Fitur Lupa Kata Sandi
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setErrorMsg("Silakan masukkan alamat email Anda terlebih dahulu di kolom email untuk mereset kata sandi.");
+      return;
+    }
+    
+    setIsResetting(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setSuccessMsg("Tautan pemulihan kata sandi telah dikirim ke email Anda. Silakan cek kotak masuk atau folder spam.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (error.message.includes("auth/user-not-found") || error.message.includes("auth/invalid-email")) {
+          setErrorMsg("Alamat email tidak terdaftar atau tidak valid.");
+        } else {
+          setErrorMsg(error.message.replace("Firebase: ", ""));
+        }
+      } else {
+        setErrorMsg("Gagal mengirim email pemulihan. Silakan coba lagi.");
+      }
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -120,22 +154,38 @@ export default function AdminLoginPage() {
           <p className="text-xs text-slate-500 mt-1.5 uppercase tracking-widest font-bold">Flash Global Admin Portal</p>
         </div>
 
-        {/* Error Alert Panel */}
-        <AnimatePresence>
-          {errorMsg && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0, y: -10 }} 
-              animate={{ opacity: 1, height: "auto", y: 0 }} 
-              exit={{ opacity: 0, height: 0, y: -10 }}
-              className="mb-6 overflow-hidden"
-            >
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-semibold rounded-xl flex items-start gap-3 leading-relaxed">
-                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Alert Panels (Error & Success) */}
+        <div className="space-y-3 mb-6">
+          <AnimatePresence>
+            {errorMsg && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, y: -10 }} 
+                animate={{ opacity: 1, height: "auto", y: 0 }} 
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-semibold rounded-xl flex items-start gap-3 leading-relaxed">
+                  <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <span>{errorMsg}</span>
+                </div>
+              </motion.div>
+            )}
+
+            {successMsg && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, y: -10 }} 
+                animate={{ opacity: 1, height: "auto", y: 0 }} 
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm font-semibold rounded-xl flex items-start gap-3 leading-relaxed">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+                  <span>{successMsg}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Form Login Email */}
         <form onSubmit={handleAdminLogin} className="space-y-5">
@@ -174,11 +224,23 @@ export default function AdminLoginPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            
+            {/* Tombol Lupa Kata Sandi */}
+            <div className="flex justify-end mt-2">
+              <button 
+                type="button" 
+                onClick={handleForgotPassword}
+                disabled={isResetting || isLoading}
+                className="text-[11px] font-bold text-slate-500 hover:text-[#7A171D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isResetting ? "Mengirim Tautan..." : "Lupa Kata Sandi?"}
+              </button>
+            </div>
           </div>
 
           <button 
             type="submit" 
-            disabled={isLoading}
+            disabled={isLoading || isResetting}
             className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-4 rounded-xl text-sm transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] disabled:opacity-70 mt-4 flex items-center justify-center gap-2"
           >
             {isLoading ? (
@@ -199,7 +261,7 @@ export default function AdminLoginPage() {
         <button 
           type="button"
           onClick={handleGoogleLogin}
-          disabled={isLoading}
+          disabled={isLoading || isResetting}
           className="mt-6 w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl text-sm transition-all border border-slate-200 shadow-sm disabled:opacity-50 active:scale-[0.98]"
         >
           <Image src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width={20} height={20} />
