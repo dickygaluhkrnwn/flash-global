@@ -5,14 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Crown, ArrowRight, Building, 
   MapPin, User, Briefcase, TrendingUp, 
-  FileCheck, ShieldAlert, MessageCircle 
+  FileCheck, ShieldAlert, MessageCircle, 
+  CheckCircle2, AlertCircle, Clock
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
-
-const inputStyle = "w-full rounded-xl border-2 border-gray-200 bg-white outline-none text-gray-900 shadow-sm transition-all placeholder:text-gray-400 placeholder:font-normal font-semibold focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10";
-const inputStyleGold = "w-full rounded-xl border-2 border-[#C5A059]/20 bg-white outline-none text-gray-900 shadow-sm transition-all placeholder:text-gray-400 placeholder:font-normal font-semibold focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 const industryOptions = [
   "E-Commerce & Retail",
@@ -33,11 +34,16 @@ const volumeOptions = [
 ];
 
 export default function BusinessTab() {
-  const { user } = useAuthStore();
+  const { user, login } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showB2BForm, setShowB2BForm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   
+  // Status Kemitraan dari Database
+  const [contractStatus, setContractStatus] = useState<"Pending" | "Approved" | "Rejected" | null>(null);
+  const [b2bLimit, setB2bLimit] = useState<number>(0);
+
   // State untuk Profil Bisnis Standar
   const [formData, setFormData] = useState({ 
     companyName: "", 
@@ -56,6 +62,7 @@ export default function BusinessTab() {
   useEffect(() => {
     if (user?.uid) {
       setB2bData(prev => ({ ...prev, picName: user.name || "" }));
+      
       const fetchUserData = async () => {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -65,49 +72,70 @@ export default function BusinessTab() {
               companyName: data.companyName || "",
               defaultAddress: data.defaultAddress || ""
             });
-            setB2bData(prev => ({ 
-              ...prev, 
-              legalCompanyName: data.companyName || "" 
-            }));
+            setB2bData({
+              picName: data.picName || user.name || "",
+              legalCompanyName: data.companyName || "",
+              npwp: data.npwp || "",
+              industry: data.industry || "",
+              volume: data.monthlyVolume || ""
+            });
+            setContractStatus(data.contractStatus || null);
+            setB2bLimit(data.b2bLimit || 0);
+
+            // Jika role di database sudah business tapi di zustand belum, update zustand
+            if (data.role === "business" && user.role !== "business") {
+              login({ ...user, role: "business" });
+            }
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
+        } finally {
+          setIsLoading(false);
         }
       };
       fetchUserData();
     }
-  }, [user]);
+  }, [user, login]);
 
   const handleSaveCompany = async () => {
     if (!user?.uid) return;
+    setIsSaving(true);
     try {
-      await setDoc(doc(db, "users", user.uid), { ...formData, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(doc(db, "users", user.uid), { 
+        companyName: formData.companyName,
+        defaultAddress: formData.defaultAddress,
+        updatedAt: serverTimestamp() 
+      }, { merge: true });
       setIsEditing(false);
     } catch (error) {
       console.error("Error saving company data:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  // LOGIKA CERDAS: SINKRONISASI KE TABEL ADMIN B2B
   const handleSubmitB2B = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.uid) return;
-    setIsLoading(true);
+    setIsSaving(true);
 
     try {
-      // 1. Simpan pengajuan ke Firestore
-      await setDoc(doc(db, "b2b_requests", user.uid), {
-        userId: user.uid,
-        email: user.email,
+      // 1. Simpan langsung ke profil user agar terbaca oleh Admin B2B
+      await setDoc(doc(db, "users", user.uid), {
         picName: b2bData.picName,
-        legalCompanyName: b2bData.legalCompanyName,
+        companyName: b2bData.legalCompanyName, // Samakan nama entitas
         npwp: b2bData.npwp,
         industry: b2bData.industry,
         monthlyVolume: b2bData.volume,
-        status: "Menunggu Peninjauan",
-        requestedAt: serverTimestamp()
-      });
+        contractStatus: "Pending", // Status awal wajib Pending
+        b2bRequestedAt: serverTimestamp()
+      }, { merge: true });
 
-      // 2. Generate Pesan WA
+      setContractStatus("Pending");
+      setShowB2BForm(false);
+
+      // 2. Generate Pesan WA ke Tim Sales/Kemitraan
       const adminWhatsApp = "6281234567890"; 
       const message = `Halo Tim Kemitraan Flash Global,\n\nSaya tertarik untuk *Upgrade Akun Corporate (B2B)*. Berikut profil bisnis saya:\n\n👤 *Nama PIC:* ${b2bData.picName}\n🏢 *Nama PT/Entitas:* ${b2bData.legalCompanyName}\n📄 *NPWP:* ${b2bData.npwp || "-"}\n🏭 *Industri:* ${b2bData.industry}\n📦 *Estimasi Volume:* ${b2bData.volume}\n✉️ *Email Terdaftar:* ${user.email}\n\nMohon informasi terkait dokumen legalitas lanjutan dan penawaran harga grosirnya. Terima kasih.`;
       
@@ -118,156 +146,226 @@ export default function BusinessTab() {
       console.error("Gagal mengajukan B2B:", error);
       alert("Terjadi kesalahan. Pastikan koneksi internet Anda stabil.");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
+  if (isLoading) {
+    return <div className="h-64 flex items-center justify-center text-slate-400 font-bold text-sm animate-pulse">Memuat Profil Bisnis...</div>;
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       
       {/* 1. PROFIL BISNIS STANDAR (Untuk Form Booking) */}
-      <div className="bg-white rounded-3xl shadow-xl shadow-[#7A171D]/5 border border-gray-100 overflow-hidden p-8">
-        <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
+        <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50">
           <div>
-            <h2 className="text-xl font-black text-gray-900">Store / Branch Profile</h2>
-            <p className="text-gray-500 text-sm mt-1">Kelola nama entitas dan lokasi gudang default untuk penjemputan.</p>
+            <h2 className="text-xl font-black text-slate-900">Branch & Store Profile</h2>
+            <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium">Kelola nama entitas dan lokasi gudang default untuk mempercepat penjemputan.</p>
           </div>
           {!isEditing ? (
-            <button onClick={() => setIsEditing(true)} className="bg-gray-50 hover:bg-gray-100 text-gray-900 px-4 py-2 rounded-xl font-bold text-sm transition-all border border-gray-200">
-              Edit Details
-            </button>
+            <Button onClick={() => setIsEditing(true)} variant="outline" className="h-10 text-xs font-bold w-full sm:w-auto">
+              Edit Data Cabang
+            </Button>
           ) : (
-            <button onClick={handleSaveCompany} className="bg-[#7A171D] hover:bg-[#5A0E13] text-white px-5 py-2 rounded-xl font-bold text-sm transition-all">
-              Save
-            </button>
+            <Button onClick={handleSaveCompany} disabled={isSaving} variant="primary" className="h-10 text-xs font-bold w-full sm:w-auto">
+              {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+            </Button>
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="p-6 md:p-8 space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">Display Name / Branch</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Display Name / Branch Name</label>
             <div className="relative">
-              <Building className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" disabled={!isEditing} value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} className={`${inputStyle} pl-11 pr-4 py-3 disabled:bg-gray-50 disabled:text-gray-500`} placeholder="Toko Flash Global Pusat" />
+              <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input 
+                type="text" 
+                disabled={!isEditing} 
+                value={formData.companyName} 
+                onChange={(e) => setFormData({...formData, companyName: e.target.value})} 
+                className="pl-11 disabled:bg-slate-100 disabled:text-slate-500 font-bold" 
+                placeholder="Cth: Toko Flash Global Pusat" 
+              />
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">Default Warehouse Address</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Default Warehouse Address</label>
             <div className="relative">
-              <MapPin className="w-5 h-5 absolute left-4 top-4 text-gray-400" />
-              <textarea disabled={!isEditing} value={formData.defaultAddress} onChange={(e) => setFormData({...formData, defaultAddress: e.target.value})} rows={3} className={`${inputStyle} pl-11 pr-4 py-3 disabled:bg-gray-50 disabled:text-gray-500 resize-none`} placeholder="Alamat lengkap pergudangan..."></textarea>
+              <MapPin className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
+              <textarea 
+                disabled={!isEditing} 
+                value={formData.defaultAddress} 
+                onChange={(e) => setFormData({...formData, defaultAddress: e.target.value})} 
+                rows={3} 
+                className="flex w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pl-11 text-sm font-bold text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:border-[#7A171D] disabled:bg-slate-100 disabled:text-slate-500 resize-none" 
+                placeholder="Alamat lengkap pergudangan..."
+              ></textarea>
             </div>
           </div>
         </div>
       </div>
 
       {/* 2. CORPORATE B2B UPGRADE SECTION */}
-      <div className="bg-gradient-to-br from-gray-900 to-slate-800 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl border border-gray-800 transition-all">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
+      <div className={cn(
+        "rounded-[2rem] p-6 md:p-8 text-white relative overflow-hidden shadow-xl border transition-all",
+        contractStatus === "Approved" 
+          ? "bg-gradient-to-br from-[#7A171D] via-[#5A0E13] to-[#4A0A10] border-red-500/20" 
+          : "bg-slate-900 border-slate-800"
+      )}>
         
-        <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10 border-b border-gray-700 pb-6 mb-6">
-          <div className="flex items-center gap-5">
-            <div className="w-14 h-14 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg shrink-0">
-              <Crown className="w-7 h-7 text-gray-900" />
+        {/* Dekorasi Background */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
+        {contractStatus === "Approved" && (
+          <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-red-500 rounded-full blur-[100px] opacity-20 pointer-events-none" />
+        )}
+        
+        {/* Konten Tergantung Status */}
+        {contractStatus === "Approved" ? (
+          // UI JIKA SUDAH APPROVED (KARTU VIP)
+          <div className="relative z-10 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg mb-5 border border-white/20">
+              <Crown className="w-8 h-8 text-[#7A171D]" />
             </div>
-            <div>
-              <h2 className="text-2xl font-black mb-1">Corporate Account</h2>
-              <p className="text-gray-400 text-sm">Tell us more about your business to unlock B2B perks.</p>
+            <h2 className="text-2xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#C5A059]">Verified Corporate Partner</h2>
+            <p className="text-white/80 text-sm font-medium mb-8 max-w-md mx-auto">Akun bisnis Anda telah tervalidasi. Anda sekarang berhak mendapatkan diskon khusus dan fitur pembayaran tempo (Net 30).</p>
+            
+            <div className="w-full max-w-sm bg-black/20 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-left">
+              <p className="text-[10px] text-[#DFBE7B] font-bold uppercase tracking-widest mb-1">Limit Piutang (Credit Line)</p>
+              <p className="text-3xl font-black text-white">Rp {(b2bLimit / 1000000).toLocaleString('id-ID')} Juta</p>
+              <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-white/60 font-medium">
+                <span>Status Akun: Aktif</span>
+                <span className="flex items-center gap-1"><CheckCircle2 className="w-4 h-4 text-emerald-400"/> Tervalidasi</span>
+              </div>
             </div>
           </div>
-          {!showB2BForm && (
-            <button onClick={() => setShowB2BForm(true)} className="bg-gradient-to-r from-[#C5A059] to-[#DFBE7B] hover:from-[#b08d4a] hover:to-[#C5A059] text-gray-900 font-bold px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-lg whitespace-nowrap">
-              Apply for Partnership <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        ) : contractStatus === "Pending" ? (
+          // UI JIKA PENDING REVIEW
+          <div className="relative z-10 flex flex-col items-center text-center py-8">
+            <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center shadow-lg mb-5 border border-amber-500/30">
+              <Clock className="w-8 h-8 text-amber-400" />
+            </div>
+            <h2 className="text-2xl font-black mb-2 text-white">Pengajuan Sedang Ditinjau</h2>
+            <p className="text-slate-400 text-sm font-medium max-w-md mx-auto">Tim Kemitraan kami sedang memvalidasi data perusahaan Anda. Proses ini biasanya memakan waktu 1-2 hari kerja. Tim kami akan menghubungi Anda via WhatsApp.</p>
+          </div>
+        ) : (
+          // UI AWAL (BELUM MENGAJUKAN ATAU REJECTED)
+          <>
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10 border-b border-slate-700/50 pb-6 mb-6">
+              <div className="flex items-center gap-5">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg shrink-0 border border-white/10">
+                  <Crown className="w-6 h-6 md:w-7 md:h-7 text-slate-900" />
+                </div>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-black mb-1">B2B Corporate Account</h2>
+                  <p className="text-slate-400 text-xs md:text-sm font-medium">Daftarkan entitas bisnis Anda untuk fitur pembayaran tempo.</p>
+                </div>
+              </div>
+              {!showB2BForm && (
+                <Button onClick={() => setShowB2BForm(true)} variant="gold" className="w-full md:w-auto h-12 shadow-lg whitespace-nowrap px-6">
+                  Apply for Partnership <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+            </div>
 
-        <AnimatePresence>
-          {showB2BForm && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="relative z-10 overflow-hidden">
-              
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
-                <h3 className="text-[#DFBE7B] font-bold text-lg mb-5 flex items-center gap-2">
-                  <Briefcase className="w-5 h-5" /> Business Information
-                </h3>
-                
-                <form onSubmit={handleSubmitB2B} className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {contractStatus === "Rejected" && !showB2BForm && (
+              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3 mb-6 relative z-10">
+                 <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                 <div>
+                   <p className="text-sm font-bold text-red-400">Pengajuan Sebelumnya Ditolak</p>
+                   <p className="text-xs text-red-200 mt-1">Dokumen atau legalitas Anda mungkin kurang lengkap. Silakan ajukan ulang dengan data yang benar.</p>
+                 </div>
+              </div>
+            )}
+
+            <AnimatePresence>
+              {showB2BForm && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="relative z-10 overflow-hidden">
+                  
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-2 backdrop-blur-sm">
+                    <h3 className="text-[#C5A059] font-bold text-base md:text-lg mb-5 flex items-center gap-2">
+                      <Briefcase className="w-5 h-5" /> Business Information
+                    </h3>
                     
-                    {/* Nama PIC */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Representative Name (PIC)</label>
-                      <div className="relative">
-                        <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <input type="text" value={b2bData.picName} onChange={(e) => setB2bData({...b2bData, picName: e.target.value})} className={`${inputStyleGold} pl-11 pr-4 py-3 bg-gray-900/50 text-white`} placeholder="Full Name" required />
-                      </div>
-                    </div>
+                    <form onSubmit={handleSubmitB2B} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        
+                        {/* Nama PIC */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Representative Name (PIC)</label>
+                          <div className="relative">
+                            <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.picName} onChange={(e) => setB2bData({...b2bData, picName: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="Full Name" required />
+                          </div>
+                        </div>
 
-                    {/* Legal Company Name */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Company Name (NPWP/NIB)</label>
-                      <div className="relative">
-                        <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <input type="text" value={b2bData.legalCompanyName} onChange={(e) => setB2bData({...b2bData, legalCompanyName: e.target.value})} className={`${inputStyleGold} pl-11 pr-4 py-3 bg-gray-900/50 text-white`} placeholder="PT. Logistik Super Nusantara" required />
-                      </div>
-                    </div>
+                        {/* Legal Company Name */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Name (PT/CV)</label>
+                          <div className="relative">
+                            <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.legalCompanyName} onChange={(e) => setB2bData({...b2bData, legalCompanyName: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="PT. Logistik Super Nusantara" required />
+                          </div>
+                        </div>
 
-                    {/* Tax ID / NPWP */}
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tax ID / Nomor NPWP <span className="text-gray-500 normal-case">(Opsional saat ini)</span></label>
-                      <div className="relative">
-                        <FileCheck className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <input type="text" value={b2bData.npwp} onChange={(e) => setB2bData({...b2bData, npwp: e.target.value})} className={`${inputStyleGold} pl-11 pr-4 py-3 bg-gray-900/50 text-white`} placeholder="00.000.000.0-000.000" />
-                      </div>
-                    </div>
+                        {/* Tax ID / NPWP */}
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tax ID / Nomor NPWP <span className="text-slate-500 normal-case font-medium">(Wajib)</span></label>
+                          <div className="relative">
+                            <FileCheck className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.npwp} onChange={(e) => setB2bData({...b2bData, npwp: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 font-mono tracking-wider" placeholder="00.000.000.0-000.000" required />
+                          </div>
+                        </div>
 
-                    {/* Industry Dropdown */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Industry</label>
-                      <div className="relative">
-                        <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <select value={b2bData.industry} onChange={(e) => setB2bData({...b2bData, industry: e.target.value})} className={`${inputStyleGold} pl-11 pr-4 py-3 bg-gray-900/50 text-white appearance-none`} required>
-                          <option value="" disabled className="text-gray-500">Select an industry...</option>
-                          {industryOptions.map(opt => <option key={opt} value={opt} className="bg-gray-800 text-white">{opt}</option>)}
-                        </select>
-                      </div>
-                    </div>
+                        {/* Industry Dropdown */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Industry</label>
+                          <div className="relative">
+                            <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <select value={b2bData.industry} onChange={(e) => setB2bData({...b2bData, industry: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
+                              <option value="" disabled className="text-slate-500">Select an industry...</option>
+                              {industryOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
+                            </select>
+                          </div>
+                        </div>
 
-                    {/* Delivery Volume Dropdown */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Est. Monthly Delivery Volume</label>
-                      <div className="relative">
-                        <TrendingUp className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                        <select value={b2bData.volume} onChange={(e) => setB2bData({...b2bData, volume: e.target.value})} className={`${inputStyleGold} pl-11 pr-4 py-3 bg-gray-900/50 text-white appearance-none`} required>
-                          <option value="" disabled className="text-gray-500">Select delivery volume...</option>
-                          {volumeOptions.map(opt => <option key={opt} value={opt} className="bg-gray-800 text-white">{opt}</option>)}
-                        </select>
+                        {/* Delivery Volume Dropdown */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Est. Monthly Delivery Volume</label>
+                          <div className="relative">
+                            <TrendingUp className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <select value={b2bData.volume} onChange={(e) => setB2bData({...b2bData, volume: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
+                              <option value="" disabled className="text-slate-500">Select delivery volume...</option>
+                              {volumeOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
                       </div>
-                    </div>
+
+                      <div className="pt-6 flex flex-col-reverse md:flex-row items-center justify-end gap-3 border-t border-white/10 mt-6">
+                        <Button type="button" variant="ghost" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto h-12 text-slate-400 hover:text-white hover:bg-white/10">
+                          Batal
+                        </Button>
+                        <Button type="submit" disabled={isSaving} variant="gold" className="w-full md:w-auto h-12 px-8 shadow-lg">
+                          {isSaving ? "Mengirim..." : <><MessageCircle className="w-4 h-4 mr-2" /> Ajukan Kemitraan B2B</>}
+                        </Button>
+                      </div>
+                    </form>
 
                   </div>
-
-                  <div className="pt-6 flex flex-col-reverse md:flex-row items-center justify-end gap-3">
-                    <button type="button" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto px-6 py-3 rounded-xl font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
-                      Batal
-                    </button>
-                    <button type="submit" disabled={isLoading} className="w-full md:w-auto bg-[#C5A059] hover:bg-[#b08d4a] text-gray-900 font-bold px-8 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#C5A059]/20 disabled:opacity-70">
-                      {isLoading ? "Mengirim..." : <><MessageCircle className="w-5 h-5" /> Submit via WhatsApp</>}
-                    </button>
+                  
+                  <div className="flex gap-3 text-[11px] text-slate-400 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 mt-4 font-medium leading-relaxed">
+                    <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
+                    <p>Dokumen legalitas fisik (SIUP/NIB/KTP Direktur) akan diminta oleh tim representatif kami setelah validasi profil bisnis awal ini disetujui.</p>
                   </div>
-                </form>
 
-              </div>
-              
-              <div className="flex gap-3 text-[11px] text-gray-400 bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-                <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
-                <p>Data Anda aman bersama kami. Dokumen legalitas fisik (SIUP/NIB/KTP Direktur) akan diminta oleh tim representatif kami setelah validasi data awal ini disetujui.</p>
-              </div>
-
-            </motion.div>
-          )}
-        </AnimatePresence>
-
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
       </div>
     </div>
   );

@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Mail, Eye, EyeOff, ShieldAlert, Package } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, ShieldAlert, Package, ArrowRight } from "lucide-react";
 import Image from "next/image";
 
 // --- IMPORT FIREBASE CORE ---
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { UserRole } from "@/store/useAuthStore"; // Menggunakan tipe role dari store
 
-const allowedRoles = ["superadmin", "admin_finance", "admin_operational"];
+// Daftar role yang diizinkan masuk portal admin (Sinkron dengan Fase 1.1)
+const allowedRoles: UserRole[] = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -29,10 +31,10 @@ export default function AdminLoginPage() {
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        const userRole = userData?.role || "";
+        const userRole = (userData?.role || "") as UserRole;
         
         if (allowedRoles.includes(userRole)) {
-          router.push("/admin"); // REVISI: Dilempar ke halaman Home/Dashboard Utama Admin
+          router.push("/admin"); // Dilempar ke halaman Dashboard Utama Admin
         } else {
           await signOut(auth);
           setErrorMsg("Akses ditolak. Akun Anda tidak memiliki hak akses Administrator.");
@@ -62,7 +64,7 @@ export default function AdminLoginPage() {
         if (error.message.includes("auth/invalid-credential")) {
           setErrorMsg("Email atau kata sandi Administrator salah.");
         } else {
-          setErrorMsg(error.message);
+          setErrorMsg(error.message.replace("Firebase: ", ""));
         }
       } else {
         setErrorMsg("Terjadi kesalahan sistem. Silakan coba lagi nanti.");
@@ -86,7 +88,7 @@ export default function AdminLoginPage() {
           setIsLoading(false);
           return;
         }
-        setErrorMsg(error.message);
+        setErrorMsg(error.message.replace("Firebase: ", ""));
       } else {
         setErrorMsg("Gagal login dengan Google.");
       }
@@ -95,40 +97,40 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-900 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Glow Premium */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#7A171D] rounded-full blur-[160px] opacity-20 pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#C5A059] rounded-full blur-[160px] opacity-10 pointer-events-none" />
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+      {/* Background Glow Premium (Light Mode) */}
+      <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[140px] opacity-15 pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-5%] w-[30%] h-[30%] bg-[#C5A059] rounded-full blur-[120px] opacity-20 pointer-events-none" />
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }} 
         animate={{ opacity: 1, y: 0 }} 
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-3xl p-8 shadow-2xl relative z-10"
+        className="w-full max-w-md bg-white border border-slate-200 rounded-[2rem] p-8 sm:p-10 shadow-2xl shadow-slate-200/50 relative z-10"
       >
         {/* Top Strip */}
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#7A171D] to-[#C5A059]" />
+        <div className="absolute top-0 left-10 right-10 h-1.5 bg-gradient-to-r from-[#7A171D] to-[#C5A059] rounded-b-xl" />
 
         {/* Header Logo */}
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4 border border-red-500/20">
-            <Package className="text-[#C5A059] w-7 h-7" />
+        <div className="text-center mb-8 mt-2">
+          <div className="w-16 h-16 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] rounded-2xl flex items-center justify-center shadow-lg shadow-[#7A171D]/20 mx-auto mb-5 border border-white/20">
+            <Package className="text-[#C5A059] w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Central Engine</h1>
-          <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Flash Global Admin Portal</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Central Engine</h1>
+          <p className="text-xs text-slate-500 mt-1.5 uppercase tracking-widest font-bold">Flash Global Admin Portal</p>
         </div>
 
         {/* Error Alert Panel */}
         <AnimatePresence>
           {errorMsg && (
             <motion.div 
-              initial={{ opacity: 0, height: 0 }} 
-              animate={{ opacity: 1, height: "auto" }} 
-              exit={{ opacity: 0, height: 0 }}
+              initial={{ opacity: 0, height: 0, y: -10 }} 
+              animate={{ opacity: 1, height: "auto", y: 0 }} 
+              exit={{ opacity: 0, height: 0, y: -10 }}
               className="mb-6 overflow-hidden"
             >
-              <div className="p-4 bg-red-900/30 border border-red-500/30 text-red-200 text-xs font-semibold rounded-xl flex items-start gap-2.5 leading-relaxed">
-                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-semibold rounded-xl flex items-start gap-3 leading-relaxed">
+                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
             </motion.div>
@@ -137,39 +139,39 @@ export default function AdminLoginPage() {
 
         {/* Form Login Email */}
         <form onSubmit={handleAdminLogin} className="space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Admin Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Admin Email</label>
+            <div className="relative group">
+              <Mail className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@flashglobal.com" 
-                className="w-full pl-11 pr-4 py-3 bg-slate-900/60 border-2 border-slate-700 rounded-xl outline-none focus:border-[#7A171D] text-white text-sm font-semibold transition-all shadow-inner"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl outline-none focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 text-slate-900 text-sm font-semibold transition-all"
                 required 
               />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Secret Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Secret Password</label>
+            <div className="relative group">
+              <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
               <input 
                 type={showPassword ? "text" : "password"} 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" 
-                className="w-full pl-11 pr-12 py-3 bg-slate-900/60 border-2 border-slate-700 rounded-xl outline-none focus:border-[#7A171D] text-white text-sm font-semibold transition-all shadow-inner"
+                className="w-full pl-12 pr-12 py-3.5 bg-slate-50/50 border border-slate-200 rounded-xl outline-none focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 text-slate-900 text-sm font-semibold transition-all"
                 required 
               />
               <button 
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#7A171D] transition-colors"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -177,30 +179,31 @@ export default function AdminLoginPage() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-[#7A171D] to-[#5A0E13] hover:from-[#942128] hover:to-[#7A171D] text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-red-950/50 disabled:opacity-50 mt-2 flex items-center justify-center"
+            className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-4 rounded-xl text-sm transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] disabled:opacity-70 mt-4 flex items-center justify-center gap-2"
           >
-            {isLoading ? <span className="animate-pulse">Mengautentikasi...</span> : "Masuk Ke Core Engine"}
+            {isLoading ? (
+               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>Otorisasi Masuk <ArrowRight className="w-4 h-4" /></>
+            )}
           </button>
         </form>
 
         {/* Divider & Google Login */}
-        <div className="mt-8 relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-700"></div>
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="px-3 bg-slate-800 text-slate-400">Atau masuk dengan Otorisasi Sistem</span>
-          </div>
+        <div className="mt-8 flex items-center justify-between">
+          <span className="w-full border-b border-slate-200"></span>
+          <span className="px-4 text-xs text-center text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">Jalur Alternatif</span>
+          <span className="w-full border-b border-slate-200"></span>
         </div>
 
         <button 
           type="button"
           onClick={handleGoogleLogin}
           disabled={isLoading}
-          className="mt-6 w-full flex items-center justify-center gap-3 bg-slate-700/50 hover:bg-slate-700 text-white font-bold py-3.5 rounded-xl text-sm transition-all border border-slate-600 disabled:opacity-50"
+          className="mt-6 w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl text-sm transition-all border border-slate-200 shadow-sm disabled:opacity-50 active:scale-[0.98]"
         >
           <Image src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width={20} height={20} />
-          <span>Login dengan Google Workspace</span>
+          <span>Login via Google Workspace</span>
         </button>
 
       </motion.div>

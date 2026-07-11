@@ -12,7 +12,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Singleton pattern: Mencegah Firebase inisialisasi ulang berkali-kali di Next.js
+// Singleton pattern: Mencegah Firebase inisialisasi ulang berkali-kali di Next.js (Hot Reload)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Inisialisasi layanan yang akan kita pakai

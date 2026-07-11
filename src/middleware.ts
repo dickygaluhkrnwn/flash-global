@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/static') ||
-    url.pathname.startsWith('/admin') || // <-- JALUR VIP: BYPASS FOLDER ADMIN
+    url.pathname.startsWith('/admin') || // <-- JALUR VIP: BYPASS FOLDER ADMIN SEPENUHNYA
     url.pathname.includes('.')
   ) {
     return NextResponse.next();
@@ -21,6 +21,7 @@ export function middleware(request: NextRequest) {
   const isMobile = device.type === 'mobile';
 
   // LOGIC REWRITE: Arahkan secara internal tanpa merubah URL di browser
+  // Ini memungkinkan kita memisahkan UI Desktop dan Mobile secara rapi
   if (isMobile) {
     // Jika user buka dari HP, arahkan ke folder src/app/mobile
     return NextResponse.rewrite(new URL(`/mobile${url.pathname}`, request.url));

@@ -6,12 +6,12 @@ export default function DesktopLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--background-alt)] text-[var(--foreground)] selection:bg-brand-maroon selection:text-white relative overflow-x-hidden">
-      {/* Navbar kita panggil di sini biar muncul di semua halaman desktop */}
+    <div className="min-h-screen flex flex-col bg-[var(--background-alt)] text-[var(--foreground)] selection:bg-[#7A171D] selection:text-white relative overflow-x-hidden font-sans">
+      {/* Navbar dipanggil di sini agar persisten di semua rute desktop */}
       <Navbar />
       
-      {/* Konten halaman (page.tsx) akan di-render di dalam children ini */}
-      <div className="flex-grow flex flex-col">
+      {/* Konten Halaman */}
+      <div className="flex-grow flex flex-col mt-[72px]"> {/* mt-[72px] mengimbangi tinggi navbar fixed */}
         {children}
       </div>
     </div>

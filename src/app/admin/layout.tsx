@@ -9,7 +9,7 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-const allowedRoles = ["superadmin", "admin_finance", "admin_operational", "admin_cs"];
+const allowedRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -45,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           if (userRole === "admin_finance" && pathname === "/admin/vehicles") {
             router.push("/admin/pricing"); 
           }
-          if (userRole === "admin_operational" && pathname === "/admin/pricing") {
+          if (userRole === "admin_ops" && pathname === "/admin/pricing") {
             router.push("/admin/vehicles"); 
           }
 
@@ -64,12 +64,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => unsubscribe();
   }, [pathname, router]);
 
-  // State Loading Guard Screen Premium
+  // State Loading Guard Screen Premium (Light Mode)
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center text-gray-500 font-bold text-sm">
-        <div className="w-12 h-12 border-4 border-gray-100 border-t-brand-maroon rounded-full animate-spin mb-4"></div>
-        <span className="animate-pulse">Memverifikasi Otoritas Administrator...</span>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-bold text-sm">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mb-4 shadow-sm"></div>
+        <span className="animate-pulse tracking-widest uppercase text-xs">Memverifikasi Otoritas Administrator...</span>
       </div>
     );
   }
@@ -79,14 +79,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  // Jika lolos guard perlindungan, render sistem Admin Workspace
+  // Jika lolos guard perlindungan, render sistem Admin Workspace (Light Mode Pro)
   if (allowedRoles.includes(currentRole)) {
     return (
-      <div className="min-h-screen bg-background-alt text-foreground flex relative overflow-hidden">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex relative overflow-hidden font-sans">
         
-        {/* Ornamen Premium Background Khusus Admin */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-maroon rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-brand-gold rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
+        {/* Ornamen Premium Background Khusus Admin (Clean Modern) */}
+        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-600 rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
+        <div className="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-emerald-600 rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
 
         {/* SIDEBAR WORKSPACE ADMIN (COLLAPSIBLE/HOVERABLE) */}
         <div className="z-50">
@@ -94,8 +94,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* WORKSPACE AREA - Padding kiri disesuaikan dengan lebar Sidebar collapsed */}
-        <main className="flex-1 max-h-screen overflow-y-auto w-full md:pl-20 transition-all duration-300">
-          {children}
+        <main className="flex-1 max-h-screen overflow-y-auto w-full md:pl-20 transition-all duration-300 relative z-10 p-6 md:p-8">
+          <div className="max-w-[1600px] mx-auto w-full">
+            {children}
+          </div>
         </main>
 
       </div>

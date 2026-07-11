@@ -1,9 +1,8 @@
-// src/components/ui/Button.tsx
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "gold";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "gold" | "danger";
   size?: "sm" | "md" | "lg" | "icon";
   isLoading?: boolean;
 }
@@ -11,16 +10,17 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", isLoading, children, ...props }, ref) => {
     
-    // Base style untuk semua tombol (Premium Feel)
-    const baseStyles = "inline-flex items-center justify-center whitespace-nowrap rounded-xl font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-maroon/20 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]";
+    // Base style premium dengan active state dan focus ring yang halus
+    const baseStyles = "inline-flex items-center justify-center whitespace-nowrap rounded-xl font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 active:scale-[0.98]";
     
-    // Varian Desain Tombol
+    // Varian Desain Tombol yang lebih modern
     const variants = {
-      primary: "bg-brand-maroon text-white hover:bg-brand-maroon-dark shadow-[0_4px_14px_0_rgba(122,23,29,0.25)] hover:shadow-[0_6px_20px_rgba(122,23,29,0.2)]",
-      secondary: "bg-gray-900 text-white hover:bg-black shadow-[0_4px_14px_0_rgba(0,0,0,0.2)]",
-      gold: "bg-brand-gold text-white hover:bg-brand-gold-dark shadow-[0_4px_14px_0_rgba(197,160,89,0.25)]",
-      outline: "border-2 border-gray-200 bg-transparent hover:border-brand-maroon/50 hover:bg-brand-maroon/5 text-gray-700 hover:text-brand-maroon",
-      ghost: "bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900",
+      primary: "bg-[#7A171D] text-white hover:bg-[#5A0E13] focus-visible:ring-[#7A171D]/50 shadow-md shadow-[#7A171D]/20 hover:shadow-lg hover:shadow-[#7A171D]/30",
+      secondary: "bg-slate-900 text-white hover:bg-slate-800 focus-visible:ring-slate-900/50 shadow-md shadow-slate-900/20 hover:shadow-lg hover:shadow-slate-900/30",
+      gold: "bg-[#C5A059] text-white hover:bg-[#A68345] focus-visible:ring-[#C5A059]/50 shadow-md shadow-[#C5A059]/20 hover:shadow-lg hover:shadow-[#C5A059]/30",
+      danger: "bg-red-500 text-white hover:bg-red-600 focus-visible:ring-red-500/50 shadow-md shadow-red-500/20 hover:shadow-lg hover:shadow-red-500/30",
+      outline: "border border-slate-200 bg-transparent hover:border-[#7A171D] hover:bg-[#7A171D]/5 text-slate-700 hover:text-[#7A171D] focus-visible:ring-[#7A171D]/50",
+      ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-200",
     };
 
     // Ukuran Tombol
@@ -28,7 +28,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       sm: "h-9 px-4 text-xs",
       md: "h-11 px-6 text-sm",
       lg: "h-14 px-8 text-base",
-      icon: "h-10 w-10",
+      icon: "h-11 w-11",
     };
 
     return (

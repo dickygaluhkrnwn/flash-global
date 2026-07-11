@@ -2,27 +2,31 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   Save, CheckCircle2, AlertCircle, Coins, 
-  Building, Bike, Car, Truck, MapPin, RefreshCw, Shield, Users, Plus, Trash2, X
+  Building, Car, MapPin, RefreshCw, Shield, Users, 
+  Search, Filter, ArrowUpDown, ShieldAlert, Activity
 } from "lucide-react";
 
 // --- IMPORT FIREBASE CORE ---
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
 
 // --- IMPORT UI KIT PREMIUM ---
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 
 // --- TYPES ---
 export interface VehiclePricing {
-  id: string; // id unik, misal: "blind-van"
-  name: string; // "Blind Van"
+  id: string; 
+  name: string; 
   isMotor: boolean;
-  maxWeight: number;
+  maxWeight: number; // Kapasitas (Read-Only di halaman ini, diedit di menu Vehicles)
   baseFare: number;
   minKm: number;
   perKm: number;
@@ -36,29 +40,22 @@ interface PricingConfig {
 }
 
 export default function AdminPricingPage() {
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
 
-  // State Modal Tambah Armada Baru
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newVehicle, setNewVehicle] = useState<Partial<VehiclePricing>>({
-    name: "", id: "", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0
-  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState("all"); 
+  const [sortBy, setSortBy] = useState("fare_asc"); 
 
-  // State Default Tarif (Sekarang menggunakan Array dinamis)
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>({
     b2bDiscount: 15,
     tarifPorter: 50000,
-    customVehicles: [
-      { id: "motor", name: "Armada Motor", isMotor: true, maxWeight: 20, baseFare: 12000, minKm: 3, perKm: 2500, insurancePercent: 1.5 },
-      { id: "mobil", name: "Mobil MPV/Van", isMotor: false, maxWeight: 300, baseFare: 45000, minKm: 5, perKm: 4000, insurancePercent: 0.2 },
-      { id: "pickup", name: "Pickup Bak/Box", isMotor: false, maxWeight: 1000, baseFare: 80000, minKm: 5, perKm: 5500, insurancePercent: 0.2 },
-      { id: "truk", name: "Truk Engkel CDE", isMotor: false, maxWeight: 2500, baseFare: 250000, minKm: 10, perKm: 8500, insurancePercent: 0.2 },
-    ]
+    customVehicles: []
   });
 
-  // Tarik data saat halaman dimuat
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -67,25 +64,17 @@ export default function AdminPricingPage() {
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          // Jika data customVehicles ada, gunakan itu. Jika menggunakan struktur lama, abaikan dan pakai default Array.
           if (data.customVehicles && Array.isArray(data.customVehicles)) {
             setPricingConfig({
               b2bDiscount: data.b2bDiscount || 15,
               tarifPorter: data.tarifPorter || 50000,
               customVehicles: data.customVehicles
             });
-          } else {
-             // Migrasi halus dari struktur lama (motor, mobil, pickup) ke array baru
-             setPricingConfig(prev => ({
-                ...prev,
-                b2bDiscount: data.b2bDiscount || prev.b2bDiscount,
-                tarifPorter: data.tarifPorter || prev.tarifPorter
-             }));
           }
         }
       } catch (error) {
         console.error("Gagal menarik master data tarif:", error);
-        showToast("error", "Gagal memuat konfigurasi dari database.");
+        showToast("error", "Gagal memuat konfigurasi tarif dari database.");
       } finally {
         setIsLoading(false);
       }
@@ -93,17 +82,17 @@ export default function AdminPricingPage() {
     fetchSettings();
   }, []);
 
-  // Mencegah scroll body saat modal terbuka
-  useEffect(() => {
-    if (isAddModalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isAddModalOpen]);
+  // RBAC GUARD (Hanya Superadmin & Finance)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Tarif ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
@@ -118,372 +107,293 @@ export default function AdminPricingPage() {
         updatedAt: serverTimestamp(),
       }, { merge: true });
       
-      showToast("success", "Konfigurasi tarif armada berhasil diperbarui secara live!");
+      showToast("success", "Konfigurasi tarif berhasil diperbarui ke seluruh sistem!");
     } catch (error) {
       console.error("Gagal menyimpan konfigurasi tarif:", error);
-      showToast("error", "Otoritas gagal. Periksa hak akses database Firebase Anda.");
+      showToast("error", "Otoritas gagal. Periksa koneksi atau hak akses database.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Helper Update Data dalam Array Armada
   const handleVehicleChange = (index: number, field: keyof VehiclePricing, value: any) => {
-    const updatedVehicles = [...pricingConfig.customVehicles];
-    updatedVehicles[index] = { ...updatedVehicles[index], [field]: value };
-    setPricingConfig({ ...pricingConfig, customVehicles: updatedVehicles });
-  };
-
-  // Helper Hapus Armada
-  const handleDeleteVehicle = (index: number) => {
-    if (confirm("Yakin ingin menghapus armada ini dari sistem?")) {
-      const updatedVehicles = pricingConfig.customVehicles.filter((_, i) => i !== index);
+    // Kita harus mencari index asli di dalam array global berdasarkan ID armada yang diedit di hasil filter
+    const vehicleId = processedData[index].id;
+    const globalIndex = pricingConfig.customVehicles.findIndex(v => v.id === vehicleId);
+    
+    if (globalIndex !== -1) {
+      const updatedVehicles = [...pricingConfig.customVehicles];
+      updatedVehicles[globalIndex] = { ...updatedVehicles[globalIndex], [field]: value };
       setPricingConfig({ ...pricingConfig, customVehicles: updatedVehicles });
     }
   };
 
-  // Helper Tambah Armada Baru
-  const handleAddNewVehicle = () => {
-    if (!newVehicle.name || !newVehicle.id) {
-      alert("Nama dan ID Armada wajib diisi!");
-      return;
-    }
-    const newV: VehiclePricing = {
-      id: newVehicle.id.toLowerCase().replace(/\s+/g, '-'), // Pastikan ID huruf kecil dan spasi jadi strip
-      name: newVehicle.name,
-      isMotor: newVehicle.isMotor || false,
-      maxWeight: Number(newVehicle.maxWeight) || 100,
-      baseFare: Number(newVehicle.baseFare) || 0,
-      minKm: Number(newVehicle.minKm) || 0,
-      perKm: Number(newVehicle.perKm) || 0,
-      insurancePercent: Number(newVehicle.insurancePercent) || 0,
-    };
-
-    setPricingConfig({
-      ...pricingConfig,
-      customVehicles: [...pricingConfig.customVehicles, newV]
+  // Logic Advanced Filter & Sort
+  const processedData = pricingConfig.customVehicles
+    .filter(v => {
+      const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchType = filterType === "all" ? true : filterType === "motor" ? v.isMotor : !v.isMotor;
+      return matchSearch && matchType;
+    })
+    .sort((a, b) => {
+      if (sortBy === "fare_asc") return a.baseFare - b.baseFare;
+      if (sortBy === "fare_desc") return b.baseFare - a.baseFare;
+      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
+      return 0;
     });
-    
-    setIsAddModalOpen(false);
-    setNewVehicle({ name: "", id: "", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0 });
-    showToast("success", `Armada ${newV.name} berhasil ditambahkan! Jangan lupa tekan Simpan.`);
-  };
-
 
   if (isLoading) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center">
-        <RefreshCw className="w-8 h-8 text-brand-maroon animate-spin mb-3" />
-        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest animate-pulse">Menghubungkan ke Manifes Pricing...</p>
+      <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
+        <Activity className="w-10 h-10 text-[#7A171D] animate-pulse mb-4" />
+        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Sinkronisasi Matriks Tarif...</p>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="p-6 md:p-10 max-w-[1400px] mx-auto space-y-8 selection:bg-brand-maroon selection:text-white relative">
-        
-        {/* HEADER CONTROL PANEL */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6 border-gray-200/60">
-          <div>
-            <Badge variant="default" className="bg-brand-maroon/10 text-brand-maroon border-brand-maroon/20 mb-2">
-              Control Panel System
-            </Badge>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-              Konfigurasi <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-maroon to-brand-gold">Tarif & Armada</span>
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Kelola harga dasar, proteksi asuransi, biaya operasional, dan tambah armada baru secara dinamis.</p>
-          </div>
-
-          <Button 
-            onClick={handleSaveConfiguration}
-            disabled={isSaving}
-            className="w-full md:w-auto shadow-[0_4px_14px_0_rgba(122,23,29,0.25)] hover:shadow-[0_6px_20px_rgba(122,23,29,0.2)]"
-          >
-            {isSaving ? (
-              <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</>
-            ) : (
-              <><Save className="w-4 h-4 mr-2" /> Simpan Perubahan</>
-            )}
-          </Button>
-        </div>
-
-        {/* BANNER NOTIFIKASI */}
-        <AnimatePresence>
-          {toastMessage && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              className={`p-4 rounded-2xl font-bold text-sm border flex items-center gap-3 shadow-sm ${toastMessage.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}
-            >
-              {toastMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" /> : <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />}
-              <p>{toastMessage.text}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="space-y-8">
-          
-          {/* ROW 1: PARAMETER GLOBAL LOGISTIK & B2B */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* CARD CONFIG PORTER / HELPER */}
-            <Card className="shadow-premium border-gray-100">
-              <CardHeader className="p-6 pb-0 flex flex-row items-center gap-4 space-y-0">
-                <div className="w-10 h-10 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-900 text-base">Tarif Tenaga Porter</h3>
-                  <p className="text-xs text-gray-400 mt-1">Biaya bantuan bongkar muat per satu orang.</p>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">Rp</span>
-                  <Input 
-                    type="number" 
-                    value={pricingConfig.tarifPorter} 
-                    onChange={(e) => setPricingConfig({...pricingConfig, tarifPorter: Number(e.target.value)})}
-                    className="pl-12 font-mono font-bold focus-visible:border-brand-gold/50 focus-visible:ring-brand-gold/10"
-                    required 
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* CARD CONFIG B2B DISCOUNT */}
-            <Card className="shadow-premium border-gray-100">
-              <CardHeader className="p-6 pb-0 flex flex-row items-center gap-4 space-y-0">
-                <div className="w-10 h-10 rounded-xl bg-brand-maroon/10 text-brand-maroon flex items-center justify-center shrink-0">
-                  <Building className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-900 text-base">Diskon Akun Korporat B2B</h3>
-                  <p className="text-xs text-gray-400 mt-1">Potongan harga otomatis untuk akun dengan hak akses khusus.</p>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="relative">
-                  <Input 
-                    type="number" 
-                    step="0.1" 
-                    min="0" 
-                    max="100"
-                    value={pricingConfig.b2bDiscount} 
-                    onChange={(e) => setPricingConfig({...pricingConfig, b2bDiscount: Number(e.target.value)})} 
-                    className="pr-12 font-bold text-lg focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" 
-                    required 
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">%</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ROW 2: TARIF MULTIPLIER ARMADA KENDARAAN (DYNAMIC ARRAY) */}
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2 flex items-center gap-2">
-                <Car className="w-4 h-4" /> Multiplier Tarif Matriks Kendaraan
-              </h4>
-              <Button variant="outline" size="sm" onClick={() => setIsAddModalOpen(true)} className="border-brand-maroon text-brand-maroon hover:bg-brand-maroon hover:text-white shadow-sm">
-                <Plus className="w-4 h-4 mr-1.5" /> Tambah Armada Baru
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-              <AnimatePresence>
-                {pricingConfig.customVehicles.map((vehicle, index) => (
-                  <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}>
-                    <PricingCard 
-                      index={index}
-                      data={vehicle} 
-                      onChange={handleVehicleChange}
-                      onDelete={() => handleDeleteVehicle(index)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* MODAL TAMBAH ARMADA BARU TERPISAH DI LUAR CONTAINER */}
+    <div className="space-y-8 pb-10 font-sans">
+      
       <AnimatePresence>
-        {isAddModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
-              className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" 
-              onClick={() => setIsAddModalOpen(false)} 
-            />
-            
-            {/* Modal Box */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]"
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-                <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-brand-maroon" /> Tambah Armada Baru
-                </h2>
-                <button onClick={() => setIsAddModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors shadow-sm">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Modal Body (Scrollable) */}
-              <div className="p-6 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500">Nama Armada</label>
-                    <Input placeholder="Cth: Blind Van" value={newVehicle.name} onChange={(e) => setNewVehicle({...newVehicle, name: e.target.value, id: e.target.value})} className="border-gray-200 focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500">Maks Kapasitas (Kg)</label>
-                    <Input type="number" placeholder="Cth: 800" value={newVehicle.maxWeight || ""} onChange={(e) => setNewVehicle({...newVehicle, maxWeight: Number(e.target.value)})} className="border-gray-200 focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl bg-gray-50">
-                  <input type="checkbox" id="isMotorCheck" checked={newVehicle.isMotor} onChange={(e) => setNewVehicle({...newVehicle, isMotor: e.target.checked})} className="w-4 h-4 accent-brand-maroon" />
-                  <label htmlFor="isMotorCheck" className="text-sm font-bold text-gray-700 cursor-pointer">Kendaraan Roda Dua (Motor)?</label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-gray-100">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500">Tarif Dasar (Rp)</label>
-                    <Input type="number" placeholder="Cth: 50000" value={newVehicle.baseFare || ""} onChange={(e) => setNewVehicle({...newVehicle, baseFare: Number(e.target.value)})} className="border-gray-200 font-mono focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500">Tarif Selanjutnya / KM</label>
-                    <Input type="number" placeholder="Cth: 4000" value={newVehicle.perKm || ""} onChange={(e) => setNewVehicle({...newVehicle, perKm: Number(e.target.value)})} className="border-gray-200 font-mono focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500">Jarak Minimum (Km)</label>
-                    <Input type="number" placeholder="Cth: 5" value={newVehicle.minKm || ""} onChange={(e) => setNewVehicle({...newVehicle, minKm: Number(e.target.value)})} className="border-gray-200 focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-brand-maroon">Rate Asuransi (%)</label>
-                    <Input type="number" step="0.1" placeholder="Cth: 0.2" value={newVehicle.insurancePercent || ""} onChange={(e) => setNewVehicle({...newVehicle, insurancePercent: Number(e.target.value)})} className="border-brand-maroon/20 focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="p-6 border-t border-gray-100 bg-gray-50 shrink-0">
-                <Button onClick={handleAddNewVehicle} className="w-full bg-brand-maroon hover:bg-brand-maroon-dark text-white shadow-[0_4px_14px_0_rgba(122,23,29,0.25)] hover:shadow-[0_6px_20px_rgba(122,23,29,0.2)]">
-                  <Plus className="w-4 h-4 mr-2" /> Simpan Armada Baru
-                </Button>
-              </div>
-            </motion.div>
-          </div>
+        {toastMessage && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-50 p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toastMessage.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+            {toastMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toastMessage.text}
+          </motion.div>
         )}
       </AnimatePresence>
-    </>
+
+      {/* HEADER CONTROL PANEL */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <Badge variant="brand" className="mb-3 px-3 py-1 shadow-sm inline-flex items-center gap-1.5">
+            <Coins className="w-3 h-3 fill-current"/> Finance Control Panel
+          </Badge>
+          <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+            Konfigurasi <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Tarif Harga</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-1.5 max-w-2xl">Atur harga dasar, margin jarak tempuh, asuransi, dan kebijakan diskon korporat secara real-time.</p>
+        </div>
+        
+        <Button 
+          onClick={handleSaveConfiguration}
+          disabled={isSaving}
+          className="w-full md:w-auto h-12 px-8 text-sm font-bold shrink-0"
+        >
+          {isSaving ? (
+            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan...</>
+          ) : (
+            <><Save className="w-4 h-4 mr-2" /> Publikasi Tarif Live</>
+          )}
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* CARD CONFIG PORTER */}
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="p-6 pb-0 flex flex-row items-center gap-4 space-y-0">
+            <div className="w-12 h-12 rounded-xl bg-[#C5A059]/10 text-[#A68345] flex items-center justify-center shrink-0 border border-[#C5A059]/20">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Tarif Tenaga Porter / Helper</h3>
+              <p className="text-xs text-slate-500 mt-1">Biaya bantuan bongkar muat per satu orang personel.</p>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">Rp</span>
+              <Input 
+                type="number" 
+                value={pricingConfig.tarifPorter} 
+                onChange={(e) => setPricingConfig({...pricingConfig, tarifPorter: Number(e.target.value)})}
+                className="pl-12 font-mono font-bold text-lg"
+                required 
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CARD CONFIG B2B DISCOUNT */}
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="p-6 pb-0 flex flex-row items-center gap-4 space-y-0">
+            <div className="w-12 h-12 rounded-xl bg-[#7A171D]/10 text-[#7A171D] flex items-center justify-center shrink-0 border border-[#7A171D]/20">
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">Diskon Akun Korporat (B2B)</h3>
+              <p className="text-xs text-slate-500 mt-1">Potongan harga otomatis untuk akun terverifikasi.</p>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="relative">
+              <Input 
+                type="number" 
+                step="0.1" 
+                min="0" 
+                max="100"
+                value={pricingConfig.b2bDiscount} 
+                onChange={(e) => setPricingConfig({...pricingConfig, b2bDiscount: Number(e.target.value)})} 
+                className="pr-12 font-bold text-lg" 
+                required 
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Car className="w-5 h-5 text-[#7A171D]" /> Multiplier Tarif Matriks Armada
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">Sesuaikan tarif dasar dan per kilometer untuk masing-masing kelas armada yang ada.</p>
+          </div>
+          
+          {/* TOOLBAR FILTER & SEARCH */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="text" placeholder="Cari nama armada..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full sm:w-[200px] bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-slate-900 outline-none text-sm focus:border-[#7A171D] transition-all" />
+            </div>
+            <div className="flex gap-2">
+              <div className="relative">
+                <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[#7A171D] appearance-none font-semibold text-slate-700 min-w-[120px]">
+                  <option value="all">Semua Jenis</option>
+                  <option value="motor">Roda Dua</option>
+                  <option value="mobil">Roda Empat+</option>
+                </select>
+              </div>
+              <div className="relative">
+                <ArrowUpDown className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-[#7A171D] appearance-none font-semibold text-slate-700 min-w-[140px]">
+                  <option value="fare_asc">Tarif Termurah</option>
+                  <option value="fare_desc">Tarif Termahal</option>
+                  <option value="name_asc">Nama (A-Z)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {pricingConfig.customVehicles.length === 0 && !isLoading && (
+          <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+            <Car className="w-12 h-12 text-slate-300 mb-3" />
+            <h4 className="text-slate-700 font-bold">Belum Ada Armada Dikonfigurasi</h4>
+            <p className="text-slate-500 text-sm mt-1">Harap tambahkan armada melalui menu Master Data Kendaraan terlebih dahulu.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {processedData.map((vehicle, index) => (
+              <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
+                <PricingCard 
+                  index={index}
+                  data={vehicle} 
+                  onChange={handleVehicleChange}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+      </div>
+    </div>
   );
 }
 
 // ======================================================================
-// KOMPONEN CARD ARMADA DINAMIS
+// KOMPONEN CARD TARIF ARMADA DINAMIS
 // ======================================================================
 interface PricingCardProps {
   index: number;
   data: VehiclePricing;
   onChange: (index: number, field: keyof VehiclePricing, val: any) => void;
-  onDelete: () => void;
 }
 
-function PricingCard({ index, data, onChange, onDelete }: PricingCardProps) {
-  // Tema warna dinamis berdasarkan urutan card (Biar nggak bosan)
-  const isMaroon = index % 2 === 0;
-  const focusBorderClass = isMaroon ? "focus-visible:border-brand-maroon/50 focus-visible:ring-brand-maroon/10" : "focus-visible:border-brand-gold/50 focus-visible:ring-brand-gold/10";
-  const badgeClass = isMaroon ? "bg-brand-maroon/10 text-brand-maroon" : "bg-brand-gold/10 text-brand-gold";
+function PricingCard({ index, data, onChange }: PricingCardProps) {
+  const isMaroon = data.isMotor; // Motor kita beri aksen Gold, Mobil aksen Maroon (bebas)
+  const badgeClass = isMaroon ? "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20" : "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20";
 
   return (
-    <Card className="shadow-premium border-gray-100 overflow-hidden relative group">
-      <CardHeader className="p-5 border-b border-gray-50 bg-gray-50/50 flex flex-row items-center justify-between space-y-0">
+    <Card className="shadow-sm border-slate-200 overflow-hidden relative group hover:shadow-md transition-shadow">
+      <CardHeader className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between space-y-0">
         <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${badgeClass}`}>
-            <Car className="w-4 h-4" />
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border", badgeClass)}>
+            <Car className="w-5 h-5" />
           </div>
           <div className="overflow-hidden">
-            <h2 className="text-sm font-bold text-gray-900 truncate" title={data.name}>{data.name}</h2>
-            <p className="text-[10px] font-semibold text-gray-400 mt-0.5 uppercase tracking-wider">Maks {data.maxWeight} Kg</p>
+            <h2 className="text-base font-bold text-slate-900 truncate" title={data.name}>{data.name}</h2>
+            <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider flex items-center gap-1.5">
+              <span>{data.isMotor ? "Roda Dua" : "Roda Empat+"}</span> • <span>Maks {data.maxWeight} Kg</span>
+            </p>
           </div>
         </div>
-        
-        {/* Tombol Hapus (Muncul saat hover) */}
-        <button onClick={onDelete} className="w-7 h-7 rounded bg-white border border-gray-200 text-gray-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors opacity-0 group-hover:opacity-100 shrink-0 shadow-sm" title="Hapus Armada">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
       </CardHeader>
 
       <CardContent className="p-6 space-y-5">
         
         {/* Base Fare */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-500 flex items-center gap-2">
-            <Coins className="w-3.5 h-3.5 text-gray-400" /> Tarif Dasar (Base Fare)
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+            <Coins className="w-3.5 h-3.5 text-slate-400" /> Tarif Dasar (Base Fare)
           </label>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">Rp</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">Rp</span>
             <Input 
               type="number" 
               value={data.baseFare} 
               onChange={(e) => onChange(index, "baseFare", Number(e.target.value))} 
-              className={`pl-12 font-mono font-bold ${focusBorderClass}`} 
+              className="pl-12 font-mono font-bold" 
               required
             />
           </div>
         </div>
 
-        {/* Jarak Minimum */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-500 flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-gray-400" /> Jarak Minimum (KM)
-          </label>
-          <div className="relative">
-            <Input 
-              type="number" 
-              value={data.minKm} 
-              onChange={(e) => onChange(index, "minKm", Number(e.target.value))} 
-              className={`pr-12 font-bold ${focusBorderClass}`}
-              required 
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">KM</span>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Jarak Minimum */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" /> Jarak Min.
+            </label>
+            <div className="relative">
+              <Input 
+                type="number" 
+                value={data.minKm} 
+                onChange={(e) => onChange(index, "minKm", Number(e.target.value))} 
+                className="pr-10 font-bold text-center"
+                required 
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">KM</span>
+            </div>
           </div>
-        </div>
 
-        {/* Tarif Next KM */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-500 flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-gray-400" /> Tarif per KM Selanjutnya
-          </label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">Rp</span>
-            <Input 
-              type="number" 
-              value={data.perKm} 
-              onChange={(e) => onChange(index, "perKm", Number(e.target.value))} 
-              className={`pl-12 pr-14 font-mono font-bold ${focusBorderClass}`} 
-              required
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">/ KM</span>
+          {/* Tarif Next KM */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" /> Next / KM
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">Rp</span>
+              <Input 
+                type="number" 
+                value={data.perKm} 
+                onChange={(e) => onChange(index, "perKm", Number(e.target.value))} 
+                className="pl-9 font-mono font-bold" 
+                required
+              />
+            </div>
           </div>
         </div>
 
         {/* Opsional Asuransi */}
-        <div className="space-y-2 pt-2 border-t border-dashed border-gray-100">
-          <label className="text-xs font-semibold text-brand-maroon flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5" /> Rate Asuransi Otomatis (%)
+        <div className="space-y-2 pt-3 border-t border-dashed border-slate-200">
+          <label className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+            <Shield className="w-3.5 h-3.5 text-[#C5A059]" /> Rate Asuransi Otomatis
           </label>
           <div className="relative">
             <Input 
@@ -491,10 +401,10 @@ function PricingCard({ index, data, onChange, onDelete }: PricingCardProps) {
               step="0.1" 
               value={data.insurancePercent || 0} 
               onChange={(e) => onChange(index, "insurancePercent", Number(e.target.value))} 
-              className={`pr-10 font-bold border-brand-maroon/20 ${focusBorderClass}`} 
+              className="pr-10 font-bold border-slate-300 bg-slate-50 focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/10" 
               required 
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">%</span>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">%</span>
           </div>
         </div>
 

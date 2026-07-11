@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -16,7 +16,7 @@ import {
   updateProfile
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { useAuthStore } from "@/store/useAuthStore";
+import { useAuthStore, UserRole } from "@/store/useAuthStore";
 
 export default function DesktopLoginPage() {
   const router = useRouter();
@@ -50,10 +50,11 @@ export default function DesktopLoginPage() {
         role: "user",
         createdAt: new Date().toISOString()
       });
+      return "user" as UserRole;
     }
+    return (userSnap.data().role as UserRole) || "user";
   };
 
-  // FUNGSI SUBMIT EMAIL & PASSWORD
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -61,25 +62,28 @@ export default function DesktopLoginPage() {
     
     try {
       if (isLogin) {
-        // --- PROSES LOGIN ---
         const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+        
+        const userRef = doc(db, "users", userCredential.user.uid);
+        const userSnap = await getDoc(userRef);
+        const userRole = (userSnap.exists() ? userSnap.data().role : "user") as UserRole;
         
         login({
           uid: userCredential.user.uid,
           email: userCredential.user.email,
           name: userCredential.user.displayName || "Pengguna",
-          photoURL: userCredential.user.photoURL
+          photoURL: userCredential.user.photoURL,
+          role: userRole
         });
 
       } else {
-        // --- PROSES REGISTER ---
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         
         await updateProfile(userCredential.user, {
           displayName: formData.name
         });
 
-        await saveUserToFirestore(
+        const assignedRole = await saveUserToFirestore(
           userCredential.user.uid, 
           userCredential.user.email || "", 
           formData.name
@@ -89,16 +93,22 @@ export default function DesktopLoginPage() {
           uid: userCredential.user.uid,
           email: userCredential.user.email,
           name: formData.name,
-          photoURL: null
+          photoURL: null,
+          role: assignedRole
         });
       }
       
-      router.push("/dashboard");
+      // PERBAIKAN: Arahkan ke rute publik /dashboard, bukan /desktop/dashboard
+      router.push("/dashboard"); 
 
-    } catch (error: unknown) { // Perbaikan Tipe Any ke Unknown
+    } catch (error: unknown) {
       console.error(error);
       if (error instanceof Error) {
-        setErrorMsg(error.message.replace("Firebase: ", ""));
+        let friendlyError = error.message;
+        if (friendlyError.includes("invalid-credential")) friendlyError = "Email atau password salah.";
+        if (friendlyError.includes("email-already-in-use")) friendlyError = "Email sudah terdaftar.";
+        if (friendlyError.includes("weak-password")) friendlyError = "Password minimal 6 karakter.";
+        setErrorMsg(friendlyError.replace("Firebase: ", ""));
       } else {
         setErrorMsg("Terjadi kesalahan yang tidak terduga.");
       }
@@ -107,7 +117,6 @@ export default function DesktopLoginPage() {
     }
   };
 
-  // FUNGSI LOGIN GOOGLE
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setErrorMsg("");
@@ -116,7 +125,7 @@ export default function DesktopLoginPage() {
     try {
       const result = await signInWithPopup(auth, provider);
       
-      await saveUserToFirestore(
+      const userRole = await saveUserToFirestore(
         result.user.uid, 
         result.user.email || "", 
         result.user.displayName || "Pengguna Google",
@@ -127,14 +136,16 @@ export default function DesktopLoginPage() {
         uid: result.user.uid,
         email: result.user.email,
         name: result.user.displayName || "Pengguna Google",
-        photoURL: result.user.photoURL
+        photoURL: result.user.photoURL,
+        role: userRole
       });
 
-      router.push("/dashboard");
-    } catch (error: unknown) { // Perbaikan Tipe Any ke Unknown
+      // PERBAIKAN: Arahkan ke rute publik /dashboard, bukan /desktop/dashboard
+      router.push("/dashboard"); 
+    } catch (error: unknown) {
       console.error(error);
       if (error instanceof Error) {
-        setErrorMsg("Gagal login dengan Google: " + error.message);
+        setErrorMsg("Gagal login dengan Google: " + error.message.replace("Firebase: ", ""));
       } else {
         setErrorMsg("Gagal login dengan Google. Silakan coba lagi.");
       }
@@ -144,62 +155,66 @@ export default function DesktopLoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Accents */}
-      <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#7A171D] rounded-full blur-[120px] opacity-10 pointer-events-none" />
-      <div className="absolute bottom-[-20%] left-[-10%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[100px] opacity-15 pointer-events-none" />
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+      <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[140px] opacity-15 pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-5%] w-[30%] h-[30%] bg-[#C5A059] rounded-full blur-[120px] opacity-20 pointer-events-none" />
 
-      <div className="max-w-5xl w-full bg-white rounded-3xl shadow-2xl shadow-[#7A171D]/5 flex overflow-hidden z-10 relative min-h-[600px]">
+      <div className="max-w-5xl w-full bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 flex overflow-hidden z-10 relative min-h-[650px] border border-slate-100">
         
-        {/* Sisi Kiri - Branding */}
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] p-12 flex-col justify-between relative overflow-hidden text-white">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#C5A059]/20 rounded-full blur-2xl" />
+        <div className="hidden lg:flex lg:w-5/12 bg-gradient-to-br from-[#7A171D] via-[#6A1218] to-[#4A0A10] p-12 flex-col justify-between relative overflow-hidden text-white">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-[#C5A059]/20 rounded-full blur-3xl" />
           
           <div className="relative z-10">
-            <h2 className="text-4xl font-extrabold mb-4">Flash Global</h2>
-            <p className="text-white/80 text-lg leading-relaxed">
-              Portal manajemen pengiriman dan logistik luar negeri yang terintegrasi penuh.
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
+                <Truck className="w-6 h-6 text-[#C5A059]" />
+              </div>
+              <h2 className="text-2xl font-extrabold tracking-tight">Flash Global</h2>
+            </div>
+            <h3 className="text-4xl font-bold mb-4 leading-tight">Solusi Logistik Tanpa Batas</h3>
+            <p className="text-white/70 text-base leading-relaxed">
+              Kelola pengiriman domestik maupun luar negeri Anda dengan mudah, aman, dan terpantau secara real-time dalam satu portal.
             </p>
           </div>
 
           <div className="relative z-10 space-y-6">
-            <div className="flex items-center gap-4 bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/10">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <ShieldCheck className="text-[#C5A059] w-6 h-6" />
+            <div className="flex items-start gap-4 bg-black/20 p-5 rounded-2xl backdrop-blur-sm border border-white/5">
+              <div className="w-10 h-10 rounded-full bg-[#C5A059]/20 flex items-center justify-center shrink-0 mt-1">
+                <ShieldCheck className="text-[#C5A059] w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-semibold text-lg text-[#DFBE7B]">Sistem Akun Terpusat</h4>
-                <p className="text-sm text-white/80">Satu kredensial login untuk akses Web & Aplikasi Mobile secara real-time.</p>
+                <h4 className="font-semibold text-base text-white mb-1">Keamanan Data Terjamin</h4>
+                <p className="text-sm text-white/60 leading-relaxed">Sistem terenkripsi penuh memastikan data pengiriman dan profil Anda tetap aman.</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sisi Kanan - Area Formulir */}
-        <div className="w-full lg:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white">
-          <div className="mb-8 flex justify-between items-center">
-            <Link href="/" className="text-sm text-gray-500 hover:text-[#7A171D] transition-colors font-semibold flex items-center gap-2">
+        <div className="w-full lg:w-7/12 p-8 sm:p-12 md:p-16 flex flex-col justify-center bg-white">
+          <div className="mb-10 flex justify-between items-center">
+            <Link href="/" className="text-sm text-slate-500 hover:text-[#7A171D] transition-colors font-medium flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
               &larr; Kembali ke Beranda
             </Link>
           </div>
 
-          <div className="mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              {isLogin ? "Selamat Datang" : "Buat Akun Baru"}
+          <div className="mb-8">
+            <h2 className="text-3xl font-extrabold text-slate-900 mb-2 tracking-tight">
+              {isLogin ? "Selamat Datang Kembali" : "Buat Akun Baru"}
             </h2>
-            <p className="text-gray-500">
+            <p className="text-slate-500 text-sm">
               {isLogin 
-                ? "Silakan masuk untuk mengelola pengiriman Anda." 
-                : "Daftar sekarang untuk mempermudah proses logistik."}
+                ? "Silakan masuk untuk mengelola dan melacak pengiriman Anda." 
+                : "Daftar sekarang dan nikmati kemudahan manajemen logistik."}
             </p>
           </div>
 
-          {/* Pesan Error */}
           <AnimatePresence>
             {errorMsg && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 text-sm font-semibold rounded-xl">
-                {errorMsg}
+              <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="mb-6 overflow-hidden">
+                <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-xl flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 shrink-0" /> {errorMsg}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -216,50 +231,50 @@ export default function DesktopLoginPage() {
             >
               {!isLogin && (
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Nama Lengkap</label>
-                  <div className="relative">
+                  <label className="text-sm font-semibold text-slate-700">Nama Lengkap</label>
+                  <div className="relative group">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <User className="w-5 h-5 text-gray-400" />
+                      <User className="w-5 h-5 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
                     </div>
-                    <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Masukkan nama lengkap" className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#7A171D] outline-none transition-all bg-gray-50" required={!isLogin} />
+                    <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Masukkan nama lengkap" className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-slate-50/50 text-slate-900 font-medium" required={!isLogin} />
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700">Email</label>
-                <div className="relative">
+                <label className="text-sm font-semibold text-slate-700">Email</label>
+                <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="w-5 h-5 text-gray-400" />
+                    <Mail className="w-5 h-5 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
                   </div>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="contoh@email.com" className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#7A171D] outline-none transition-all bg-gray-50" required />
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="contoh@email.com" className="w-full pl-12 pr-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-slate-50/50 text-slate-900 font-medium" required />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700">Password</label>
-                <div className="relative">
+                <label className="text-sm font-semibold text-slate-700">Password</label>
+                <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="w-5 h-5 text-gray-400" />
+                    <Lock className="w-5 h-5 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
                   </div>
-                  <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-12 py-3 rounded-xl border border-gray-200 focus:border-[#7A171D] outline-none transition-all bg-gray-50" required />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-[#7A171D] transition-colors">
+                  <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-12 pr-12 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none transition-all bg-slate-50/50 text-slate-900 font-medium" required />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-[#7A171D] transition-colors">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
 
               {isLogin && (
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-1">
                   <button type="button" className="text-sm font-semibold text-[#C5A059] hover:text-[#7A171D] transition-colors">
                     Lupa Password?
                   </button>
                 </div>
               )}
 
-              <button type="submit" disabled={isLoading} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/30 disabled:opacity-70 disabled:cursor-not-allowed mt-2">
+              <button type="submit" disabled={isLoading} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 hover:shadow-[#7A171D]/40 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed mt-4">
                 {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 ) : (
                   <>
                     {isLogin ? "Masuk ke Akun" : "Daftar Sekarang"} <ArrowRight className="w-5 h-5" />
@@ -269,18 +284,17 @@ export default function DesktopLoginPage() {
             </motion.form>
           </AnimatePresence>
 
-          {/* OPSI LOGIN GOOGLE */}
-          <div className="mt-6 flex items-center justify-between">
-            <span className="w-1/5 border-b border-gray-200 lg:w-1/4"></span>
-            <span className="text-xs text-center text-gray-400 font-semibold uppercase">Atau login dengan</span>
-            <span className="w-1/5 border-b border-gray-200 lg:w-1/4"></span>
+          <div className="mt-8 flex items-center justify-between">
+            <span className="w-full border-b border-slate-200"></span>
+            <span className="px-4 text-xs text-center text-slate-400 font-bold uppercase tracking-wider whitespace-nowrap">Atau lanjutkan dengan</span>
+            <span className="w-full border-b border-slate-200"></span>
           </div>
 
           <button 
             type="button" 
             onClick={handleGoogleLogin} 
             disabled={isLoading}
-            className="w-full mt-6 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm disabled:opacity-70"
+            className="w-full mt-6 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-70"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -291,10 +305,9 @@ export default function DesktopLoginPage() {
             Google
           </button>
 
-          {/* Toggle Login/Register */}
-          <div className="mt-8 text-center text-sm text-gray-600">
+          <div className="mt-8 text-center text-sm text-slate-600">
             {isLogin ? "Belum punya akun? " : "Sudah punya akun? "}
-            <button type="button" onClick={() => setIsLogin(!isLogin)} className="font-bold text-[#7A171D] hover:text-[#C5A059] transition-colors">
+            <button type="button" onClick={() => setIsLogin(!isLogin)} className="font-bold text-[#7A171D] hover:text-[#5A0E13] underline underline-offset-4 transition-colors">
               {isLogin ? "Daftar di sini" : "Masuk di sini"}
             </button>
           </div>
