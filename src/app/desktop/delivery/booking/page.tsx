@@ -304,7 +304,7 @@ function BookingForm() {
         createdAt: serverTimestamp(),
         porterCount 
       });
-      router.push("/desktop/pembayaran");
+      router.push("/pembayaran");
     } catch (error) { 
       console.error("Kesalahan sistem submit order", error); // Linter lolos (Digunakan di console.log)
       setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda."); 
@@ -331,10 +331,10 @@ function BookingForm() {
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <Button onClick={() => router.push("/desktop/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
+            <Button onClick={() => router.push("/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
               <Truck className="w-4 h-4 mr-1.5"/> Pesan Kurir
             </Button>
-            <Button onClick={() => router.push("/desktop/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
+            <Button onClick={() => router.push("/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
               <Globe2 className="w-4 h-4 mr-1.5 text-slate-500"/> Kargo Global
             </Button>
           </div>

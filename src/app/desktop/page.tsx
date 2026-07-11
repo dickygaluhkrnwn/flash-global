@@ -270,12 +270,13 @@ export default function DesktopLandingPage() {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
   };
 
+  // PERBAIKAN: Routing Canonical (Tanpa /desktop)
   const getNextRouteWithData = () => {
     const params = new URLSearchParams({
       origin: formData.origin, destination: formData.destination, weight: formData.weight.toString(),
       l: formData.length.toString(), w: formData.width.toString(), h: formData.height.toString()
     }).toString();
-    return activeTab === "domestik" ? `/desktop/delivery/booking?${params}` : `/desktop/forwarding/quote?${params}`;
+    return activeTab === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`;
   };
 
   const handleDirectRoute = (route: string) => {
@@ -323,14 +324,16 @@ export default function DesktopLandingPage() {
           {/* QUICK ACCESS BUTTONS: Pindah ke kanan atas agar rapi */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto shrink-0 pb-1">
             <Button 
-              onClick={() => handleDirectRoute("/desktop/delivery/booking")}
+              // PERBAIKAN: Canonical Route
+              onClick={() => handleDirectRoute("/delivery/booking")}
               variant="primary" 
               className="w-full sm:w-auto h-12 px-6 text-sm font-bold shadow-lg shadow-[#7A171D]/20 rounded-xl flex items-center justify-center gap-2"
             >
               <Truck className="w-4 h-4" /> Pesan Domestik Langsung
             </Button>
             <Button 
-              onClick={() => handleDirectRoute("/desktop/forwarding/quote")}
+              // PERBAIKAN: Canonical Route
+              onClick={() => handleDirectRoute("/forwarding/quote")}
               variant="outline" 
               className="w-full sm:w-auto h-12 px-6 text-sm font-bold bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm rounded-xl flex items-center justify-center gap-2"
             >
@@ -527,7 +530,7 @@ export default function DesktopLandingPage() {
               </div>
 
               <div className="absolute bottom-6 right-6 z-20">
-                <button onClick={() => router.push("/desktop/tracking")} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
+                <button onClick={() => router.push("/tracking")} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
                   <div className="bg-[#7A171D]/10 p-2 rounded-xl text-[#7A171D] group-hover:scale-110 transition-transform"><PackageSearch className="w-4 h-4"/></div>
                   <span className="text-slate-800 text-xs font-bold tracking-wide">Cek Pengiriman</span>
                 </button>

@@ -285,7 +285,7 @@ export default function PaymentPage() {
       const encodedMessage = encodeURIComponent(message);
       window.open(`https://wa.me/${adminWhatsApp}?text=${encodedMessage}`, "_blank");
 
-      router.push("/desktop/dashboard");
+      router.push("/dashboard");
 
     } catch (error: unknown) {
       console.error("Gagal memproses pembayaran:", error);
@@ -300,7 +300,7 @@ export default function PaymentPage() {
   };
 
   const handlePayLater = () => {
-    router.push("/desktop/dashboard");
+    router.push("/dashboard");
   };
 
   const formatRupiah = (val: number) => {

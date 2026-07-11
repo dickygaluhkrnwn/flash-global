@@ -560,7 +560,7 @@ export default function OrderDetailPage() {
                 </Button>
                 
                 {order.status === "Menunggu Pembayaran" ? (
-                  <Button onClick={() => router.push("/desktop/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
+                  <Button onClick={() => router.push("/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
                     <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
                   </Button>
                 ) : (

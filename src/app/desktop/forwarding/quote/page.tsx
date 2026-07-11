@@ -121,7 +121,7 @@ function QuoteForm() {
       window.open(`https://wa.me/${adminWA}?text=${waText}`, "_blank");
       
       // Redirect to Dashboard
-      router.push("/desktop/dashboard");
+      router.push("/dashboard");
 
     } catch (error) {
       console.error("Failed to save quote:", error);
@@ -170,7 +170,7 @@ function QuoteForm() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <Button onClick={() => router.push("/desktop/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
+          <Button onClick={() => router.push("/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
              Domestic Cargo
           </Button>
           <Button variant="gold" className="shadow-md h-11 text-xs px-5 cursor-default hover:scale-100">
