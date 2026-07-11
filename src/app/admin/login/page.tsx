@@ -101,7 +101,7 @@ export default function AdminLoginPage() {
     }
   };
 
-  // Fitur Lupa Kata Sandi
+  // Fitur Lupa Kata Sandi (Dengan Bypass URL Dinamis)
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       setErrorMsg("Silakan masukkan alamat email Anda terlebih dahulu di kolom email untuk mereset kata sandi.");
@@ -113,7 +113,19 @@ export default function AdminLoginPage() {
     setSuccessMsg("");
 
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      // BIKIN URL DINAMIS: Otomatis deteksi Localhost atau Vercel
+      const resetUrl = process.env.NODE_ENV === "development" 
+        ? "http://localhost:3000/reset-password" 
+        : "https://flash-global.vercel.app/reset-password";
+
+      // PAKSA FIREBASE PAKE URL KITA (Bypass error Console)
+      const actionCodeSettings = {
+        url: resetUrl,
+        handleCodeInApp: false,
+      };
+
+      await sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
+      
       setSuccessMsg("Tautan pemulihan kata sandi telah dikirim ke email Anda. Silakan cek kotak masuk atau folder spam.");
     } catch (error: unknown) {
       if (error instanceof Error) {
