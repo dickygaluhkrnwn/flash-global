@@ -15,23 +15,9 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
 
-interface UnpaidOrder {
-  id: string;
-  date: string;
-  originAddress: string;
-  destAddress: string;
-  amount: number;
-  status: string;
-}
-
-interface B2BClientDebt {
-  id: string; 
-  name: string;
-  email: string;
-  unpaidCount: number;
-  totalDebt: number;
-  orders: UnpaidOrder[];
-}
+// MENGGUNAKAN GLOBAL TYPES
+import { B2BClientDebt, UnpaidOrder } from "@/types/finance";
+import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function FinanceReceivablesPage() {
   const router = useRouter();
@@ -58,25 +44,45 @@ export default function FinanceReceivablesPage() {
         const debtMap = new Map<string, B2BClientDebt>();
         
         b2bOrderSnap.forEach(docObj => {
-          const data = docObj.data();
+          const data = docObj.data() as OrderDetail;
           
           // Filter hanya yang belum Lunas
           if (data.paymentStatus !== "Lunas") {
-            const clientEmail = data.email || data.origin?.senderName || "Unknown B2B Client";
+            
+            // 1. Safe Origin Parsing
+            const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
+            const originAddress = originObj?.address || (typeof data.origin === 'string' ? data.origin : "-");
+            const senderNameFallback = originObj?.senderName || data.senderName;
+            
+            // 2. Safe Client Parsing
+            const clientEmail = typeof data.email === 'string' ? data.email : (typeof senderNameFallback === 'string' ? senderNameFallback : "Unknown B2B Client");
+            const clientName = typeof senderNameFallback === 'string' ? senderNameFallback : "Corporate Client";
+            
+            // 3. Safe Amount
             const amount = data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost || 0;
             
-            const dateObj = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
+            // 4. Safe Date Parsing
+            let dateObj = new Date();
+            if (data.createdAt) {
+               const ts = data.createdAt as Record<string, unknown>;
+               if (typeof ts.toDate === 'function') {
+                  dateObj = ts.toDate() as Date;
+               } else {
+                  dateObj = new Date(data.createdAt as string | number);
+               }
+            }
             const dateStr = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
             
-            let primaryDest = data.destination || "Tujuan";
+            // 5. Safe Destination Parsing
+            let primaryDest = typeof data.destination === 'string' ? data.destination : "Tujuan";
             if (data.destinations && data.destinations.length > 0) {
-                primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : data.destinations[0].address;
+                primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : (data.destinations[0].address || "Tujuan");
             }
 
             const orderDetail: UnpaidOrder = {
               id: docObj.id,
               date: dateStr,
-              originAddress: data.origin?.address || data.origin || "-",
+              originAddress: originAddress,
               destAddress: primaryDest,
               amount: amount,
               status: data.paymentStatus || "Menunggu Pembayaran"
@@ -90,7 +96,7 @@ export default function FinanceReceivablesPage() {
             } else {
               debtMap.set(clientEmail, {
                 id: docObj.id,
-                name: data.origin?.senderName || "Corporate Client",
+                name: clientName,
                 email: clientEmail,
                 unpaidCount: 1,
                 totalDebt: amount,

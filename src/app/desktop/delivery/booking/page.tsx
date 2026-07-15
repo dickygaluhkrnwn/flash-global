@@ -16,28 +16,14 @@ import OriginForm from "./components/OriginForm";
 import DropsAccordion from "./components/DropsAccordion";
 import ExtraServices from "./components/ExtraServices";
 import BookingReceipt from "./components/BookingReceipt";
-import { DropDestination, DynamicVehicle } from "./components/types";
+
+// PERBAIKAN: Mengambil tipe dari Global Types
+import { 
+  DropDestination, DynamicVehicle, Coordinates, 
+  MapViewState, OriginData 
+} from "@/types/order";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-
-// === TYPE DEFINITIONS UNTUK MENGHILANGKAN ANY ===
-interface Coordinates {
-  lng: number;
-  lat: number;
-}
-
-interface MapViewState {
-  longitude: number;
-  latitude: number;
-  zoom: number;
-}
-
-interface OriginData {
-  address: string;
-  detail: string;
-  senderName: string;
-  senderPhone: string;
-}
 
 function BookingForm() {
   const router = useRouter();
@@ -57,7 +43,9 @@ function BookingForm() {
   const [selectedVehicle, setSelectedVehicle] = useState<DynamicVehicle | null>(null);
 
   const [selectedService, setSelectedService] = useState<"Instan" | "Sameday">("Instan");
-  const [originData, setOriginData] = useState<OriginData>({ address: searchParams.get("origin") || "", detail: "", senderName: user?.name || "", senderPhone: "" });
+  
+  // PERBAIKAN: Menggunakan displayName dari Global User
+  const [originData, setOriginData] = useState<OriginData>({ address: searchParams.get("origin") || "", detail: "", senderName: user?.displayName || "", senderPhone: "" });
   const [originCoords, setOriginCoords] = useState<Coordinates | null>(null);
 
   const initialDropId = `DROP-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -71,7 +59,7 @@ function BookingForm() {
   const [porterCount, setPorterCount] = useState<number>(0);
   const [tollFee, setTollFee] = useState<number>(0);
 
-  const [routeData, setRouteData] = useState<unknown>(null); // Type-Safe untuk Data Geometri Route dari Mapbox
+  const [routeData, setRouteData] = useState<unknown>(null); 
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
   const [activeDraggable, setActiveDraggable] = useState<"origin" | string | null>(null);
   const [mapViewState, setMapViewState] = useState<MapViewState>({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
@@ -126,13 +114,13 @@ function BookingForm() {
 
     autoGeocode();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]); // Hanya berjalan di awal atau jika URL parameter berubah
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchCoreData = async () => {
       setIsFetchingData(true);
       try {
-        if (user?.role === "business") setIsB2BClient(true);
+        if (user?.role === "b2b") setIsB2BClient(true);
         const [vSnap, pSnap] = await Promise.all([ getDoc(doc(db, "settings", "vehicles")), getDoc(doc(db, "settings", "pricing")) ]);
 
         if (vSnap.exists() && vSnap.data().motor) setMotorSettings(vSnap.data().motor);
@@ -143,7 +131,6 @@ function BookingForm() {
           if (pData.tarifPorter) setTarifPerPorter(pData.tarifPorter);
 
           if (pData.customVehicles && Array.isArray(pData.customVehicles) && pData.customVehicles.length > 0) {
-            // Type-Safe Sorting
             const sortedVehicles = (pData.customVehicles as DynamicVehicle[]).sort((a, b) => a.maxWeight - b.maxWeight);
             setVehicles(sortedVehicles);
             setSelectedVehicle(sortedVehicles[0]);
@@ -245,7 +232,6 @@ function BookingForm() {
 
   const handleInfoClick = (title: string, text: string) => setActiveInfo({ title, text });
   
-  // Handler Event Type-Safe
   const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setOriginData({ ...originData, [e.target.name]: e.target.value });
   
   const handleMarkerDragEnd = useCallback((lng: number, lat: number, type: "origin" | string) => {
@@ -306,7 +292,7 @@ function BookingForm() {
       });
       router.push("/pembayaran");
     } catch (error) { 
-      console.error("Kesalahan sistem submit order", error); // Linter lolos (Digunakan di console.log)
+      console.error("Kesalahan sistem submit order", error); 
       setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda."); 
     } finally { 
       setIsLoading(false); 

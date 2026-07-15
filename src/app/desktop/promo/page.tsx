@@ -15,22 +15,14 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
-interface PromoData {
-  id: string; // Kode Promo
-  type: "percentage" | "fixed";
-  value: number;
-  quota: number;
-  usedCount: number;
-  expiresAt: string;
-  targetService?: "all" | "domestik" | "forwarding"; 
-  targetUser?: string; 
-}
+// --- IMPORT GLOBAL TYPES ---
+import { Promo } from "@/types/finance";
 
 export default function ClientPromoPage() {
   const router = useRouter();
   const { user, isHydrated } = useAuthStore();
   
-  const [promos, setPromos] = useState<PromoData[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"all" | "domestik" | "forwarding">("all");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -52,7 +44,7 @@ export default function ClientPromoPage() {
         let promosList = snap.docs.map(d => ({
           id: d.id,
           ...d.data()
-        })) as PromoData[];
+        })) as Promo[];
         
         // Filter cerdas:
         // 1. Buang yang sudah kadaluarsa

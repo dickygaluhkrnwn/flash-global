@@ -18,23 +18,14 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 
-interface PromoData {
-  id: string; // Kode Promo
-  type: "percentage" | "fixed";
-  value: number;
-  quota: number;
-  usedCount: number;
-  expiresAt: string;
-  isActive: boolean;
-  targetService?: "all" | "domestik" | "forwarding"; // Dibuat optional untuk backward compatibility
-  targetUser?: string; // Dibuat optional untuk backward compatibility
-}
+// --- IMPORT GLOBAL TYPES ---
+import { Promo } from "@/types/finance";
 
 export default function AdminPromoPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [promos, setPromos] = useState<PromoData[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Filter States
@@ -72,7 +63,7 @@ export default function AdminPromoPage() {
       const promosList = snap.docs.map(d => ({
         id: d.id,
         ...d.data()
-      })) as PromoData[];
+      })) as Promo[];
       
       promosList.sort((a, b) => Number(b.isActive) - Number(a.isActive));
       setPromos(promosList);
@@ -133,7 +124,7 @@ export default function AdminPromoPage() {
   };
 
   // HANDLER: Toggle Status (Aktif/Nonaktif)
-  const handleTogglePromo = async (id: string, currentStatus: boolean) => {
+  const handleTogglePromo = async (id: string, currentStatus: boolean | undefined) => {
     try {
       await updateDoc(doc(db, "promos", id), { isActive: !currentStatus });
       showToast("success", `Status promo ${id} diperbarui.`);

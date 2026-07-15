@@ -1,0 +1,56 @@
+export type Role = 'superadmin' | 'admin_finance' | 'admin_operational' | 'b2b' | 'b2c' | 'driver' | 'staff';
+
+export interface UserPreferences {
+  eReceipt?: boolean;
+  eReceiptEmail?: string;
+  proofOfDelivery?: boolean;
+}
+
+export interface UserNotifications {
+  orders?: { push: boolean; email: boolean; whatsapp: boolean };
+  billing?: { email: boolean; whatsapp: boolean };
+  promos?: { email: boolean; sms: boolean };
+  security?: { email: boolean; push: boolean };
+}
+
+export interface User {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  phoneNumber?: string;
+  photoURL?: string;
+  
+  // --- Field Spesifik B2B & Operasional ---
+  companyName?: string;
+  npwp?: string;
+  defaultAddress?: string;
+  picName?: string;
+  industry?: string;
+  monthlyVolume?: string;
+  contractStatus?: 'Pending' | 'Approved' | 'Rejected' | null;
+  b2bLimit?: number;
+  b2bRequestedAt?: Date | any;
+
+  // --- Preferensi & Keamanan ---
+  preferences?: UserPreferences;
+  notifications?: UserNotifications;
+  isSuspended?: boolean; // BARU: Indikator blokir/suspend untuk pengguna B2C/Driver
+  
+  // Menggunakan 'any' sementara untuk timestamp Firestore agar fleksibel saat parsing
+  createdAt: Date | any; 
+  updatedAt?: Date | any;
+}
+
+export interface B2BRequest {
+  id: string;
+  userId: string;
+  companyName: string;
+  businessType: string;
+  npwp: string;
+  address: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: string; // ID admin yang menyetujui
+  createdAt: Date | any;
+  updatedAt?: Date | any;
+}

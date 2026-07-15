@@ -1,7 +1,8 @@
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Truck, Car, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DynamicVehicle } from "./types";
+// IMPORT DARI GLOBAL TYPES
+import { DynamicVehicle } from "@/types/order";
 import { FieldLabel } from "./FieldLabel";
 
 interface Props {

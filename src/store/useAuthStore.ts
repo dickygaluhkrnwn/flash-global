@@ -1,16 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { User, Role } from '@/types/user';
 
-// Definisikan semua kemungkinan role di sistem kita
-export type UserRole = 
-  | 'superadmin' 
-  | 'admin_cs' 
-  | 'admin_finance' 
-  | 'admin_ops' 
-  | 'user' 
-  | 'business';
-
-// Interface untuk data preferensi regional (BARU)
+// Interface untuk data preferensi regional
 export interface UserRegional {
   country?: string;
   city?: string;
@@ -20,20 +12,15 @@ export interface UserRegional {
   measurement?: string;
 }
 
-// Mendefinisikan struktur data User
-export interface User {
-  uid: string;
-  email: string | null;
-  name: string | null;
-  photoURL: string | null;
-  role: UserRole;
-  regional?: UserRegional; // Tambahkan properti regional opsional di sini
+// Extend Global User untuk kebutuhan internal Store (menambahkan regional)
+export interface StoreUser extends User {
+  regional?: UserRegional;
 }
 
 // Mendefinisikan struktur fungsi dan variabel di dalam Store
 interface AuthState {
-  user: User | null;
-  login: (userData: User) => void;
+  user: StoreUser | null;
+  login: (userData: StoreUser) => void;
   logout: () => void;
   isHydrated: boolean;
   setHydrated: (state: boolean) => void;

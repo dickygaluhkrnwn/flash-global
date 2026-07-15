@@ -21,6 +21,9 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
+// --- IMPORT GLOBAL TYPES ---
+import { AdminPricingConfig, EstimateData } from "@/types/order";
+
 // ======================================================================
 // PENGGUNAAN DYNAMIC IMPORT SSR: FALSE (UNTUK MAPBOX INDEPENDEN)
 // ======================================================================
@@ -35,36 +38,6 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-
-// ======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
-// ======================================================================
-
-interface AdminPricingConfig {
-  domestik?: {
-    motor?: { baseFare: number; minKm: number; perKm: number; maxWeight: number };
-    mobil?: { baseFare: number; minKm: number; perKm: number; maxWeight: number };
-  };
-  internasional?: {
-    basePerKg?: number;
-  };
-  discounts?: {
-    thresholdKg?: number;
-    rate?: number;
-  };
-}
-
-interface EstimateData {
-  chargeableWeight: number;
-  finalEstimate: number;
-  parameters: {
-    actualWeight: number;
-    volumeWeight: number;
-    distanceTraveled: number;
-    category: string;
-    vehicleName: string;
-  };
-}
 
 // ======================================================================
 // LOGIKA KALKULASI TARIF MENGGUNAKAN DATA DINAMIS DARI ADMIN FIRESTORE

@@ -1,23 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, CheckCircle2, AlertCircle, Activity, Filter, ArrowUpDown, ArrowUpRight, ArrowDownRight, Building2, FileText, CreditCard } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 
-interface UserSystemData {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  npwp?: string;
-  b2bLimit?: number;
-  contractStatus?: "Pending" | "Approved" | "Rejected";
-}
+// IMPORT GLOBAL TYPES
+import { User } from "@/types/user";
 
 export default function B2BManagementPage() {
-  const [users, setUsers] = useState<UserSystemData[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); 
@@ -30,8 +23,12 @@ export default function B2BManagementPage() {
       setIsLoading(true);
       try {
         const snap = await getDocs(collection(db, "users"));
-        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-        setUsers(allUsers.filter(u => u.role === "business" || u.npwp));
+        // Mapping id Firestore menjadi uid sesuai Global Types
+        const allUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() })) as User[];
+        
+        // Filter users dengan role b2b, legacy role 'business', atau yang memiliki npwp
+        // Casting (u.role as string) diperlukan agar lolos union check TypeScript
+        setUsers(allUsers.filter(u => u.role === "b2b" || (u.role as string) === "business" || u.npwp));
       } catch (error) {
         console.error(error);
         showToast("error", "Gagal memuat data Korporat B2B.");
@@ -52,13 +49,14 @@ export default function B2BManagementPage() {
       await updateDoc(doc(db, "users", userId), {
         contractStatus: status,
         b2bLimit: limitVal,
-        role: status === "Approved" ? "business" : "user"
+        // Standarisasi role baru: b2b dan b2c
+        role: status === "Approved" ? "b2b" : "b2c"
       });
       showToast("success", `Berkas kontrak perusahaan berhasil diperbarui.`);
       
       // Update state lokal tanpa harus refetch ulang seluruh database (Optimization)
       setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId ? { ...u, contractStatus: status, b2bLimit: limitVal, role: status === "Approved" ? "business" : "user" } : u
+        u.uid === userId ? { ...u, contractStatus: status, b2bLimit: limitVal, role: status === "Approved" ? "b2b" : "b2c" } : u
       ));
     } catch (error) {
       console.error(error);
@@ -66,18 +64,28 @@ export default function B2BManagementPage() {
     }
   };
 
-  const processedData = users
-    .filter(u => {
-      const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()) || (u.npwp || "").includes(searchQuery);
-      const matchStatus = filterStatus === "all" ? true : (u.contractStatus || "Pending") === filterStatus;
-      return matchSearch && matchStatus;
-    })
-    .sort((a, b) => {
-      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
-      if (sortBy === "limit_desc") return (b.b2bLimit || 0) - (a.b2bLimit || 0);
-      return 0;
-    });
+  // Gunakan useMemo agar sorting/filtering tidak jalan berkali-kali jika state lain berubah
+  const processedData = useMemo(() => {
+    return users
+      .filter(u => {
+        // Fallback properti name yang aman dengan double casting
+        const clientName = u.companyName || u.displayName || (u as unknown as Record<string, unknown>).name as string || "";
+        const matchSearch = clientName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            u.email.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            (u.npwp || "").includes(searchQuery);
+        const matchStatus = filterStatus === "all" ? true : (u.contractStatus || "Pending") === filterStatus;
+        return matchSearch && matchStatus;
+      })
+      .sort((a, b) => {
+        const nameA = a.companyName || a.displayName || (a as unknown as Record<string, unknown>).name as string || "";
+        const nameB = b.companyName || b.displayName || (b as unknown as Record<string, unknown>).name as string || "";
+        
+        if (sortBy === "name_asc") return nameA.localeCompare(nameB);
+        if (sortBy === "name_desc") return nameB.localeCompare(nameA);
+        if (sortBy === "limit_desc") return (b.b2bLimit || 0) - (a.b2bLimit || 0);
+        return 0;
+      });
+  }, [users, searchQuery, filterStatus, sortBy]);
 
   // Kalkulasi Statistik Powerful
   const totalB2B = users.length;
@@ -174,7 +182,7 @@ export default function B2BManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {processedData.map(u => <B2BRowKey key={u.id} user={u} onUpdate={handleUpdateContract} />)}
+                {processedData.map(u => <B2BRowKey key={u.uid} user={u} onUpdate={handleUpdateContract} />)}
               </tbody>
             </table>
           )}
@@ -184,13 +192,16 @@ export default function B2BManagementPage() {
   );
 }
 
-function B2BRowKey({ user, onUpdate }: { user: UserSystemData; onUpdate: (id: string, status: "Approved" | "Rejected", limitVal: number) => void }) {
+function B2BRowKey({ user, onUpdate }: { user: User; onUpdate: (id: string, status: "Approved" | "Rejected", limitVal: number) => void }) {
   const [localLimit, setLocalLimit] = useState<number | "">(user.b2bLimit || 0);
+
+  // Helper untuk mendapatkan nama fallback dengan aman
+  const displayCompanyName = user.companyName || user.displayName || (user as unknown as Record<string, unknown>).name as string || "Klien Korporat";
 
   return (
     <tr className="hover:bg-slate-50 transition-colors">
       <td className="p-5 pl-6">
-        <p className="font-bold text-slate-900">{user.name}</p>
+        <p className="font-bold text-slate-900">{displayCompanyName}</p>
         <p className="text-slate-500 mt-0.5">{user.email}</p>
       </td>
       <td className="p-5 font-bold text-slate-600">{user.npwp || "Belum Input"}</td>
@@ -215,10 +226,10 @@ function B2BRowKey({ user, onUpdate }: { user: UserSystemData; onUpdate: (id: st
         </span>
       </td>
       <td className="p-5 pr-6 flex justify-end gap-2 pt-6">
-        <button onClick={() => onUpdate(user.id, "Approved", Number(localLimit) || 0)} className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5">
+        <button onClick={() => onUpdate(user.uid, "Approved", Number(localLimit) || 0)} className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5">
           <ArrowUpRight className="w-4 h-4" /> Approve
         </button>
-        <button onClick={() => onUpdate(user.id, "Rejected", 0)} className="px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 font-bold text-xs rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5">
+        <button onClick={() => onUpdate(user.uid, "Rejected", 0)} className="px-4 py-2.5 bg-red-50 border border-red-200 text-red-700 font-bold text-xs rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5">
           <ArrowDownRight className="w-4 h-4" /> Reject
         </button>
       </td>

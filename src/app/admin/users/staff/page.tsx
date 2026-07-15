@@ -5,26 +5,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, CheckCircle2, AlertCircle, Ban, Activity, Filter, Plus, Save, Mail, ShieldAlert, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { useAuthStore, UserRole } from "@/store/useAuthStore";
+import { useAuthStore } from "@/store/useAuthStore";
 
-interface UserSystemData {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  isSuspended?: boolean;
-}
+// IMPORT GLOBAL TYPES
+import { User, Role } from "@/types/user";
 
 export default function StaffManagementPage() {
   const { user: currentUser } = useAuthStore();
-  const [users, setUsers] = useState<UserSystemData[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("all"); 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const [newStaff, setNewStaff] = useState({ name: "", email: "", role: "admin_cs" as UserRole });
+  const [newStaff, setNewStaff] = useState({ name: "", email: "", role: "staff" as Role });
 
   useEffect(() => {
     // MENDAPATKAN DATA (Dibungkus dalam useEffect agar aman dari dependensi loop linter)
@@ -32,8 +27,24 @@ export default function StaffManagementPage() {
       setIsLoading(true);
       try {
         const snap = await getDocs(collection(db, "users"));
-        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-        const adminRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
+        
+        // Memetakan ID dan memfilter role khusus Admin/Staff
+        const allUsers = snap.docs.map(d => {
+          const data = d.data();
+          // Fallback legacy roles jika masih ada di DB
+          let userRole = data.role as string;
+          if (userRole === "admin_ops") userRole = "admin_operational";
+          if (userRole === "admin_cs") userRole = "staff";
+
+          return { 
+            uid: d.id, 
+            ...data, 
+            role: userRole as Role,
+            displayName: data.displayName || data.name || "Staf Baru" // Safe Fallback
+          } as User;
+        });
+
+        const adminRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
         setUsers(allUsers.filter(u => adminRoles.includes(u.role)));
       } catch (error) {
         console.error(error);
@@ -73,7 +84,7 @@ export default function StaffManagementPage() {
       
       // Update state React lokal untuk menghindari fetch ulang (Optimization)
       setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId ? { ...u, isSuspended: !currentStatus } : u
+        u.uid === userId ? { ...u, isSuspended: !currentStatus } : u
       ));
     } catch {
       showToast("error", "Gagal merubah status staf.");
@@ -87,7 +98,8 @@ export default function StaffManagementPage() {
       const staffMockId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
       
       const newStaffData = {
-        name: newStaff.name,
+        displayName: newStaff.name,
+        name: newStaff.name, // Untuk backward compatibility
         email: newStaff.email,
         role: newStaff.role,
         isSuspended: false,
@@ -98,8 +110,10 @@ export default function StaffManagementPage() {
       showToast("success", `Hak akses internal staf ${newStaff.name} berhasil didaftarkan.`);
       
       // Update tabel secara lokal dengan data baru tanpa query ulang ke Firebase
-      setUsers(prev => [{ id: staffMockId, ...newStaffData, createdAt: undefined }, ...prev]);
-      setNewStaff({ name: "", email: "", role: "admin_cs" });
+      const createdStaff = { uid: staffMockId, ...newStaffData, createdAt: new Date() } as User;
+      setUsers(prev => [createdStaff, ...prev]);
+      
+      setNewStaff({ name: "", email: "", role: "staff" });
     } catch {
       showToast("error", "Gagal menyimpan entitas staf baru.");
     } finally {
@@ -108,15 +122,15 @@ export default function StaffManagementPage() {
   };
 
   const processedData = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = (u.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchRole = filterRole === "all" ? true : u.role === filterRole;
     return matchSearch && matchRole;
   });
 
   // Kalkulasi Statistik Staf
   const totalStaff = users.length;
-  const opsStaff = users.filter(u => u.role === "admin_ops").length;
-  const csStaff = users.filter(u => u.role === "admin_cs").length;
+  const opsStaff = users.filter(u => u.role === "admin_operational").length;
+  const csStaff = users.filter(u => u.role === "staff").length;
   const adminStaff = users.filter(u => u.role === "admin_finance" || u.role === "superadmin").length;
 
   return (
@@ -193,9 +207,9 @@ export default function StaffManagementPage() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase">Otoritas Role</label>
-              <select value={newStaff.role} onChange={(e) => setNewStaff({...newStaff, role: e.target.value as UserRole})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 text-sm font-semibold outline-none focus:border-[#7A171D] focus:bg-white transition-all shadow-inner">
-                <option value="admin_cs">Customer Service (CS)</option>
-                <option value="admin_ops">Operational Admin</option>
+              <select value={newStaff.role} onChange={(e) => setNewStaff({...newStaff, role: e.target.value as Role})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-900 text-sm font-semibold outline-none focus:border-[#7A171D] focus:bg-white transition-all shadow-inner">
+                <option value="staff">Customer Service (CS / Staff)</option>
+                <option value="admin_operational">Operational Admin</option>
                 <option value="admin_finance">Finance Admin</option>
                 <option value="superadmin">Super Admin</option>
               </select>
@@ -220,8 +234,8 @@ export default function StaffManagementPage() {
                 <option value="all">Semua Departemen</option>
                 <option value="superadmin">Direksi (Superadmin)</option>
                 <option value="admin_finance">Finance</option>
-                <option value="admin_ops">Operasional</option>
-                <option value="admin_cs">Customer Service</option>
+                <option value="admin_operational">Operasional</option>
+                <option value="staff">Customer Service</option>
               </select>
             </div>
           </div>
@@ -242,9 +256,9 @@ export default function StaffManagementPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {processedData.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={s.uid} className="hover:bg-slate-50 transition-colors">
                       <td className="p-5 pl-6">
-                        <p className="font-bold text-slate-900">{s.name}</p>
+                        <p className="font-bold text-slate-900">{s.displayName}</p>
                         <p className="text-slate-500 mt-0.5 flex items-center gap-1.5 text-xs"><Mail className="w-3.5 h-3.5"/> {s.email}</p>
                       </td>
                       <td className="p-5">
@@ -254,7 +268,7 @@ export default function StaffManagementPage() {
                       </td>
                       <td className="p-5 pr-6 flex justify-end">
                         <button 
-                          onClick={() => handleToggleSuspend(s.id, s.isSuspended || false)} 
+                          onClick={() => handleToggleSuspend(s.uid, s.isSuspended || false)} 
                           className={`p-2.5 rounded-xl border transition-all shadow-sm ${s.isSuspended ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-600 hover:text-white'}`} 
                           title={s.isSuspended ? "Unban" : "Suspend (Cabut Akses)"}
                         >

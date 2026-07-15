@@ -12,30 +12,9 @@ import {
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
-// --- INTERFACES ---
-interface DashboardStats {
-  totalB2B: number;
-  totalDrivers: number;
-  totalOrdersToday: number;
-  totalRevenueToday: number;
-  totalWeightToday: number;
-  activeTickets: number;
-  avgOrderValueWeekly: number;
-}
-
-interface ChartData {
-  label: string;
-  value: number;
-  dateStr: string;
-}
-
-interface ActiveNode {
-  id: string;
-  origin: string;
-  destination: string;
-  status: string;
-  vehicle: string;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { DashboardStats, ChartData, ActiveNode } from "@/types/admin";
+import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -56,13 +35,14 @@ export default function AdminDashboardPage() {
     const aggregateDashboardData = async () => {
       setIsLoading(true);
       try {
-        // 1. Fetch Total Klien B2B
-        const b2bQuery = query(collection(db, "users"), where("role", "==", "b2b_client"));
+        // 1. Fetch Total Klien B2B (Perbaikan Query Role)
+        const b2bQuery = query(collection(db, "users"), where("role", "==", "b2b"));
         const b2bSnap = await getDocs(b2bQuery);
         const b2bCount = b2bSnap.size;
 
-        // 2. Fetch Total Mitra Sopir
-        const driverSnap = await getDocs(collection(db, "driver_wallets"));
+        // 2. Fetch Total Mitra Sopir (Perbaikan Query Role)
+        const driverQuery = query(collection(db, "users"), where("role", "==", "driver"));
+        const driverSnap = await getDocs(driverQuery);
         const driverCount = driverSnap.size;
 
         // 3. Fetch Tiket Bantuan Aktif (Open / In Progress)
@@ -97,8 +77,19 @@ export default function AdminDashboardPage() {
         const todayStr = new Date().toDateString();
 
         orderSnap.forEach((docObj) => {
-          const data = docObj.data();
-          const createdAtDate = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+          const data = docObj.data() as OrderDetail;
+          
+          // Safe Date Parsing
+          let createdAtDate = new Date();
+          if (data.createdAt) {
+             const ts = data.createdAt as Record<string, unknown>;
+             if (typeof ts.toDate === 'function') {
+                createdAtDate = ts.toDate() as Date;
+             } else {
+                createdAtDate = new Date(data.createdAt as string | number);
+             }
+          }
+          
           const orderDateStr = createdAtDate.toDateString();
           const orderTotal = data.breakdown?.grandTotal || data.totalCost || 0;
           const orderWeight = data.totalWeight || data.weight || 0;
@@ -120,10 +111,20 @@ export default function AdminDashboardPage() {
 
           // C. Ambil orderan yang sedang aktif berjalan untuk Live Map Node
           if (data.status === "Sedang Diproses" || data.status === "Menunggu Pembayaran" || data.status === "Dikirim") {
+            
+            // Safe Parsing Origin & Destination
+            const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
+            const originAddress = originObj?.address || (typeof data.origin === 'string' ? data.origin : "Unknown");
+            
+            let destAddress = data.destination || "Unknown";
+            if (data.destinations && data.destinations.length > 0) {
+                destAddress = data.destinations[0].address || "Unknown";
+            }
+
             nodesList.push({
               id: docObj.id.substring(0, 8).toUpperCase(),
-              origin: data.origin?.address || data.origin || "Unknown",
-              destination: data.destinations?.[0]?.address || data.destination || "Unknown",
+              origin: originAddress,
+              destination: destAddress,
               status: data.status,
               vehicle: data.vehicleName || "Kurir",
             });

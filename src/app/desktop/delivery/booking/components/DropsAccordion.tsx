@@ -5,7 +5,8 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FieldLabel } from "./FieldLabel";
-import { DropDestination, DynamicVehicle, DeliveryItem } from "./types";
+// IMPORT DARI GLOBAL TYPES (Menghapus import lokal "./types")
+import { DropDestination, DynamicVehicle, DeliveryItem } from "@/types/order";
 import { cn } from "@/lib/utils";
 import { User, Phone, MapPin, PackageOpen, Plus, Trash2, MapPinned, ChevronDown, Download, Upload, Info } from "lucide-react";
 
@@ -17,7 +18,7 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const inputGold = "focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/10";
 
-// Tipe spesifik untuk pengaturan motor, menggantikan `any`
+// Tipe spesifik untuk pengaturan motor
 interface MotorSettings {
   weightSmall?: number;
   weightMedium?: number;
@@ -57,7 +58,6 @@ export default function DropsAccordion({
 
   const removeDrop = (index: number) => setDrops(prev => prev.filter((_, i) => i !== index));
   
-  // Perbaikan tipe `val` dari `any` menjadi `string` karena semua input untuk updateDropField saat ini berupa string (address, detail, receiverName, dll)
   const updateDropField = (dIndex: number, field: keyof DropDestination, val: string) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], [field]: val }; return newDrops; });
   
   const updateDropFieldsMulti = (dIndex: number, updates: Partial<DropDestination>) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], ...updates }; return newDrops; });

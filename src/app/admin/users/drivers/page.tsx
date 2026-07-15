@@ -2,21 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, CheckCircle2, AlertCircle, Ban, Activity, Filter, ArrowUpDown, Truck, Wallet } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, CheckCircle2, AlertCircle, Ban, Activity, Filter, ArrowUpDown, Truck, Wallet, ShieldAlert } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/Button";
 
-interface DriverSystemData {
-  id: string;
-  name: string;
-  phone: string;
-  vehicleType: string;
-  balance: number;
-  isSuspended?: boolean;
-}
+// IMPORT GLOBAL TYPES
+import { DriverData } from "@/types/admin";
 
 export default function DriversManagementPage() {
-  const [drivers, setDrivers] = useState<DriverSystemData[]>([]);
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+
+  const [drivers, setDrivers] = useState<DriverData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); 
@@ -28,7 +28,7 @@ export default function DriversManagementPage() {
       setIsLoading(true);
       try {
         const snap = await getDocs(collection(db, "driver_wallets"));
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverSystemData[];
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverData[];
         setDrivers(list);
       } catch (error) {
         console.error(error);
@@ -62,13 +62,19 @@ export default function DriversManagementPage() {
 
   const processedData = drivers
     .filter(d => {
-      const matchSearch = d.name.toLowerCase().includes(searchQuery.toLowerCase()) || d.phone.includes(searchQuery) || d.vehicleType.toLowerCase().includes(searchQuery.toLowerCase());
+      // Safe String Check untuk menghindari error linter
+      const matchSearch = (d.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (d.phone || "").includes(searchQuery) || 
+                          (d.vehicleType || "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchStatus = filterStatus === "all" ? true : filterStatus === "suspended" ? d.isSuspended : !d.isSuspended;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
-      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      const nameA = a.name || "";
+      const nameB = b.name || "";
+
+      if (sortBy === "name_asc") return nameA.localeCompare(nameB);
+      if (sortBy === "name_desc") return nameB.localeCompare(nameA);
       if (sortBy === "balance_desc") return (b.balance || 0) - (a.balance || 0);
       return 0;
     });
@@ -78,6 +84,22 @@ export default function DriversManagementPage() {
   const activeDrivers = drivers.filter(d => !d.isSuspended).length;
   const suspendedDrivers = drivers.filter(d => d.isSuspended).length;
   const totalWalletBalance = drivers.reduce((sum, d) => sum + (d.balance || 0), 0);
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin & Admin Operational)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Manajemen Mitra ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -171,7 +193,7 @@ export default function DriversManagementPage() {
                   <tr key={d.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-5 pl-6">
                       <p className="font-bold text-slate-900">{d.name}</p>
-                      <p className="text-slate-500 mt-0.5">{d.phone}</p>
+                      <p className="text-slate-500 mt-0.5">{d.phone || "-"}</p>
                     </td>
                     <td className="p-5 text-slate-700 font-medium">{d.vehicleType}</td>
                     <td className="p-5 font-black text-emerald-600">Rp {(d.balance || 0).toLocaleString('id-ID')}</td>

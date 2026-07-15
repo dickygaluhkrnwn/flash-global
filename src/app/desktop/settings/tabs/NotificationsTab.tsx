@@ -13,7 +13,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-// --- INTERFACE UNTUK PROPS TOGGLE ROW ---
+// --- INTERFACE UNTUK PROPS TOGGLE ROW (Lokal UI) ---
 interface ToggleRowProps {
   icon: React.ElementType;
   label: string;

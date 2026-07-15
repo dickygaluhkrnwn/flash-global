@@ -21,23 +21,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-// --- TYPES ---
-export interface VehiclePricing {
-  id: string; 
-  name: string; 
-  isMotor: boolean;
-  maxWeight: number; // Kapasitas (Read-Only di halaman ini, diedit di menu Vehicles)
-  baseFare: number;
-  minKm: number;
-  perKm: number;
-  insurancePercent?: number; 
-}
-
-interface PricingConfig {
-  b2bDiscount: number;
-  tarifPorter: number;
-  customVehicles: VehiclePricing[];
-}
+// --- IMPORT GLOBAL TYPES ---
+import { PricingConfig } from "@/types/admin";
+import { DynamicVehicle } from "@/types/order";
 
 export default function AdminPricingPage() {
   const router = useRouter();
@@ -105,15 +91,15 @@ export default function AdminPricingPage() {
     }
   };
 
-  const handleVehicleChange = (index: number, field: keyof VehiclePricing, value: number) => {
+  const handleVehicleChange = (index: number, field: keyof DynamicVehicle, value: number | string | boolean) => {
     // Kita harus mencari index asli di dalam array global berdasarkan ID armada yang diedit di hasil filter
     const vehicleId = processedData[index].id;
     const globalIndex = pricingConfig.customVehicles.findIndex(v => v.id === vehicleId);
     
     if (globalIndex !== -1) {
       const updatedVehicles = [...pricingConfig.customVehicles];
-      // Menyalin item dan mengupdate nilainya
-      updatedVehicles[globalIndex] = { ...updatedVehicles[globalIndex], [field]: value };
+      // Menyalin item dan mengupdate nilainya dengan Type Casting yang aman
+      updatedVehicles[globalIndex] = { ...updatedVehicles[globalIndex], [field]: value } as DynamicVehicle;
       setPricingConfig({ ...pricingConfig, customVehicles: updatedVehicles });
     }
   };
@@ -317,8 +303,8 @@ export default function AdminPricingPage() {
 // ======================================================================
 interface PricingCardProps {
   index: number;
-  data: VehiclePricing;
-  onChange: (index: number, field: keyof VehiclePricing, val: number) => void;
+  data: DynamicVehicle;
+  onChange: (index: number, field: keyof DynamicVehicle, val: number | string | boolean) => void;
 }
 
 function PricingCard({ index, data, onChange }: PricingCardProps) {

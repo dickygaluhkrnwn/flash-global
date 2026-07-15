@@ -7,19 +7,12 @@ import {
   Clock, CheckCircle2, AlertCircle, Eye, XCircle, CheckCircle, ChevronDown, Package, MapPin
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, query, orderBy, Timestamp, getDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, query, orderBy, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
-interface InsuranceClaim {
-  id: string;
-  orderId: string;
-  clientName: string;
-  claimedAmount: number;
-  reason: string;
-  proofUrl: string;
-  status: "Pending Review" | "Approved" | "Rejected";
-  createdAt?: Timestamp;
-}
+// IMPORT DARI GLOBAL TYPES
+import { InsuranceClaim } from "@/types/support";
+import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function AdminClaimsPage() {
   const [claims, setClaims] = useState<InsuranceClaim[]>([]);
@@ -57,9 +50,20 @@ export default function AdminClaimsPage() {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
   };
 
-  const formatTime = (ts?: Timestamp) => {
+  // Safe Timestamp Parsers untuk lolos Strict Mode
+  const getMillis = (ts: unknown) => {
+    if (!ts) return 0;
+    const t = ts as { toMillis?: () => number, seconds?: number };
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t.seconds === 'number') return t.seconds * 1000;
+    return new Date(ts as string | number).getTime();
+  };
+
+  const formatTime = (ts?: unknown) => {
     if (!ts) return "Unknown";
-    return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const t = ts as { toDate?: () => Date };
+    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(ts as string | number);
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   // Fungsi refresh lokal untuk optimize (di passing ke props component anak)
@@ -69,11 +73,11 @@ export default function AdminClaimsPage() {
 
   const processedClaims = useMemo(() => {
     let res = [...claims];
-    if (searchQuery) res = res.filter(c => c.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || c.orderId.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) res = res.filter(c => (c.clientName || "").toLowerCase().includes(searchQuery.toLowerCase()) || (c.orderId || "").toLowerCase().includes(searchQuery.toLowerCase()));
     if (filterStatus !== "All") res = res.filter(c => c.status === filterStatus);
     res.sort((a, b) => {
-      const timeA = a.createdAt?.toMillis() || 0;
-      const timeB = b.createdAt?.toMillis() || 0;
+      const timeA = getMillis(a.createdAt);
+      const timeB = getMillis(b.createdAt);
       return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
     });
     return res;
@@ -182,26 +186,9 @@ export default function AdminClaimsPage() {
 }
 
 // === KOMPONEN BARIS EXPANDABLE (LAZY LOADING) ===
-// Membuat interface eksplisit agar tidak terkena linter rule "no-explicit-any"
-interface OrderReferenceData {
-  vehicleName?: string;
-  serviceType?: string;
-  totalWeight?: number;
-  weight?: number;
-  breakdown?: {
-    deliveryFee?: number;
-    insuranceFee?: number;
-  };
-  totalDistance?: number;
-  origin?: { address: string } | string;
-  destination?: string;
-  destinations?: { address: string }[];
-  [key: string]: unknown;
-}
-
 interface ExpandableClaimRowProps {
   claim: InsuranceClaim;
-  formatTime: (ts?: Timestamp) => string;
+  formatTime: (ts?: unknown) => string;
   formatRupiah: (val: number) => string;
   setShowImageModal: (url: string) => void;
   showToast: (type: "success" | "error", msg: string) => void;
@@ -210,13 +197,13 @@ interface ExpandableClaimRowProps {
 
 function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal, showToast, updateLocalState }: ExpandableClaimRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [orderData, setOrderData] = useState<OrderReferenceData | null>(null);
+  const [orderData, setOrderData] = useState<OrderDetail | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const toggleExpand = async () => {
     setIsExpanded(!isExpanded);
-    if (!isExpanded && !orderData) {
+    if (!isExpanded && !orderData && claim.orderId) {
       setIsLoadingOrder(true);
       try {
         let docRef = doc(db, "orders", claim.orderId);
@@ -226,7 +213,7 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
           docSnap = await getDoc(docRef);
         }
         if (docSnap.exists()) {
-          setOrderData(docSnap.data() as OrderReferenceData);
+          setOrderData({ id: docSnap.id, category: "domestik", status: "Unknown", ...docSnap.data() } as OrderDetail);
         }
       } catch (e) {
         console.error("Gagal menarik detail order:", e);
@@ -269,9 +256,13 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
           <p className="text-[10px] text-slate-500 max-w-[250px] leading-relaxed"><span className="text-red-500 font-bold uppercase tracking-widest text-[9px] block mb-0.5">Alasan Kerusakan:</span> {claim.reason}</p>
         </td>
         <td className="p-5 align-top">
-          <button onClick={() => setShowImageModal(claim.proofUrl)} className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-xl border border-blue-200 transition-colors font-bold text-[10px] uppercase tracking-widest shadow-sm">
-            <Eye className="w-4 h-4" /> Lihat Foto
-          </button>
+          {claim.proofUrl ? (
+             <button onClick={() => setShowImageModal(claim.proofUrl!)} className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-600 px-4 py-2 rounded-xl border border-blue-200 transition-colors font-bold text-[10px] uppercase tracking-widest shadow-sm">
+               <Eye className="w-4 h-4" /> Lihat Foto
+             </button>
+          ) : (
+            <span className="text-slate-400 text-xs italic">Tanpa Foto</span>
+          )}
         </td>
         <td className="p-5 pr-6 align-top flex flex-col items-end gap-2">
           {claim.status === "Pending Review" ? (
@@ -329,17 +320,17 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
                              <div className="mt-1 w-2 h-2 rounded-full bg-slate-300 ring-4 ring-slate-100 shrink-0" />
                              <div>
                                <p className="text-[9px] text-slate-400 font-bold uppercase mb-0.5">Asal</p>
-                               <p className="text-xs font-bold text-slate-900">{typeof orderData.origin === 'object' ? orderData.origin.address : orderData.origin}</p>
+                               <p className="text-xs font-bold text-slate-900">{typeof orderData.origin === 'object' && orderData.origin !== null ? (orderData.origin as LocationDetail).address : (orderData.origin || "-")}</p>
                              </div>
                            </div>
                            <div className="border-l-2 border-dashed border-slate-200 ml-[3px] pl-5 py-2">
-                             <p className="text-[10px] font-bold text-slate-400">Jarak Tempuh: <span className="text-slate-900">{orderData.totalDistance} Km</span></p>
+                             <p className="text-[10px] font-bold text-slate-400">Jarak Tempuh: <span className="text-slate-900">{orderData.totalDistance || 0} Km</span></p>
                            </div>
                            <div className="flex gap-3 items-start">
                              <div className="mt-1 w-2 h-2 rounded-full bg-[#7A171D] ring-4 ring-red-50 shrink-0" />
                              <div>
                                <p className="text-[9px] text-[#7A171D] font-bold uppercase mb-0.5">Tujuan Akhir</p>
-                               <p className="text-xs font-bold text-slate-900">{orderData.destinations ? orderData.destinations[orderData.destinations.length - 1].address : orderData.destination}</p>
+                               <p className="text-xs font-bold text-slate-900">{orderData.destinations && orderData.destinations.length > 0 ? orderData.destinations[orderData.destinations.length - 1].address : (orderData.destination || "-")}</p>
                              </div>
                            </div>
                         </div>

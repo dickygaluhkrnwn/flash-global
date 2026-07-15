@@ -61,7 +61,7 @@ export default function BusinessTab() {
 
   useEffect(() => {
     if (user?.uid) {
-      setB2bData(prev => ({ ...prev, picName: user.name || "" }));
+      setB2bData(prev => ({ ...prev, picName: user.displayName || "" }));
       
       const fetchUserData = async () => {
         try {
@@ -73,7 +73,7 @@ export default function BusinessTab() {
               defaultAddress: data.defaultAddress || ""
             });
             setB2bData({
-              picName: data.picName || user.name || "",
+              picName: data.picName || user.displayName || "",
               legalCompanyName: data.companyName || "",
               npwp: data.npwp || "",
               industry: data.industry || "",
@@ -82,9 +82,9 @@ export default function BusinessTab() {
             setContractStatus(data.contractStatus || null);
             setB2bLimit(data.b2bLimit || 0);
 
-            // Jika role di database sudah business tapi di zustand belum, update zustand
-            if (data.role === "business" && user.role !== "business") {
-              login({ ...user, role: "business" });
+            // Jika role di database sudah b2b tapi di zustand belum, update zustand
+            if (data.role === "b2b" && user.role !== "b2b") {
+              login({ ...user, role: "b2b" });
             }
           }
         } catch (error) {

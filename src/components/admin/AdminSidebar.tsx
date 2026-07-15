@@ -14,8 +14,11 @@ import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+// --- IMPORT GLOBAL TYPES ---
+import { Role } from "@/types/user";
+
 interface AdminSidebarProps {
-  currentRole: string;
+  currentRole: Role | string;
   pathname: string;
 }
 
@@ -27,8 +30,8 @@ interface SidebarButtonProps {
   isExpanded: boolean;
 }
 
-// REVISI ROLE: Sesuaikan dengan tipe UserRole di useAuthStore (admin_ops diganti dari admin_operational)
-const allowedRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
+// MENGGUNAKAN ROLE YANG SUDAH DISTANDARISASI DI GLOBAL TYPES
+const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
 
 export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProps) {
   const router = useRouter();
@@ -67,15 +70,16 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
     }
   };
 
-  const getRoleBadgeLabel = (role: string) => {
+  const getRoleBadgeLabel = (role: Role | string) => {
     if (role === "superadmin") return "Super Admin";
     if (role === "admin_finance") return "Finance";
-    if (role === "admin_ops") return "Operational";
-    if (role === "admin_cs") return "Support";
+    if (role === "admin_operational") return "Operational";
+    if (role === "staff") return "Staff CS";
     return "Secure Node";
   };
 
-  if (!allowedRoles.includes(currentRole)) return null;
+  // Validasi Role
+  if (!allowedRoles.includes(currentRole as Role)) return null;
 
   return (
     <>
@@ -127,7 +131,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">User & Security</p>}
             
             {/* MENU MANAJEMEN PENGGUNA (ACCORDION DENGAN SUB-MENU) */}
-            {(currentRole === "superadmin" || currentRole === "admin_ops" || currentRole === "admin_cs") && (
+            {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
               <div className="flex flex-col">
                 <button 
                   onClick={() => {
@@ -168,7 +172,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             )}
             
             {/* MENU PUSAT BANTUAN & AUDIT (ACCORDION BARU) */}
-            {(currentRole === "superadmin" || currentRole === "admin_cs") && (
+            {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
               <div className="flex flex-col">
                 <button 
                   onClick={() => {
@@ -210,7 +214,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Dispatch & Finance</p>}
             
             {/* MENU DISPATCH & ORDER (ACCORDION DENGAN SUB-MENU) */}
-            {(currentRole === "superadmin" || currentRole === "admin_ops") && (
+            {(currentRole === "superadmin" || currentRole === "admin_operational") && (
               <div className="flex flex-col">
                 <button 
                   onClick={() => {
@@ -293,7 +297,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             )}
             
             {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Master Data</p>}
-            {(currentRole === "superadmin" || currentRole === "admin_ops") && (
+            {(currentRole === "superadmin" || currentRole === "admin_operational") && (
               <SidebarButton icon={Truck} label="Data Armada" href="/admin/vehicles" isActive={pathname === "/admin/vehicles"} isExpanded={isExpanded} />
             )}
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (

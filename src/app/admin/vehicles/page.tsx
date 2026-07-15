@@ -21,27 +21,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-// Menggunakan tipe yang sama dengan halaman Pricing
-export interface VehiclePricing {
-  id: string; 
-  name: string; 
-  isMotor: boolean;
-  maxWeight: number;
-  baseFare: number;
-  minKm: number;
-  perKm: number;
-  insurancePercent?: number; 
-  // Properti tambahan khusus dimensi (jika motor)
-  dimS?: { p: number, l: number, t: number };
-  dimM?: { p: number, l: number, t: number };
-  dimL?: { p: number, l: number, t: number };
-}
-
-// Interface tambahan untuk membungkus pricingConfig agar tidak menggunakan any
-interface PricingConfig {
-  customVehicles: VehiclePricing[];
-  [key: string]: unknown;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { DynamicVehicle } from "@/types/order";
+import { PricingConfig } from "@/types/admin";
 
 export default function AdminVehiclesPage() {
   const router = useRouter();
@@ -59,13 +41,13 @@ export default function AdminVehiclesPage() {
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
-  const [currentVehicle, setCurrentVehicle] = useState<Partial<VehiclePricing>>({
+  const [currentVehicle, setCurrentVehicle] = useState<Partial<DynamicVehicle>>({
     name: "", id: "", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
     dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
   });
 
   // Data Global Pricing Config 
-  const [pricingConfig, setPricingConfig] = useState<PricingConfig>({ customVehicles: [] });
+  const [pricingConfig, setPricingConfig] = useState<PricingConfig>({ customVehicles: [], b2bDiscount: 15, tarifPorter: 50000 });
 
   // Tarik data saat halaman dimuat
   useEffect(() => {
@@ -100,7 +82,7 @@ export default function AdminVehiclesPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleSaveToDatabase = async (updatedVehicles: VehiclePricing[]) => {
+  const handleSaveToDatabase = async (updatedVehicles: DynamicVehicle[]) => {
     setIsSaving(true);
     try {
       const newConfig = { ...pricingConfig, customVehicles: updatedVehicles, updatedAt: serverTimestamp() };
@@ -125,10 +107,10 @@ export default function AdminVehiclesPage() {
     setIsModalOpen(true);
   };
 
-  const handleOpenEditModal = (vehicle: VehiclePricing) => {
+  const handleOpenEditModal = (vehicle: DynamicVehicle) => {
     setModalMode("edit");
     // Cari index global asli berdasarkan ID
-    const globalIndex = pricingConfig.customVehicles.findIndex((v: VehiclePricing) => v.id === vehicle.id);
+    const globalIndex = pricingConfig.customVehicles.findIndex((v: DynamicVehicle) => v.id === vehicle.id);
     setEditingIndex(globalIndex);
     
     setCurrentVehicle({
@@ -146,7 +128,7 @@ export default function AdminVehiclesPage() {
       return;
     }
 
-    const vehicleData: VehiclePricing = {
+    const vehicleData: DynamicVehicle = {
       id: currentVehicle.id.toLowerCase().replace(/\s+/g, '-'),
       name: currentVehicle.name,
       isMotor: currentVehicle.isMotor || false,
@@ -183,7 +165,7 @@ export default function AdminVehiclesPage() {
 
   const handleDeleteVehicle = (vehicleId: string) => {
     if (confirm("Perhatian! Menghapus armada dapat berdampak pada operasional. Yakin ingin menghapus armada ini dari sistem?")) {
-      const updatedVehicles = pricingConfig.customVehicles.filter((v: VehiclePricing) => v.id !== vehicleId);
+      const updatedVehicles = pricingConfig.customVehicles.filter((v: DynamicVehicle) => v.id !== vehicleId);
       handleSaveToDatabase(updatedVehicles);
     }
   };
@@ -192,12 +174,12 @@ export default function AdminVehiclesPage() {
 
   // Logic Advanced Filter & Sort
   const processedData = vehiclesArray
-    .filter((v: VehiclePricing) => {
+    .filter((v: DynamicVehicle) => {
       const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchType = filterType === "all" ? true : filterType === "motor" ? v.isMotor : !v.isMotor;
       return matchSearch && matchType;
     })
-    .sort((a: VehiclePricing, b: VehiclePricing) => {
+    .sort((a: DynamicVehicle, b: DynamicVehicle) => {
       if (sortBy === "weight_asc") return a.maxWeight - b.maxWeight;
       if (sortBy === "weight_desc") return b.maxWeight - a.maxWeight;
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
@@ -206,15 +188,15 @@ export default function AdminVehiclesPage() {
 
   // Statistik
   const totalVehicles = vehiclesArray.length;
-  const totalMotor = vehiclesArray.filter((v: VehiclePricing) => v.isMotor).length;
-  const totalMobil = vehiclesArray.filter((v: VehiclePricing) => !v.isMotor).length;
+  const totalMotor = vehiclesArray.filter((v: DynamicVehicle) => v.isMotor).length;
+  const totalMobil = vehiclesArray.filter((v: DynamicVehicle) => !v.isMotor).length;
 
   // =========================================================================
   // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
   // =========================================================================
   
   // RBAC GUARD (Hanya Superadmin & Operasional)
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
@@ -317,7 +299,7 @@ export default function AdminVehiclesPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence>
-            {processedData.map((vehicle: VehiclePricing) => (
+            {processedData.map((vehicle: DynamicVehicle) => (
               <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                 <VehicleCard 
                   data={vehicle} 
@@ -461,7 +443,7 @@ export default function AdminVehiclesPage() {
 // KOMPONEN CARD ARMADA DINAMIS
 // ======================================================================
 interface VehicleCardProps {
-  data: VehiclePricing;
+  data: DynamicVehicle;
   onEdit: () => void;
   onDelete: () => void;
 }

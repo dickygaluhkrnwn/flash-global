@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/Input";
 import { MapPin, User, Phone } from "lucide-react";
 import { FieldLabel } from "./FieldLabel";
 import { cn } from "@/lib/utils";
+// IMPORT DARI GLOBAL TYPES
+import { OriginData, Coordinates } from "@/types/order";
 
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
@@ -13,25 +15,10 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const inputRed = "focus-visible:border-[#7A171D] focus-visible:ring-[#7A171D]/10";
 
-// =======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
-// =======================================================================
-export interface OriginData {
-  address: string;
-  detail: string;
-  senderName: string;
-  senderPhone: string;
-}
-
-export interface OriginCoords {
-  lng: number;
-  lat: number;
-}
-
 interface Props {
   originData: OriginData;
   setOriginData: React.Dispatch<React.SetStateAction<OriginData>>;
-  setOriginCoords: React.Dispatch<React.SetStateAction<OriginCoords | null>>;
+  setOriginCoords: React.Dispatch<React.SetStateAction<Coordinates | null>>;
   handleOriginChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   handleInfoClick: (t: string, text: string) => void;
 }

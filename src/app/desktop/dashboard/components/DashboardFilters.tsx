@@ -3,11 +3,16 @@ import { SlidersHorizontal, ArrowDownWideNarrow, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface FilterProps {
-  sortBy: string; setSortBy: (v: string) => void;
-  filterCategory: string; setFilterCategory: (v: string) => void;
-  filterService: string; setFilterService: (v: string) => void;
-  dateStart: string; setDateStart: (v: string) => void;
-  dateEnd: string; setDateEnd: (v: string) => void;
+  sortBy: string;
+  setSortBy: (v: string) => void;
+  filterCategory: string;
+  setFilterCategory: (v: string) => void;
+  filterService: string;
+  setFilterService: (v: string) => void;
+  dateStart: string;
+  setDateStart: (v: string) => void;
+  dateEnd: string;
+  setDateEnd: (v: string) => void;
   resetFilters: () => void;
   onClose: () => void;
 }

@@ -31,7 +31,8 @@ export default function ProfileTab() {
 
   useEffect(() => {
     if (user) {
-      const nameParts = (user.name || "").split(" ");
+      // PERBAIKAN: Menggunakan displayName dari Global Type
+      const nameParts = (user.displayName || "").split(" ");
       const fName = nameParts[0] || "";
       const lName = nameParts.slice(1).join(" ") || "";
 
@@ -95,16 +96,17 @@ export default function ProfileTab() {
         await updateProfile(auth.currentUser, { displayName: fullName, photoURL: finalPhotoURL });
       }
 
-      // Update Firestore Database
+      // Update Firestore Database (Pastikan 'displayName' digunakan bukan 'name' jika mengikuti standar, tapi kita update dua-duanya untuk backward compatibility DB)
       await setDoc(doc(db, "users", user.uid), {
+        displayName: fullName,
         name: fullName, 
         phone: formData.phone, 
         photoURL: finalPhotoURL, 
         updatedAt: serverTimestamp()
       }, { merge: true });
 
-      // Update Zustand Store (Pastikan role terbawa)
-      login({ ...user, name: fullName, photoURL: finalPhotoURL });
+      // Update Zustand Store (Pastikan role terbawa & menggunakan displayName)
+      login({ ...user, displayName: fullName, photoURL: finalPhotoURL });
 
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
@@ -212,16 +214,16 @@ export default function ProfileTab() {
               <h4 className="font-bold text-slate-900 text-lg">Profile Photo</h4>
               <p className="text-sm text-slate-500">Recommended format: JPG, PNG. Max size 2MB.</p>
             </div>
-            {/* Role Badge */}
+            {/* Role Badge (PERBAIKAN: Check 'b2b' role) */}
             {user?.role && (
               <div className="flex items-center gap-1.5 w-max px-3 py-1 bg-slate-100 border border-slate-200 rounded-full">
-                {user.role === 'business' ? (
+                {user.role === 'b2b' ? (
                   <Building2 className="w-3.5 h-3.5 text-[#C5A059]" />
                 ) : (
                   <User className="w-3.5 h-3.5 text-slate-500" />
                 )}
                 <span className="text-xs font-semibold text-slate-700 capitalize">
-                  {user.role === 'business' ? 'Business Account' : 'Regular User'}
+                  {user.role === 'b2b' ? 'Corporate Partner' : 'Regular User'}
                 </span>
               </div>
             )}

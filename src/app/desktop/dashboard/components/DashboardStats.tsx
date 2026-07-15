@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import { Package, Clock, Truck, CheckCircle2 } from "lucide-react";
-import { Order } from "./types";
+import { DashboardOrder } from "@/types/order";
 import { cn } from "@/lib/utils";
 
-export default function DashboardStats({ orders }: { orders: Order[] }) {
+export default function DashboardStats({ orders }: { orders: DashboardOrder[] }) {
   const totalActivity = orders.length;
   const processingCount = orders.filter(o => o.status === "Sedang Diproses" || o.status === "Menunggu Pembayaran" || o.status.includes("Menunggu")).length;
   const shippingCount = orders.filter(o => o.status === "Dikirim").length;

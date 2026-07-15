@@ -2,25 +2,23 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   Search, Filter, ArrowUpDown, 
-  Clock, CheckCircle2, AlertCircle, LifeBuoy
+  Clock, CheckCircle2, AlertCircle, LifeBuoy, ShieldAlert
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, query, orderBy, Timestamp } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, query, orderBy } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/Button";
 
-interface SupportTicket {
-  id: string;
-  clientName: string;
-  email: string;
-  issueType: string;
-  message: string;
-  status: "Open" | "In Progress" | "Resolved";
-  priority: "Low" | "Medium" | "High" | "Urgent";
-  createdAt?: Timestamp;
-}
+// IMPORT DARI GLOBAL TYPES
+import { SupportTicket } from "@/types/support";
 
 export default function AdminTicketsPage() {
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,24 +64,54 @@ export default function AdminTicketsPage() {
     }
   };
 
-  const formatTime = (ts?: Timestamp) => {
+  // Safe Timestamp Parsers untuk lolos Strict Mode
+  const getMillis = (ts: unknown) => {
+    if (!ts) return 0;
+    const t = ts as { toMillis?: () => number, seconds?: number };
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t.seconds === 'number') return t.seconds * 1000;
+    return new Date(ts as string | number).getTime();
+  };
+
+  const formatTime = (ts?: unknown) => {
     if (!ts) return "Unknown";
-    return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const t = ts as { toDate?: () => Date };
+    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(ts as string | number);
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const processedTickets = useMemo(() => {
     let res = [...tickets];
-    if (searchQuery) res = res.filter(t => t.clientName.toLowerCase().includes(searchQuery.toLowerCase()) || t.id.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      res = res.filter(t => (t.clientName || "").toLowerCase().includes(q) || t.id.toLowerCase().includes(q));
+    }
     if (filterStatus !== "All") res = res.filter(t => t.status === filterStatus);
     if (filterPriority !== "All") res = res.filter(t => t.priority === filterPriority);
     
     res.sort((a, b) => {
-      const timeA = a.createdAt?.toMillis() || 0;
-      const timeB = b.createdAt?.toMillis() || 0;
+      const timeA = getMillis(a.createdAt);
+      const timeB = getMillis(b.createdAt);
       return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
     });
     return res;
   }, [tickets, searchQuery, filterStatus, filterPriority, sortOrder]);
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin, Operational, & CS/Staff)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational' && currentUser.role !== 'staff') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Tiket Bantuan ini hanya dapat dikelola oleh Divisi Customer Support atau Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 font-sans">
@@ -162,7 +190,7 @@ export default function AdminTicketsPage() {
                   <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                     <td className="p-5 pl-6 align-top">
                       <p className="font-mono font-black text-slate-900 text-sm mb-1 uppercase">#{t.id.substring(0,8)}</p>
-                      <p className="text-[11px] text-slate-600 font-bold mb-1">{t.clientName}</p>
+                      <p className="text-[11px] text-slate-600 font-bold mb-1">{t.clientName || "Klien"}</p>
                       <p className="text-[9px] text-slate-400 font-medium flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(t.createdAt)}</p>
                     </td>
                     <td className="p-5 align-top">

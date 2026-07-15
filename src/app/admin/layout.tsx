@@ -9,14 +9,18 @@ import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-const allowedRoles = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
+// --- IMPORT GLOBAL ROLE TYPES ---
+import { Role } from "@/types/user";
+
+// HANYA ROLE ADMIN YANG DIIZINKAN MASUK AREA INI
+const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   
   const [checkingAuth, setCheckingAuth] = useState(true);
-  const [currentRole, setCurrentRole] = useState("");
+  const [currentRole, setCurrentRole] = useState<Role | "">("");
 
   // Jalur pengamanan rute Admin
   useEffect(() => {
@@ -36,16 +40,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         // Verifikasi ulang status role admin di database
         const userDoc = await getDoc(doc(db, "users", user.uid));
         const userData = userDoc.data();
-        const userRole = userData?.role || "";
-
-        if (userDoc.exists() && allowedRoles.includes(userRole)) {
-          setCurrentRole(userRole);
+        
+        // Pengecekan aman dan konversi Role Legacy jika ada
+        let userRole = (userData?.role || "") as Role | string;
+        if (userRole === "admin_ops" || userRole === "admin_cs") userRole = "admin_operational";
+        
+        if (userDoc.exists() && allowedRoles.includes(userRole as Role)) {
+          setCurrentRole(userRole as Role);
           
           // PROTEKSI MODUL BERDASARKAN ROLE SPESIFIK
           if (userRole === "admin_finance" && pathname === "/admin/vehicles") {
             router.push("/admin/pricing"); 
           }
-          if (userRole === "admin_ops" && pathname === "/admin/pricing") {
+          if (userRole === "admin_operational" && pathname === "/admin/pricing") {
             router.push("/admin/vehicles"); 
           }
 
@@ -80,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Jika lolos guard perlindungan, render sistem Admin Workspace (Light Mode Pro)
-  if (allowedRoles.includes(currentRole)) {
+  if (allowedRoles.includes(currentRole as Role)) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex relative overflow-hidden font-sans">
         

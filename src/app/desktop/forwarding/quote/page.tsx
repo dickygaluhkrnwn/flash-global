@@ -14,6 +14,9 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
+// --- IMPORT GLOBAL TYPES ---
+import { Quote } from "@/types/order";
+
 // --- IMPORT UI KIT ---
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -52,7 +55,7 @@ function QuoteForm() {
 
   // Order Data State (Auto-filled from URL if exists)
   const [formData, setFormData] = useState({
-    name: user?.name || "",
+    name: user?.displayName || "", // PERBAIKAN: Menggunakan displayName dari Global Type
     email: user?.email || "",
     phone: "",
     origin: searchParams.get("origin") || "",
@@ -93,9 +96,9 @@ function QuoteForm() {
     try {
       const quoteId = `FFW-${Date.now().toString().slice(-6)}`;
       
-      // Save to Firestore
-      await addDoc(collection(db, "quotes"), {
-        quoteId,
+      // TYPE-SAFE PAYLOAD: Memastikan payload sesuai dengan Interface Quote
+      const quotePayload: Omit<Quote, 'createdAt'> & { createdAt: any } = {
+        id: quoteId,
         userId: user?.uid || "guest",
         name: formData.name,
         email: formData.email,
@@ -112,7 +115,10 @@ function QuoteForm() {
         serviceType: "Global Cargo", 
         status: "Pending CS Quote",
         createdAt: serverTimestamp(),
-      });
+      };
+
+      // Save to Firestore
+      await addDoc(collection(db, "quotes"), quotePayload);
 
       // WhatsApp Message Template to Customs/Forwarding CS
       const adminWA = "6281234567890"; 
@@ -121,7 +127,7 @@ function QuoteForm() {
       window.open(`https://wa.me/${adminWA}?text=${waText}`, "_blank");
       
       // Redirect to Dashboard
-      router.push("/dashboard");
+      router.push("/desktop/dashboard");
 
     } catch (error) {
       console.error("Failed to save quote:", error);
@@ -170,7 +176,7 @@ function QuoteForm() {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <Button onClick={() => router.push("/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
+          <Button onClick={() => router.push("/desktop/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
              Domestic Cargo
           </Button>
           <Button variant="gold" className="shadow-md h-11 text-xs px-5 cursor-default hover:scale-100">

@@ -17,44 +17,8 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
 
-// Interface untuk mengatasi strict typing pada rawObj
-interface RawOrderData {
-  breakdown?: {
-    deliveryFee?: number;
-    insuranceFee?: number;
-    porterFee?: number;
-    tollFee?: number;
-    b2bDiscount?: number;
-    grandTotal?: number;
-  };
-  [key: string]: unknown;
-}
-
-interface FinanceReport {
-  id: string;
-  date: string;
-  time: string;
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  originAddress: string;
-  destAddress: string;
-  serviceType: string;
-  vehicleName: string;
-  weight: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  baseFee: number;
-  insuranceFee: number;
-  porterFee: number;
-  tollFee: number;
-  b2bDiscount: number;
-  promoCode: string;
-  promoDiscount: number;
-  amount: number; 
-  timestamp: number;
-  rawObj: RawOrderData; 
-}
+import { FinanceReport } from "@/types/finance";
+import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function FinanceReportsPage() {
   const router = useRouter();
@@ -81,25 +45,47 @@ export default function FinanceReportsPage() {
         const reportSnap = await getDocs(reportQ);
         
         setReports(reportSnap.docs.map(d => {
-          const data = d.data();
-          const dateObj = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
+          const data = d.data() as OrderDetail;
           
-          let primaryDest = data.destination || "Tujuan";
-          if (data.destinations && data.destinations.length > 0) {
-              primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : data.destinations[0].address;
+          // 1. Safe Date Parsing (Menghindari error Strict Mode TypeScript)
+          let dateObj = new Date();
+          if (data.createdAt) {
+            const ts = data.createdAt as Record<string, unknown>;
+            if (typeof ts.toDate === 'function') {
+               dateObj = ts.toDate() as Date;
+            } else {
+               dateObj = new Date(data.createdAt as string | number);
+            }
           }
+          
+          // 2. Safe Destination Parsing
+          let primaryDest = typeof data.destination === 'string' ? data.destination : "Tujuan";
+          if (data.destinations && data.destinations.length > 0) {
+              primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : (data.destinations[0].address || "Tujuan");
+          }
+
+          // 3. Safe Origin Parsing
+          const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
+          const originAddress = originObj?.address || (typeof data.origin === 'string' ? data.origin : "-");
+          
+          // PERBAIKAN TS STRICT: Memastikan fallback berjenis string
+          const senderNameFallback = originObj?.senderName || data.senderName;
+          const finalClientName = senderNameFallback ? senderNameFallback : (typeof data.name === 'string' ? data.name : "Guest");
+          
+          const senderPhoneFallback = originObj?.senderPhone || data.senderPhone || "-";
+          const finalClientEmail = typeof data.email === 'string' ? data.email : "Tidak ada email";
 
           return {
             id: d.id,
             date: dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
             time: dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-            clientName: data.origin?.senderName || data.senderName || data.name || "Guest",
-            clientEmail: data.email || "Tidak ada email",
-            clientPhone: data.origin?.senderPhone || data.senderPhone || data.phone || "-",
-            originAddress: data.origin?.address || data.origin || "-",
+            clientName: finalClientName,
+            clientEmail: finalClientEmail,
+            clientPhone: senderPhoneFallback,
+            originAddress: originAddress,
             destAddress: primaryDest,
             serviceType: data.serviceType || "Kargo",
-            vehicleName: data.vehicleName || data.selectedVehicle || "-",
+            vehicleName: data.vehicleName || data.vehicle || "-",
             weight: Number(data.totalWeight || data.weight) || 0,
             paymentMethod: data.paymentMethod || "Transfer Manual",
             paymentStatus: data.paymentStatus || "Menunggu Pembayaran",
@@ -115,7 +101,7 @@ export default function FinanceReportsPage() {
             
             amount: Number(data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost || data.offeredPrice) || 0,
             timestamp: dateObj.getTime(),
-            rawObj: data as RawOrderData
+            rawObj: data
           };
         }));
       } catch (err) {
@@ -135,7 +121,6 @@ export default function FinanceReportsPage() {
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   const escapeCsv = (str: string | number) => `"${String(str).replace(/"/g, '""')}"`;
 
-  // USEMEMO HARUS DI ATAS GUARD RETURN
   const processedData = useMemo(() => {
     let result = [...reports];
     if (searchQuery) {
@@ -158,7 +143,6 @@ export default function FinanceReportsPage() {
 
   const totalIncome = processedData.filter(r => r.paymentStatus === "Lunas").reduce((acc, curr) => acc + curr.amount, 0);
 
-  // HANDLER: Export CSV SUPER DETAIL
   const handleExportCSV = () => {
     if (processedData.length === 0) {
       showToast("error", "Tidak ada data untuk diekspor.");
@@ -200,10 +184,6 @@ export default function FinanceReportsPage() {
     }
   };
 
-
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
 
   // RBAC GUARD
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {

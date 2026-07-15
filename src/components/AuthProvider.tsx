@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { useAuthStore, UserRole } from "@/store/useAuthStore";
+import { useAuthStore, StoreUser } from "@/store/useAuthStore";
 import { ShieldAlert } from "lucide-react";
+import { Role } from "@/types/user";
 
 // Daftar rute client yang butuh login
 const CLIENT_PROTECTED_ROUTES = [
@@ -18,9 +19,9 @@ const CLIENT_PROTECTED_ROUTES = [
   "/mobile/dashboard", // antisipasi route mobile
 ];
 
-// Grouping Roles
-const ADMIN_ROLES: UserRole[] = ['superadmin', 'admin_cs', 'admin_finance', 'admin_ops'];
-const CLIENT_ROLES: UserRole[] = ['user', 'business'];
+// Grouping Roles (Menggunakan tipe Global Role yang baru)
+const ADMIN_ROLES: Role[] = ['superadmin', 'admin_finance', 'admin_operational', 'staff'];
+const CLIENT_ROLES: Role[] = ['b2c', 'b2b', 'driver'];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, login, logout, isHydrated } = useAuthStore();
@@ -38,30 +39,39 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Ambil data tambahan user (terutama role dan regional) dari Firestore
         try {
           const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
           
           if (userDoc.exists()) {
             const userData = userDoc.data();
+            
+            // Konversi Role Lama (Legacy) ke Global Role Baru
+            let mappedRole = userData.role || "b2c";
+            if (mappedRole === "user") mappedRole = "b2c";
+            if (mappedRole === "business") mappedRole = "b2b";
+            if (mappedRole === "admin_cs" || mappedRole === "admin_ops") mappedRole = "admin_operational";
+
             login({
               uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: userData.name || firebaseUser.displayName || "Pengguna",
-              photoURL: firebaseUser.photoURL,
-              role: userData.role as UserRole || "user", // Default ke 'user' jika kosong
-              regional: userData.regional || undefined, // TARIk DATA REGIONAL (BARU)
-            });
+              email: firebaseUser.email || "",
+              // Mapping 'name' (lama) menjadi 'displayName' (Global Types)
+              displayName: userData.displayName || userData.name || firebaseUser.displayName || "Pengguna",
+              photoURL: firebaseUser.photoURL || undefined,
+              role: mappedRole as Role,
+              regional: userData.regional || undefined,
+              createdAt: userData.createdAt || new Date(),
+              updatedAt: userData.updatedAt || new Date(),
+            } as StoreUser);
           } else {
-            // Jika document user belum ada (misal baru register pakai Google), 
-            // set default role sebagai 'user'
+            // Jika document user belum ada, set default role sebagai 'b2c'
             login({
               uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || "Pengguna",
-              photoURL: firebaseUser.photoURL,
-              role: "user",
-            });
+              email: firebaseUser.email || "",
+              displayName: firebaseUser.displayName || "Pengguna",
+              photoURL: firebaseUser.photoURL || undefined,
+              role: "b2c",
+              createdAt: new Date(),
+            } as StoreUser);
           }
         } catch (error) {
           console.error("Gagal mengambil data user dari Firestore:", error);

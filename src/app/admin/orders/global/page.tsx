@@ -15,29 +15,14 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-// =======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
-// =======================================================================
-interface QuoteData {
-  id: string;
-  originCountry?: string;
-  destCountry?: string;
-  weight?: number;
-  length?: number;
-  width?: number;
-  height?: number;
-  status: string;
-  offeredPrice?: number;
-  customsDocUrl?: string;
-  createdAt?: unknown;
-  [key: string]: unknown; // Izinkan field opsional lain dari DB
-}
+// IMPORT GLOBAL TYPES
+import { Quote } from "@/types/order";
 
 export default function GlobalOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [quotes, setQuotes] = useState<QuoteData[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -54,7 +39,7 @@ export default function GlobalOrdersPage() {
   useEffect(() => {
     const q = query(collection(db, "quotes"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setQuotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as QuoteData)));
+      setQuotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quote)));
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -83,6 +68,15 @@ export default function GlobalOrdersPage() {
     }
   };
 
+  // Helper aman untuk membaca nilai milisecond dari Firebase Timestamp
+  const getMillis = (ts: unknown) => {
+    if (!ts) return 0;
+    const t = ts as { seconds?: number; toMillis?: () => number };
+    if (typeof t.toMillis === 'function') return t.toMillis();
+    if (typeof t.seconds === 'number') return t.seconds * 1000;
+    return new Date(ts as string | number).getTime();
+  };
+
   // =======================================================================
   // HOOKS USEMEMO (Ditempatkan SEBELUM block guard/return)
   // =======================================================================
@@ -99,8 +93,8 @@ export default function GlobalOrdersPage() {
       const wB = b.weight || 0;
       const cA = a.offeredPrice || 0; 
       const cB = b.offeredPrice || 0;
-      const tA = (a.createdAt as { seconds?: number })?.seconds || 0; 
-      const tB = (b.createdAt as { seconds?: number })?.seconds || 0;
+      const tA = getMillis(a.createdAt);
+      const tB = getMillis(b.createdAt);
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -117,7 +111,7 @@ export default function GlobalOrdersPage() {
   // =======================================================================
   // GUARDS: RBAC & LOADING (Mencegah "Hook called conditionally" error)
   // =======================================================================
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />

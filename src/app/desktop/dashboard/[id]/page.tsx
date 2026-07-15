@@ -19,63 +19,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 
-type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
-
-// === TYPE DEFINITIONS UNTUK MENGHILANGKAN ANY ===
-interface TrackingHistoryItem {
-  id: string;
-  status: string;
-  description: string;
-  location?: string;
-  date: string;
-}
-
-interface DestinationItem {
-  address: string;
-  receiverName?: string;
-  receiverPhone?: string;
-}
-
-interface OrderDetailData {
-  id: string;
-  category: string;
-  userId?: string;
-  status: string;
-  statusSub?: string;
-  paymentStatus?: string;
-  createdAt?: FirebaseTimestamp;
-  resi?: string;
-  quoteId?: string;
-  origin?: { address: string; senderName?: string; senderPhone?: string } | string;
-  senderName?: string;
-  senderPhone?: string;
-  destinations?: DestinationItem[];
-  destination?: string;
-  serviceType?: string;
-  vehicleName?: string;
-  vehicle?: string;
-  totalWeight?: number;
-  weight?: number;
-  totalDistance?: number;
-  driverName?: string;
-  driverPhone?: string;
-  totalItemValue?: number;
-  breakdown?: {
-    deliveryFee: number;
-    insuranceFee: number;
-    porterFee: number;
-    tollFee: number;
-    b2bDiscount: number;
-    grandTotal?: number;
-  };
-  finalGrandTotal?: number;
-  totalCost?: number;
-  offeredPrice?: number;
-  appliedPromoCode?: string;
-  discountPromoAmount?: number;
-  trackingHistory?: TrackingHistoryItem[];
-  [key: string]: unknown; // Extra fields
-}
+// IMPORT GLOBAL TYPES
+import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -83,7 +28,7 @@ export default function OrderDetailPage() {
   const orderId = params.id as string;
   const { user, isHydrated } = useAuthStore();
 
-  const [order, setOrder] = useState<OrderDetailData | null>(null);
+  const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedResi, setCopiedResi] = useState(false);
@@ -132,7 +77,7 @@ export default function OrderDetailPage() {
           }
 
           fetchedOrderDocId = docSnap.id;
-          setOrder({ id: docSnap.id, category, ...data } as OrderDetailData);
+          setOrder({ id: docSnap.id, category, ...data } as OrderDetail);
         } else {
           setErrorMsg("Data pesanan tidak ditemukan di sistem.");
           setIsLoading(false);
@@ -200,7 +145,7 @@ export default function OrderDetailPage() {
       await addDoc(collection(db, "insurance_claims"), {
         userId: user.uid,
         orderId: order.id,
-        clientName: user.name || "Klien",
+        clientName: user.displayName || "Klien", // FIXED BUG: MENGGUNAKAN displayName
         clientEmail: user.email || "",
         claimedAmount: Number(claimData.claimedAmount),
         reason: claimData.reason,
@@ -258,7 +203,7 @@ export default function OrderDetailPage() {
         </div>
         <h2 className="text-2xl font-black text-slate-900 mb-2">Terjadi Kesalahan</h2>
         <p className="text-slate-500 font-medium mb-8">{errorMsg}</p>
-        <Button onClick={() => router.push("/dashboard")} variant="outline" className="h-12 border-slate-300">
+        <Button onClick={() => router.push("/desktop/dashboard")} variant="outline" className="h-12 border-slate-300">
           <ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Dashboard
         </Button>
       </div>
@@ -269,9 +214,9 @@ export default function OrderDetailPage() {
   const isLunas = order.paymentStatus === "Lunas";
   const resiNumber = order.resi || order.quoteId || order.id.slice(-12).toUpperCase();
 
-  const originAddress = typeof order.origin === 'object' ? order.origin.address : order.origin;
-  const originName = typeof order.origin === 'object' ? order.origin.senderName : order.senderName;
-  const originPhone = typeof order.origin === 'object' ? order.origin.senderPhone : order.senderPhone;
+  const originAddress = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).address : order.origin;
+  const originName = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderName : order.senderName;
+  const originPhone = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderPhone : order.senderPhone;
 
   // === CEK KELAYAKAN ASURANSI (DILONGGARKAN UNTUK TESTING) ===
   const hasInsurance = order.breakdown && order.breakdown.insuranceFee > 0;
@@ -296,7 +241,7 @@ export default function OrderDetailPage() {
       <div className="max-w-[1200px] mx-auto relative z-10 space-y-6">
         
         {/* Navigation Back */}
-        <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-[#7A171D] font-bold text-sm transition-colors w-fit mb-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+        <button onClick={() => router.push("/desktop/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-[#7A171D] font-bold text-sm transition-colors w-fit mb-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
           <ArrowLeft className="w-4 h-4" /> Kembali ke Pesanan Saya
         </button>
 
@@ -431,7 +376,7 @@ export default function OrderDetailPage() {
                     <div className="mt-1 bg-white p-1 rounded-full shrink-0"><MapPin className="w-4 h-4 text-[#7A171D]" /></div>
                     <div className="w-full">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Alamat Penerima</p>
-                      {order.destinations ? order.destinations.map((dest: DestinationItem, idx: number) => (
+                      {order.destinations ? order.destinations.map((dest: LocationDetail, idx: number) => (
                         <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-3 last:mb-0">
                           <div className="flex justify-between items-start mb-2">
                             <p className="font-bold text-slate-900 text-sm leading-relaxed pr-4">{dest.address}</p>
@@ -560,7 +505,7 @@ export default function OrderDetailPage() {
                 </Button>
                 
                 {order.status === "Menunggu Pembayaran" ? (
-                  <Button onClick={() => router.push("/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
+                  <Button onClick={() => router.push("/desktop/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
                     <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
                   </Button>
                 ) : (

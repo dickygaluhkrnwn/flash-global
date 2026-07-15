@@ -16,40 +16,15 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-// =======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
-// =======================================================================
-interface OrderData {
-  id: string;
-  origin?: { address?: string; senderName?: string; senderPhone?: string } | string;
-  destinations?: { address: string; receiverName?: string; receiverPhone?: string }[];
-  destination?: string;
-  serviceType?: string;
-  vehicleName?: string;
-  vehicle?: string;
-  totalWeight?: number;
-  weight?: number;
-  breakdown?: { grandTotal?: number };
-  createdAt?: unknown;
-  status: string;
-  driverName?: string;
-  driverId?: string;
-  [key: string]: unknown; // Mengizinkan properti tambahan dengan aman
-}
-
-interface DriverData {
-  id: string;
-  name: string;
-  vehicleType: string;
-  isSuspended?: boolean;
-  [key: string]: unknown;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
+import { DriverData } from "@/types/admin";
 
 export default function DomesticOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [drivers, setDrivers] = useState<DriverData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -81,7 +56,7 @@ export default function DomesticOrdersPage() {
 
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderData)));
+      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderDetail)));
       setIsLoading(false);
     });
 
@@ -95,14 +70,35 @@ export default function DomesticOrdersPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   
-  const formatDate = (timestamp: unknown) => {
+  // Safe Date Formatting untuk Strict Mode
+  const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
-    const t = timestamp as { toDate?: () => Date };
-    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(timestamp as string | number);
+    let d: Date;
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const objTs = timestamp as Record<string, unknown>;
+      if (typeof objTs.toDate === 'function') {
+        d = objTs.toDate() as Date;
+      } else {
+        d = new Date(timestamp as string | number);
+      }
+    } else {
+      d = new Date(timestamp as string | number);
+    }
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  const openStatusModal = (order: OrderData) => {
+  // Safe Milliseconds Parser untuk Sorting
+  const getMillis = (ts: FirebaseTimestamp) => {
+    if (!ts) return 0;
+    if (typeof ts === 'object' && ts !== null) {
+      const objTs = ts as Record<string, unknown>;
+      if (typeof objTs.toMillis === 'function') return objTs.toMillis() as number;
+      if (typeof objTs.seconds === 'number') return objTs.seconds * 1000;
+    }
+    return new Date(ts as string | number).getTime();
+  };
+
+  const openStatusModal = (order: OrderDetail) => {
     setSelectedOrderId(order.id);
     setStatusForm({ status: "Menuju Lokasi Jemput", location: "Pusat Hub Penjemputan", description: "", timeMode: "auto", customDate: "" });
     setShowStatusModal(true);
@@ -181,9 +177,10 @@ export default function DomesticOrdersPage() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(o => {
-        const originAddr = typeof o.origin === 'object' ? o.origin?.address : o.origin;
-        const originName = typeof o.origin === 'object' ? o.origin?.senderName : "";
-        return o.id.toLowerCase().includes(q) || (originAddr || "").toLowerCase().includes(q) || (originName || "").toLowerCase().includes(q);
+        const originObj = typeof o.origin === 'object' && o.origin !== null ? (o.origin as LocationDetail) : null;
+        const originAddr = originObj?.address || (typeof o.origin === 'string' ? o.origin : "");
+        const originName = originObj?.senderName || o.senderName || "";
+        return o.id.toLowerCase().includes(q) || originAddr.toLowerCase().includes(q) || originName.toLowerCase().includes(q);
       });
     }
     if (filterStatus !== "All") result = result.filter(o => o.status.includes(filterStatus));
@@ -194,8 +191,8 @@ export default function DomesticOrdersPage() {
       const cA = a.breakdown?.grandTotal || 0; 
       const cB = b.breakdown?.grandTotal || 0;
       
-      const tA = (a.createdAt as { seconds?: number })?.seconds || 0; 
-      const tB = (b.createdAt as { seconds?: number })?.seconds || 0;
+      const tA = getMillis(a.createdAt); 
+      const tB = getMillis(b.createdAt);
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -213,7 +210,7 @@ export default function DomesticOrdersPage() {
   // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
   // =========================================================================
   
-  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_ops') {
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
@@ -312,52 +309,60 @@ export default function DomesticOrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {processedOrders.map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-5 pl-6 align-top">
-                      <p className="font-mono font-black text-[#7A171D] text-sm uppercase">{o.id}</p>
-                      <p className="text-xs text-slate-500 font-semibold mt-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(o.createdAt)}</p>
-                    </td>
-                    <td className="p-5 align-top">
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">Pengirim</p>
-                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={typeof o.origin === 'object' ? o.origin?.address : o.origin}>
-                            {typeof o.origin === 'object' ? o.origin?.senderName || "Klien" : "Klien"}
-                          </p>
+                {processedOrders.map(o => {
+                  const originObj = typeof o.origin === 'object' && o.origin !== null ? (o.origin as LocationDetail) : null;
+                  const originAddr = originObj?.address || (typeof o.origin === 'string' ? o.origin : "");
+                  const originName = originObj?.senderName || o.senderName || "Klien";
+                  const destAddr = o.destinations?.[0]?.address || o.destination || "";
+                  const destName = o.destinations?.[0]?.receiverName || "Penerima";
+
+                  return (
+                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5 pl-6 align-top">
+                        <p className="font-mono font-black text-[#7A171D] text-sm uppercase">{o.id}</p>
+                        <p className="text-xs text-slate-500 font-semibold mt-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(o.createdAt)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Pengirim</p>
+                            <p className="font-bold text-slate-900 truncate max-w-[200px]" title={originAddr}>
+                              {originName}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Tujuan</p>
+                            <p className="font-bold text-slate-900 truncate max-w-[200px]" title={destAddr}>
+                              {o.destinations && o.destinations.length > 1 ? `${o.destinations.length} Titik Tujuan` : destName}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">Tujuan</p>
-                          <p className="font-bold text-slate-900 truncate max-w-[200px]" title={o.destinations?.[0]?.address || o.destination}>
-                            {o.destinations && o.destinations.length > 1 ? `${o.destinations.length} Titik Tujuan` : (o.destinations?.[0]?.receiverName || "Penerima")}
-                          </p>
+                      </td>
+                      <td className="p-5 align-top">
+                         <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded text-[10px] uppercase border border-slate-200 mb-2 inline-block">{o.serviceType} - {o.vehicleName || o.vehicle}</span>
+                         <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5"><Weight className="w-3.5 h-3.5"/> {o.totalWeight || o.weight} Kg</p>
+                         <p className="text-sm text-emerald-600 font-black mt-1">{formatRupiah(o.breakdown?.grandTotal || 0)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block border ${
+                          o.status.includes("Selesai") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+                          o.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200"
+                        }`}>{o.status}</span>
+                        <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-slate-200 w-fit mt-2">
+                          <UserPlus className="w-3 h-3 text-slate-400" /> {o.driverName || "Belum Ada Kurir"}
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-5 align-top">
-                       <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded text-[10px] uppercase border border-slate-200 mb-2 inline-block">{o.serviceType} - {o.vehicleName || o.vehicle}</span>
-                       <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5"><Weight className="w-3.5 h-3.5"/> {o.totalWeight || o.weight} Kg</p>
-                       <p className="text-sm text-emerald-600 font-black mt-1">{formatRupiah(o.breakdown?.grandTotal || 0)}</p>
-                    </td>
-                    <td className="p-5 align-top">
-                      <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block border ${
-                        o.status.includes("Selesai") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                        o.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200"
-                      }`}>{o.status}</span>
-                      <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-slate-200 w-fit mt-2">
-                        <UserPlus className="w-3 h-3 text-slate-400" /> {o.driverName || "Belum Ada Kurir"}
-                      </div>
-                    </td>
-                    <td className="p-5 pr-6 align-top text-right">
-                      <div className="flex flex-col items-end gap-2">
-                        <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200" variant="outline">Update Log</Button>
-                        {!o.driverId && (
-                          <Button size="sm" onClick={() => { setSelectedOrderId(o.id); setShowDriverModal(true); }} className="h-8 text-[10px] w-32 shadow-sm bg-[#7A171D] hover:bg-[#5A0E13]">Tunjuk Sopir</Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-5 pr-6 align-top text-right">
+                        <div className="flex flex-col items-end gap-2">
+                          <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200" variant="outline">Update Log</Button>
+                          {!o.driverId && (
+                            <Button size="sm" onClick={() => { setSelectedOrderId(o.id); setShowDriverModal(true); }} className="h-8 text-[10px] w-32 shadow-sm bg-[#7A171D] hover:bg-[#5A0E13]">Tunjuk Sopir</Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

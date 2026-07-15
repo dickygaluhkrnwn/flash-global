@@ -5,14 +5,17 @@ import Map, { Marker, Source, Layer } from "react-map-gl/mapbox";
 import { Navigation, MapPin } from "lucide-react"; 
 import "mapbox-gl/dist/mapbox-gl.css";
 
+// --- IMPORT GLOBAL TYPES ---
+import { Coordinates, MapDropItem } from "@/types/order";
+
 interface MapBaseProps extends Omit<React.ComponentProps<typeof Map>, 'originCoords' | 'drops' | 'routeData'> {
   className?: string;
-  originCoords?: { lng: number; lat: number } | null;
-  drops?: { id: string; lng?: number; lat?: number; [key: string]: unknown }[];
+  originCoords?: Coordinates | null;
+  drops?: MapDropItem[];
   routeData?: unknown;
   activeDraggable?: "origin" | string | null;
   onMarkerDragEnd?: (lng: number, lat: number, type: "origin" | string) => void;
-  driverCoords?: { lng: number; lat: number } | null;
+  driverCoords?: Coordinates | null;
 }
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -105,8 +108,8 @@ export default function MapBase({
         {drops && drops.filter(d => d.lng !== undefined && d.lat !== undefined).map((drop, idx) => (
           <Marker 
             key={drop.id} 
-            longitude={drop.lng!} 
-            latitude={drop.lat!} 
+            longitude={drop.lng as number} 
+            latitude={drop.lat as number} 
             anchor="bottom"
             draggable={activeDraggable === drop.id}
             onDragEnd={(e: { lngLat: { lng: number; lat: number } }) => onMarkerDragEnd && onMarkerDragEnd(e.lngLat.lng, e.lngLat.lat, drop.id)}

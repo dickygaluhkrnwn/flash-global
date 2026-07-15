@@ -15,8 +15,11 @@ import {
   GoogleAuthProvider,
   updateProfile
 } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { useAuthStore, UserRole } from "@/store/useAuthStore";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+
+// --- IMPORT GLOBAL TYPES ---
+import { Role } from "@/types/user";
 
 export default function DesktopLoginPage() {
   const router = useRouter();
@@ -45,14 +48,21 @@ export default function DesktopLoginPage() {
       await setDoc(userRef, {
         uid,
         email,
-        name,
+        displayName: name, // Global type standard
+        name, // Backward compatibility
         photoURL,
-        role: "user",
-        createdAt: new Date().toISOString()
+        role: "b2c", // Default role baru
+        createdAt: serverTimestamp()
       });
-      return "user" as UserRole;
+      return "b2c" as Role;
     }
-    return (userSnap.data().role as UserRole) || "user";
+    
+    // Mapping legacy roles jika akun lama
+    let fetchedRole = userSnap.data().role || "b2c";
+    if (fetchedRole === "user") fetchedRole = "b2c";
+    if (fetchedRole === "business") fetchedRole = "b2b";
+    
+    return fetchedRole as Role;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,14 +76,29 @@ export default function DesktopLoginPage() {
         
         const userRef = doc(db, "users", userCredential.user.uid);
         const userSnap = await getDoc(userRef);
-        const userRole = (userSnap.exists() ? userSnap.data().role : "user") as UserRole;
+        
+        let userRole = "b2c";
+        let dbName = "";
+        let dbCreatedAt = new Date();
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          userRole = data.role || "b2c";
+          dbName = data.displayName || data.name || "";
+          dbCreatedAt = data.createdAt || new Date();
+        }
+
+        // Penyesuaian ke role baru
+        if (userRole === "user") userRole = "b2c";
+        if (userRole === "business") userRole = "b2b";
         
         login({
           uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          name: userCredential.user.displayName || "Pengguna",
-          photoURL: userCredential.user.photoURL,
-          role: userRole
+          email: userCredential.user.email || "",
+          displayName: userCredential.user.displayName || dbName || "Pengguna",
+          photoURL: userCredential.user.photoURL || undefined,
+          role: userRole as Role,
+          createdAt: dbCreatedAt
         });
 
       } else {
@@ -91,15 +116,16 @@ export default function DesktopLoginPage() {
 
         login({
           uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          name: formData.name,
-          photoURL: null,
-          role: assignedRole
+          email: userCredential.user.email || "",
+          displayName: formData.name,
+          photoURL: undefined,
+          role: assignedRole,
+          createdAt: new Date()
         });
       }
       
       // PERBAIKAN: Arahkan ke rute publik /dashboard, bukan /desktop/dashboard
-      router.push("/dashboard"); 
+      router.push("/desktop/dashboard"); // Menyesuaikan dengan path aslimu
 
     } catch (error: unknown) {
       console.error(error);
@@ -134,14 +160,14 @@ export default function DesktopLoginPage() {
 
       login({
         uid: result.user.uid,
-        email: result.user.email,
-        name: result.user.displayName || "Pengguna Google",
-        photoURL: result.user.photoURL,
-        role: userRole
+        email: result.user.email || "",
+        displayName: result.user.displayName || "Pengguna Google",
+        photoURL: result.user.photoURL || undefined,
+        role: userRole,
+        createdAt: new Date()
       });
 
-      // PERBAIKAN: Arahkan ke rute publik /dashboard, bukan /desktop/dashboard
-      router.push("/dashboard"); 
+      router.push("/desktop/dashboard"); 
     } catch (error: unknown) {
       console.error(error);
       if (error instanceof Error) {
@@ -193,7 +219,7 @@ export default function DesktopLoginPage() {
 
         <div className="w-full lg:w-7/12 p-8 sm:p-12 md:p-16 flex flex-col justify-center bg-white">
           <div className="mb-10 flex justify-between items-center">
-            <Link href="/" className="text-sm text-slate-500 hover:text-[#7A171D] transition-colors font-medium flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+            <Link href="/desktop" className="text-sm text-slate-500 hover:text-[#7A171D] transition-colors font-medium flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
               &larr; Kembali ke Beranda
             </Link>
           </div>

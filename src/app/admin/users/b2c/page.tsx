@@ -7,17 +7,11 @@ import { db, auth } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 
-interface UserSystemData {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  role: string;
-  isSuspended?: boolean;
-}
+// IMPORT GLOBAL TYPES
+import { User } from "@/types/user";
 
 export default function B2CManagementPage() {
-  const [users, setUsers] = useState<UserSystemData[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); 
@@ -30,8 +24,20 @@ export default function B2CManagementPage() {
       setIsLoading(true);
       try {
         const snap = await getDocs(collection(db, "users"));
-        const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })) as UserSystemData[];
-        setUsers(allUsers.filter(u => u.role === "user"));
+        
+        // Memetakan id menjadi uid, dan melakukan fallback aman untuk data legacy (name & phone)
+        const allUsers = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            uid: d.id,
+            ...data,
+            displayName: data.displayName || data.name || "Klien",
+            phoneNumber: data.phoneNumber || data.phone || "-"
+          } as User;
+        });
+
+        // Filter users dengan role b2c atau legacy role 'user'
+        setUsers(allUsers.filter(u => u.role === "b2c" || (u.role as string) === "user"));
       } catch (error) {
         console.error(error);
         showToast("error", "Gagal memuat data B2C.");
@@ -55,7 +61,7 @@ export default function B2CManagementPage() {
       
       // Update state React lokal untuk menghindari fetch ulang yang berat
       setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId ? { ...u, isSuspended: !currentStatus } : u
+        u.uid === userId ? { ...u, isSuspended: !currentStatus } : u
       ));
     } catch {
       showToast("error", "Gagal merubah status suspensi.");
@@ -73,13 +79,15 @@ export default function B2CManagementPage() {
 
   const processedData = users
     .filter(u => {
-      const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchSearch = (u.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || "").toLowerCase().includes(searchQuery.toLowerCase());
       const matchStatus = filterStatus === "all" ? true : filterStatus === "suspended" ? u.isSuspended : !u.isSuspended;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
-      if (sortBy === "name_asc") return a.name.localeCompare(b.name);
-      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      const nameA = a.displayName || "";
+      const nameB = b.displayName || "";
+      if (sortBy === "name_asc") return nameA.localeCompare(nameB);
+      if (sortBy === "name_desc") return nameB.localeCompare(nameA);
       return 0;
     });
 
@@ -183,12 +191,12 @@ export default function B2CManagementPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {processedData.map(u => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={u.uid} className="hover:bg-slate-50 transition-colors">
                     <td className="p-5 pl-6">
-                      <p className="font-bold text-slate-900">{u.name}</p>
+                      <p className="font-bold text-slate-900">{u.displayName}</p>
                       <p className="text-slate-500 mt-0.5">{u.email}</p>
                     </td>
-                    <td className="p-5 text-slate-600 font-medium">{u.phone || "-"}</td>
+                    <td className="p-5 text-slate-600 font-medium">{u.phoneNumber || "-"}</td>
                     <td className="p-5">
                       <span className={`px-3 py-1.5 rounded-lg font-bold text-xs ${u.isSuspended ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
                         {u.isSuspended ? "SUSPENDED" : "ACTIVE NODE"}
@@ -198,7 +206,7 @@ export default function B2CManagementPage() {
                       <button onClick={() => handleResetPassword(u.email)} className="p-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl hover:border-[#C5A059] hover:text-[#C5A059] transition-all shadow-sm" title="Reset Password">
                         <KeyRound className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleToggleSuspend(u.id, u.isSuspended || false)} className={`p-2.5 rounded-xl border transition-all shadow-sm ${u.isSuspended ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-600 hover:text-white'}`} title={u.isSuspended ? "Unban" : "Suspend"}>
+                      <button onClick={() => handleToggleSuspend(u.uid, u.isSuspended || false)} className={`p-2.5 rounded-xl border transition-all shadow-sm ${u.isSuspended ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-red-50 border-red-200 text-red-600 hover:bg-red-600 hover:text-white'}`} title={u.isSuspended ? "Unban" : "Suspend"}>
                         <Ban className="w-4 h-4" />
                       </button>
                     </td>

@@ -18,6 +18,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
+// --- IMPORT GLOBAL TYPES ---
+import { 
+  FirebaseTimestamp, Coordinates, LocationDetail, 
+  MapDropItem, TrackingHistoryItem, TrackingData, MapViewState 
+} from "@/types/order";
+
 // --- DYNAMIC IMPORT MAPBASE ---
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
@@ -25,63 +31,6 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-
-// =======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' secara Massal)
-// =======================================================================
-type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
-
-interface Coordinate {
-  lat: number;
-  lng: number;
-}
-
-interface LocationDetail {
-  address?: string;
-  senderName?: string;
-  senderPhone?: string;
-  receiverName?: string;
-  receiverPhone?: string;
-  lat?: number;
-  lng?: number;
-  resi?: string;
-  [key: string]: unknown;
-}
-
-// PERBAIKAN: Menambahkan index signature agar sejalan dengan MapBaseProps
-interface MapDropItem {
-  id: string;
-  lng: number;
-  lat: number;
-  address: string;
-  [key: string]: unknown;
-}
-
-interface TrackingHistoryItem {
-  id?: string | number;
-  status: string;
-  date: string;
-  description?: string;
-  location?: string;
-  [key: string]: unknown;
-}
-
-interface TrackingData {
-  id: string;
-  category: "Domestik" | "Internasional";
-  status?: string;
-  statusSub?: string;
-  origin?: LocationDetail | string; 
-  destination?: LocationDetail | string; 
-  destinations?: LocationDetail[];
-  createdAt?: FirebaseTimestamp;
-  trackingHistory?: TrackingHistoryItem[];
-  driverCoords?: Coordinate;
-  vehicleName?: string;
-  serviceType?: string;
-  resi?: string;
-  [key: string]: unknown;
-}
 
 export default function TrackingResultPage({ params }: { params: { resi: string } }) {
   // Decode URI dari URL
@@ -93,10 +42,10 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   const [routeData, setRouteData] = useState<unknown>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
 
-  const [mapViewState, setMapViewState] = useState({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
+  const [mapViewState, setMapViewState] = useState<MapViewState>({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
 
   // Type-Safe getCoords
-  const getCoords = (locationData: unknown): Coordinate | null => {
+  const getCoords = (locationData: unknown): Coordinates | null => {
     if (locationData && typeof locationData === "object" && "lng" in locationData && "lat" in locationData) {
       const loc = locationData as Record<string, unknown>;
       if (typeof loc.lng === "number" && typeof loc.lat === "number") {
@@ -323,7 +272,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       <div className="max-w-[1300px] mx-auto relative z-10">
         
         <div className="mb-8">
-          <Link href="/tracking" className="text-xs font-bold text-slate-500 hover:text-[#7A171D] transition-all flex items-center gap-2 w-fit bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
+          <Link href="/desktop/tracking" className="text-xs font-bold text-slate-500 hover:text-[#7A171D] transition-all flex items-center gap-2 w-fit bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
             <ArrowLeft className="w-4 h-4" /> Kembali ke Pencarian
           </Link>
         </div>
@@ -341,7 +290,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
             </div>
             <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Nomor Resi Tidak Ditemukan</h2>
             <p className="text-slate-500 mt-3 text-sm font-medium max-w-md leading-relaxed">Sistem tidak mendeteksi kode AWB/Resi <b className="text-slate-800">{awbNumber}</b>. Periksa kembali penulisan karakter atau hubungi CS Flash Global.</p>
-            <Link href="/tracking" className="mt-8 bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-3.5 px-8 rounded-xl transition-colors shadow-lg shadow-[#7A171D]/20 active:scale-95">
+            <Link href="/desktop/tracking" className="mt-8 bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-3.5 px-8 rounded-xl transition-colors shadow-lg shadow-[#7A171D]/20 active:scale-95">
               Cari Ulang Resi
             </Link>
           </motion.div>

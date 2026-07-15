@@ -16,38 +16,14 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
 
-// =======================================================================
-// INTERFACES (Menghilangkan Tipe 'any' agar Linter Lolos)
-// =======================================================================
-interface OrderData {
-  id: string;
-  paymentMethod?: string;
-  paymentStatus?: string;
-  email?: string;
-  origin?: { senderName?: string; senderPhone?: string; address?: string } | string;
-  destination?: string;
-  destinations?: { address: string; receiverName?: string; receiverPhone?: string }[];
-  breakdown?: { grandTotal?: number; deliveryFee?: number; insuranceFee?: number; porterFee?: number; tollFee?: number; b2bDiscount?: number };
-  finalGrandTotal?: number;
-  totalCost?: number;
-  offeredPrice?: number;
-  appliedPromoCode?: string;
-  discountPromoAmount?: number;
-  createdAt?: unknown; // FIXED: Diganti dari any ke unknown agar lolos strict mode
-  status?: string;
-  vehicleName?: string;
-  vehicle?: string;
-  totalWeight?: number;
-  weight?: number;
-  receiptUrl?: string | null;
-  [key: string]: unknown; // Allow additional fields if any
-}
+// MENGGUNAKAN GLOBAL TYPES
+import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
 
 export default function FinanceVerificationPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -57,14 +33,14 @@ export default function FinanceVerificationPage() {
   const [sortOrder, setSortOrder] = useState("newest");
 
   // State Detail Order
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderData | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderDetail | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     // Tarik data order untuk diverifikasi
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderData)));
+      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderDetail)));
       setIsLoading(false);
     });
 
@@ -78,15 +54,38 @@ export default function FinanceVerificationPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
-  // Ganti parameter "any" dengan "unknown" dan pastikan bisa mengecek properti toDate
-  const formatDate = (timestamp: unknown) => {
+  // =======================================================================
+  // PERBAIKAN TS STRICT MODE: HELPER TIMESTAMP FIREBASE
+  // =======================================================================
+  
+  // 1. Format String Tanggal
+  const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
     
-    // Perlakuan aman untuk Firebase Timestamp (yang memiliki fungsi toDate)
-    const t = timestamp as { toDate?: () => Date };
-    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(timestamp as string | number);
+    let d: Date;
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const objTs = timestamp as Record<string, unknown>;
+      if (typeof objTs.toDate === 'function') {
+        d = objTs.toDate() as Date;
+      } else {
+        d = new Date(timestamp as string | number);
+      }
+    } else {
+      d = new Date(timestamp as string | number);
+    }
     
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
+  // 2. Format Milliseconds (Untuk Sorting) - Aman dari error 'ts.seconds is possibly undefined'
+  const getMillis = (ts: FirebaseTimestamp) => {
+    if (!ts) return 0;
+    if (typeof ts === 'object' && ts !== null) {
+      const objTs = ts as Record<string, unknown>;
+      if (typeof objTs.toMillis === 'function') return objTs.toMillis() as number;
+      if (typeof objTs.seconds === 'number') return objTs.seconds * 1000;
+    }
+    return new Date(ts as string | number).getTime();
   };
 
   // =======================================================================
@@ -153,7 +152,7 @@ export default function FinanceVerificationPage() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(o => {
-        const originName = typeof o.origin === 'object' ? o.origin?.senderName : "";
+        const originName = typeof o.origin === 'object' && o.origin !== null ? (o.origin as LocationDetail).senderName : "";
         return o.id.toLowerCase().includes(q) || (o.email || "").toLowerCase().includes(q) || (originName || "").toLowerCase().includes(q);
       });
     }
@@ -163,10 +162,8 @@ export default function FinanceVerificationPage() {
       const cA = a.breakdown?.grandTotal || a.finalGrandTotal || a.totalCost || 0; 
       const cB = b.breakdown?.grandTotal || b.finalGrandTotal || b.totalCost || 0;
       
-      const aTime = a.createdAt as { seconds?: number };
-      const bTime = b.createdAt as { seconds?: number };
-      const tA = aTime?.seconds || 0; 
-      const tB = bTime?.seconds || 0;
+      const tA = getMillis(a.createdAt);
+      const tB = getMillis(b.createdAt);
 
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
@@ -282,7 +279,7 @@ export default function FinanceVerificationPage() {
                     <td className="p-5 pl-6 align-top">
                       <p className="font-mono font-black text-slate-900 text-sm uppercase">#{v.id}</p>
                       <p className="text-xs text-slate-500 font-semibold mt-1">
-                        {v.email || (typeof v.origin === 'object' ? v.origin?.senderName : "") || "Klien"}
+                        {v.email || (typeof v.origin === 'object' && v.origin !== null ? (v.origin as LocationDetail).senderName : "") || "Klien"}
                       </p>
                       <p className="text-[10px] text-slate-400 mt-1">{formatDate(v.createdAt)}</p>
                     </td>
@@ -370,9 +367,9 @@ export default function FinanceVerificationPage() {
                             <div className="mt-1 bg-white p-1 rounded-full"><MapPin className="w-5 h-5 text-slate-400" /></div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Titik Asal Pengirim</p>
-                              <p className="font-bold text-slate-900 text-sm">{typeof selectedOrderDetail.origin === 'object' ? selectedOrderDetail.origin.address : selectedOrderDetail.origin}</p>
-                              {typeof selectedOrderDetail.origin === 'object' && selectedOrderDetail.origin.senderName && (
-                                <p className="text-xs text-slate-500 font-medium mt-1">{selectedOrderDetail.origin.senderName} ({selectedOrderDetail.origin.senderPhone})</p>
+                              <p className="font-bold text-slate-900 text-sm">{typeof selectedOrderDetail.origin === 'object' && selectedOrderDetail.origin !== null ? (selectedOrderDetail.origin as LocationDetail).address : selectedOrderDetail.origin}</p>
+                              {typeof selectedOrderDetail.origin === 'object' && selectedOrderDetail.origin !== null && (selectedOrderDetail.origin as LocationDetail).senderName && (
+                                <p className="text-xs text-slate-500 font-medium mt-1">{(selectedOrderDetail.origin as LocationDetail).senderName} ({(selectedOrderDetail.origin as LocationDetail).senderPhone})</p>
                               )}
                             </div>
                           </div>
@@ -380,7 +377,7 @@ export default function FinanceVerificationPage() {
                             <div className="mt-1 bg-white p-1 rounded-full"><MapPin className="w-5 h-5 text-[#7A171D]" /></div>
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Titik Tujuan (Destinasi)</p>
-                              {selectedOrderDetail.destinations ? selectedOrderDetail.destinations.map((dest: { address: string; receiverName?: string; receiverPhone?: string; }, idx: number) => (
+                              {selectedOrderDetail.destinations ? selectedOrderDetail.destinations.map((dest: LocationDetail, idx: number) => (
                                 <div key={idx} className="mb-3 last:mb-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                   <p className="font-bold text-slate-900 text-sm">{dest.address}</p>
                                   {dest.receiverName && <p className="text-xs text-slate-500 font-medium mt-1">{dest.receiverName} ({dest.receiverPhone})</p>}

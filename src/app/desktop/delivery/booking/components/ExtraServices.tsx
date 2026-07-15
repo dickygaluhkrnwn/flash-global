@@ -2,7 +2,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { CheckCircle, Shield, Users, Minus, Plus, DollarSign, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DynamicVehicle } from "./types";
+// MENGGUNAKAN GLOBAL TYPES BUKAN ./types
+import { DynamicVehicle } from "@/types/order";
 
 interface Props {
   selectedVehicle: DynamicVehicle | null;
@@ -16,7 +17,17 @@ interface Props {
   handleInfoClick: (t: string, text: string) => void;
 }
 
-export default function ExtraServices({ selectedVehicle, addInsurance, setAddInsurance, porterCount, setPorterCount, tarifPerPorter, tollFee, setTollFee, handleInfoClick }: Props) {
+export default function ExtraServices({ 
+  selectedVehicle, 
+  addInsurance, 
+  setAddInsurance, 
+  porterCount, 
+  setPorterCount, 
+  tarifPerPorter, 
+  tollFee, 
+  setTollFee, 
+  handleInfoClick 
+}: Props) {
   
   const showInsurance = !selectedVehicle?.isMotor && selectedVehicle?.insurancePercent !== undefined;
 

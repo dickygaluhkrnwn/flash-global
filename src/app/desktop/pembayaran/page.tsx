@@ -19,25 +19,9 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-interface OrderSummary {
-  id: string;
-  destination: string;
-  weight: number | string;
-  vehicle: string;
-  totalCost: number;
-}
-
-interface PaymentMethod {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  color: string;
-}
-
-interface PaymentConfig {
-  transferBank: PaymentMethod[];
-  qrisImageUrl: string | null;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { OrderSummary } from "@/types/order";
+import { PaymentMethod, PaymentConfig } from "@/types/finance";
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -54,7 +38,7 @@ export default function PaymentPage() {
   const [activeTab, setActiveTab] = useState<"transfer" | "qris">("transfer");
   
   // FALLBACK DEFAULT: Agar halaman tidak crash jika data admin kosong
-  const defaultTransferBank = [
+  const defaultTransferBank: PaymentMethod[] = [
     { bankName: "BCA", accountNumber: "8720516839", accountName: "PT FLASH GLOBAL LOGISTIK", color: "bg-blue-600" },
     { bankName: "MANDIRI", accountNumber: "1320087451296", accountName: "PT FLASH GLOBAL LOGISTIK", color: "bg-amber-500" }
   ];
@@ -196,7 +180,7 @@ export default function PaymentPage() {
 
       setDiscountAmount(discount);
       setAppliedPromo(code);
-    } catch (err: unknown) { // Perbaikan Linter Error di sini
+    } catch (err: unknown) { 
       if (err instanceof Error) {
         setPromoError(err.message);
       } else {
@@ -285,7 +269,7 @@ export default function PaymentPage() {
       const encodedMessage = encodeURIComponent(message);
       window.open(`https://wa.me/${adminWhatsApp}?text=${encodedMessage}`, "_blank");
 
-      router.push("/dashboard");
+      router.push("/desktop/dashboard");
 
     } catch (error: unknown) {
       console.error("Gagal memproses pembayaran:", error);
@@ -300,7 +284,7 @@ export default function PaymentPage() {
   };
 
   const handlePayLater = () => {
-    router.push("/dashboard");
+    router.push("/desktop/dashboard");
   };
 
   const formatRupiah = (val: number) => {

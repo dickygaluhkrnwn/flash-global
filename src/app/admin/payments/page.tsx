@@ -22,18 +22,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-// --- TYPES ---
-interface PaymentMethod {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  color: string;
-}
-
-interface PaymentConfig {
-  transferBank: PaymentMethod[];
-  qrisImageUrl: string | null;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { PaymentMethod, PaymentConfig } from "@/types/finance";
 
 const BANK_COLOR_OPTIONS = [
   { label: "Biru (BCA / Mandiri / BNI)", value: "bg-blue-600" },

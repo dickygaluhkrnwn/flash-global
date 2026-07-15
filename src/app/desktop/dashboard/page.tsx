@@ -11,19 +11,19 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
+// --- IMPORT GLOBAL TYPES ---
+import { DashboardOrder, FirebaseTimestamp } from "@/types/order";
+
 // --- IMPORT SUB-COMPONENTS ---
-import { Order } from "./components/types";
 import DashboardStats from "./components/DashboardStats";
 import DashboardFilters from "./components/DashboardFilters";
 import OrderCard from "./components/OrderCard";
-
-type FirebaseTimestamp = { toDate?: () => Date } | string | number | null | undefined;
 
 export default function DesktopDashboardPage() {
   const router = useRouter();
   const { user, isHydrated } = useAuthStore(); 
   
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // State Tabs & Search
@@ -67,8 +67,8 @@ export default function DesktopDashboardPage() {
 
     let unsubscribeOrders = () => {};
     let unsubscribeQuotes = () => {};
-    let localOrders: Order[] = [];
-    let localQuotes: Order[] = [];
+    let localOrders: DashboardOrder[] = [];
+    let localQuotes: DashboardOrder[] = [];
 
     const combineAndSetData = () => {
       const combined = [...localOrders, ...localQuotes];
@@ -281,7 +281,7 @@ export default function DesktopDashboardPage() {
                 <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Filter</span>
               </button>
               
-              <Link href="/delivery/booking" className="flex-1 sm:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] text-sm whitespace-nowrap">
+              <Link href="/desktop/delivery/booking" className="flex-1 sm:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] text-sm whitespace-nowrap">
                 <Package className="w-4 h-4" /> Pesan
               </Link>
             </div>

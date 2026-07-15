@@ -154,7 +154,7 @@ export default function Navbar() {
                     )}
                     
                     <div className="text-left hidden lg:block">
-                      <p className="text-sm font-bold text-slate-900 leading-none truncate max-w-[120px]">{user?.name}</p>
+                      <p className="text-sm font-bold text-slate-900 leading-none truncate max-w-[120px]">{user?.displayName}</p>
                     </div>
                     
                     <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform duration-300 ml-1", isProfileOpen ? "rotate-180" : "")} />
@@ -170,10 +170,10 @@ export default function Navbar() {
                         className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden py-2"
                       >
                         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-                          <p className="text-sm font-black text-slate-900 truncate">{user?.name}</p>
+                          <p className="text-sm font-black text-slate-900 truncate">{user?.displayName}</p>
                           <p className="text-xs font-medium text-slate-500 truncate mt-0.5">{user?.email}</p>
                           <span className="inline-block mt-2 px-2 py-0.5 bg-[#C5A059]/10 text-[#A68345] text-[10px] font-bold uppercase tracking-wider rounded-md">
-                            {user?.role === 'business' ? "Corporate Account" : "Personal Account"}
+                            {user?.role === 'b2b' ? "Corporate Account" : "Personal Account"}
                           </span>
                         </div>
 
@@ -267,7 +267,7 @@ export default function Navbar() {
                       </div>
                     )}
                     <div className="text-left">
-                      <p className="text-base font-bold text-slate-900">{user?.name}</p>
+                      <p className="text-base font-bold text-slate-900">{user?.displayName}</p>
                       <p className="text-xs font-medium text-slate-500">{user?.email}</p>
                     </div>
                   </div>

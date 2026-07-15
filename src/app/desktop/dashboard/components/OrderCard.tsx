@@ -1,12 +1,13 @@
 import { motion } from "framer-motion";
 import { Package, Truck, Plane, ChevronRight, CreditCard, Star, Search, Navigation, Clock } from "lucide-react";
-import { Order } from "./types";
+// MENGGUNAKAN GLOBAL TYPES BUKAN ./types
+import { DashboardOrder } from "@/types/order";
 import { Badge } from "@/components/ui/Badge";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  order: Order;
+  order: DashboardOrder;
   formatIDR: (v: number) => string;
   handleWAConfirm: (id: string, price: number) => void;
 }

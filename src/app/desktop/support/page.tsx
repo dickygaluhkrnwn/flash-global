@@ -17,14 +17,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-interface SupportTicket {
-  id: string;
-  issueType: string;
-  message: string;
-  status: "Open" | "In Progress" | "Resolved";
-  priority: "Low" | "Medium" | "High" | "Urgent";
-  createdAt?: Timestamp;
-}
+// --- IMPORT GLOBAL TYPES ---
+import { SupportTicket } from "@/types/support";
 
 const FAQ_DATA = [
   {
@@ -65,7 +59,7 @@ export default function DesktopSupportPage() {
   // Form State
   const [formData, setFormData] = useState({
     issueType: "Pertanyaan Umum",
-    priority: "Medium",
+    priority: "Medium" as "Low" | "Medium" | "High" | "Urgent",
     message: ""
   });
 
@@ -112,7 +106,7 @@ export default function DesktopSupportPage() {
     try {
       await addDoc(collection(db, "support_tickets"), {
         userId: user.uid,
-        clientName: user.name || "Klien Flash Global",
+        clientName: user.displayName || "Klien Flash Global", // FIXED BUG
         email: user.email || "",
         issueType: formData.issueType,
         priority: formData.priority,
@@ -133,9 +127,10 @@ export default function DesktopSupportPage() {
     }
   };
 
-  const formatTime = (ts?: Timestamp) => {
+  const formatTime = (ts?: Timestamp | any) => {
     if (!ts) return "Baru saja";
-    return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    return date.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   if (!isHydrated || !user) return null;
@@ -349,7 +344,7 @@ export default function DesktopSupportPage() {
                     <div className="relative">
                       <select 
                         value={formData.priority}
-                        onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                        onChange={(e) => setFormData({...formData, priority: e.target.value as "Low" | "Medium" | "High" | "Urgent"})}
                         className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm font-bold rounded-xl pl-4 pr-10 py-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 appearance-none transition-all cursor-pointer"
                         required
                       >

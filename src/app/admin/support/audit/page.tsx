@@ -2,18 +2,19 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Search, History, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/Button";
 
-interface AuditLog {
-  id: string;
-  adminEmail: string;
-  action: string;
-  targetModule: string;
-  timestamp?: Timestamp;
-}
+// IMPORT GLOBAL TYPES
+import { AuditLog } from "@/types/support";
 
 export default function AdminAuditPage() {
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,16 +34,42 @@ export default function AdminAuditPage() {
 
   useEffect(() => { fetchLogs(); }, []);
 
-  const formatTime = (ts?: Timestamp) => {
+  // Safe Date Parsing agar Linter TypeScript Lolos (Firebase Timestamp compatibility)
+  const formatTime = (ts?: unknown) => {
     if (!ts) return "Unknown";
-    return ts.toDate().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const t = ts as { toDate?: () => Date };
+    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(ts as string | number);
+    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
   const processedLogs = useMemo(() => {
     let res = [...logs];
-    if (searchQuery) res = res.filter(l => l.adminEmail.toLowerCase().includes(searchQuery.toLowerCase()) || l.action.toLowerCase().includes(searchQuery.toLowerCase()) || l.targetModule.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) {
+      const sq = searchQuery.toLowerCase();
+      res = res.filter(l => 
+        l.adminEmail?.toLowerCase().includes(sq) || 
+        l.action?.toLowerCase().includes(sq) || 
+        l.targetModule?.toLowerCase().includes(sq)
+      );
+    }
     return res;
   }, [logs, searchQuery]);
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin yang boleh melihat Audit Trail)
+  if (currentUser && currentUser.role !== 'superadmin') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Audit Trail ini sangat rahasia dan hanya dapat diakses oleh Superadmin.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 font-sans">

@@ -2,24 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   Wallet, Plus, Search, ArrowUpCircle, 
-  ArrowDownCircle, UserCircle, CheckCircle2, AlertCircle, History 
+  ArrowDownCircle, UserCircle, CheckCircle2, 
+  AlertCircle, History, ShieldAlert 
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-// PERBAIKAN: Menambahkan addDoc ke dalam import
 import { collection, getDocs, doc, setDoc, updateDoc, serverTimestamp, increment, addDoc } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/Button";
 
-interface DriverWallet {
-  id: string;
-  name: string;
-  phone: string;
-  vehicleType: string;
-  balance: number;
-}
+// IMPORT GLOBAL TYPES
+import { DriverData } from "@/types/admin";
 
 export default function AdminDriverWalletPage() {
-  const [drivers, setDrivers] = useState<DriverWallet[]>([]);
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+
+  const [drivers, setDrivers] = useState<DriverData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -30,7 +31,7 @@ export default function AdminDriverWalletPage() {
   // State untuk mutasi (Top Up / Tarik)
   const [showMutasiModal, setShowMutasiModal] = useState(false);
   const [mutasiType, setMutasiType] = useState<"topup" | "withdraw">("topup");
-  const [selectedDriver, setSelectedDriver] = useState<DriverWallet | null>(null);
+  const [selectedDriver, setSelectedDriver] = useState<DriverData | null>(null);
   const [mutasiAmount, setMutasiAmount] = useState<number | "">("");
 
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
@@ -40,10 +41,10 @@ export default function AdminDriverWalletPage() {
     setIsLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "driver_wallets"));
-      const driversList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as DriverWallet[];
+      const driversList = querySnapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })) as DriverData[];
       setDrivers(driversList);
     } catch (error) {
       console.error("Gagal menarik data dompet sopir:", error);
@@ -99,7 +100,9 @@ export default function AdminDriverWalletPage() {
       return;
     }
 
-    if (mutasiType === "withdraw" && amount > selectedDriver.balance) {
+    const currentBalance = selectedDriver.balance || 0;
+
+    if (mutasiType === "withdraw" && amount > currentBalance) {
       showToast("error", "Saldo sopir tidak mencukupi untuk ditarik.");
       return;
     }
@@ -139,9 +142,25 @@ export default function AdminDriverWalletPage() {
   };
 
   const filteredDrivers = drivers.filter(d => 
-    d.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    d.phone.includes(searchQuery)
+    (d.name || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (d.phone || "").includes(searchQuery)
   );
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin & Finance)
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dompet Sopir & Kas ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">
@@ -211,16 +230,16 @@ export default function AdminDriverWalletPage() {
                         <UserCircle className="w-8 h-8 text-slate-500" />
                         <div>
                           <p className="text-sm font-bold text-white">{driver.name}</p>
-                          <p className="text-xs text-slate-400 font-mono">{driver.phone}</p>
+                          <p className="text-xs text-slate-400 font-mono">{driver.phone || "-"}</p>
                         </div>
                       </div>
                     </td>
                     <td className="p-4 text-sm text-slate-300 font-medium">{driver.vehicleType}</td>
                     <td className="p-4">
-                      <span className={`text-sm font-black ${driver.balance < 15000 ? 'text-red-400' : 'text-emerald-400'}`}>
-                        Rp {driver.balance.toLocaleString('id-ID')}
+                      <span className={`text-sm font-black ${(driver.balance || 0) < 15000 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        Rp {(driver.balance || 0).toLocaleString('id-ID')}
                       </span>
-                      {driver.balance < 15000 && <p className="text-[10px] text-red-500 mt-0.5">Saldo Minim!</p>}
+                      {(driver.balance || 0) < 15000 && <p className="text-[10px] text-red-500 mt-0.5">Saldo Minim!</p>}
                     </td>
                     <td className="p-4 pr-6 flex justify-end gap-2">
                       <button 
@@ -298,13 +317,13 @@ export default function AdminDriverWalletPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white">{mutasiType === 'topup' ? 'Setor Top-Up Saldo' : 'Tarik Saldo Tunai'}</h2>
-                  <p className="text-xs text-slate-400">{selectedDriver.name} • {selectedDriver.phone}</p>
+                  <p className="text-xs text-slate-400">{selectedDriver.name} • {selectedDriver.phone || "-"}</p>
                 </div>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-6 flex justify-between items-center">
                 <span className="text-sm font-medium text-slate-400">Saldo Saat Ini</span>
-                <span className="text-lg font-black text-white">Rp {selectedDriver.balance.toLocaleString('id-ID')}</span>
+                <span className="text-lg font-black text-white">Rp {(selectedDriver.balance || 0).toLocaleString('id-ID')}</span>
               </div>
 
               <form onSubmit={handleMutasi} className="space-y-6">
