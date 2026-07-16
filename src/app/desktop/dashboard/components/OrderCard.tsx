@@ -42,7 +42,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status === "Menunggu Pembayaran" && !isB2B) {
       return (
         <button 
-          onClick={(e) => { e.stopPropagation(); router.push("/desktop/pembayaran"); }} 
+          onClick={(e) => { e.stopPropagation(); router.push("/pembayaran"); }} 
           className="flex-1 sm:flex-none px-4 py-2.5 bg-[#7A171D] hover:bg-[#5A0E13] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
         >
           <CreditCard className="w-4 h-4" /> Bayar Sekarang
@@ -55,13 +55,13 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
       return (
         <>
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`/desktop/dashboard/${order.id}`); }} 
+            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }} 
             className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
           >
             <Printer className="w-4 h-4" /> Cetak AWB
           </button>
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`/desktop/tracking/${order.resi}`); }} 
+            onClick={(e) => { e.stopPropagation(); router.push(`p/tracking/${order.resi}`); }} 
             className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
           >
             <Search className="w-4 h-4" /> Lacak Cepat
@@ -74,7 +74,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status === "Dikirim" || order.status.includes("Transit")) {
       return (
         <button 
-          onClick={(e) => { e.stopPropagation(); router.push(`/desktop/tracking/${order.resi}`); }} 
+          onClick={(e) => { e.stopPropagation(); router.push(`/tracking/${order.resi}`); }} 
           className="flex-1 sm:flex-none px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
         >
           <Navigation className="w-4 h-4" /> Lacak Live Radar
@@ -86,7 +86,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status.includes("Selesai")) {
       return (
         <button 
-          onClick={(e) => { e.stopPropagation(); router.push(`/desktop/dashboard/${order.id}`); }}
+          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }}
           className="flex-1 sm:flex-none px-4 py-2.5 bg-[#C5A059] hover:bg-[#A68345] text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5"
         >
           <Star className="w-4 h-4 fill-current" /> Nilai Kinerja
@@ -116,7 +116,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         "rounded-[1.5rem] border shadow-sm hover:shadow-md transition-all relative overflow-hidden group cursor-pointer",
         isB2B ? "bg-white border-indigo-200/60" : "bg-white border-slate-200"
       )}
-      onClick={() => router.push(`/desktop/dashboard/${order.id}`)}
+      onClick={() => router.push(`/dashboard/${order.id}`)}
     >
       {/* HEADER: Kategori & Status Operasional */}
       <div className={cn("px-5 py-3.5 border-b flex justify-between items-center", isB2B ? "bg-indigo-50/30 border-indigo-100" : "bg-slate-50/50 border-slate-100")}>
@@ -201,7 +201,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         <div className="flex gap-2 w-full sm:w-auto">
           {/* Tombol "Lihat Detail" disembunyikan di Mobile jika ada action buttons lain agar tidak penuh, tapi di Desktop tetap ada */}
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`/desktop/dashboard/${order.id}`); }}
+            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }}
             className="hidden sm:flex px-4 py-2.5 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             Lihat Detail

@@ -53,7 +53,7 @@ export default function DesktopDashboardPage() {
   };
 
   useEffect(() => {
-    if (isHydrated && !user) router.push("/desktop/login");
+    if (isHydrated && !user) router.push("/login");
   }, [user, isHydrated, router]);
 
   // REAL-TIME SYNCHRONIZATION MAPPING SUPER LENGKAP
@@ -290,7 +290,7 @@ export default function DesktopDashboardPage() {
                 </div>
               </div>
               <button 
-                onClick={() => router.push("/desktop/finance")}
+                onClick={() => router.push("/finance")}
                 className="w-full md:w-auto px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0"
               >
                 Lunasi Tagihan <ArrowRight className="w-4 h-4" />
@@ -327,7 +327,7 @@ export default function DesktopDashboardPage() {
                 <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Filter</span>
               </button>
               
-              <Link href="/desktop/delivery/booking" className="flex-1 sm:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] text-sm whitespace-nowrap">
+              <Link href="/delivery/booking" className="flex-1 sm:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] text-sm whitespace-nowrap">
                 <Package className="w-4 h-4" /> Pesan
               </Link>
             </div>

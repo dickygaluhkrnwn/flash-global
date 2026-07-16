@@ -125,7 +125,7 @@ export default function DesktopLoginPage() {
       }
       
       // PERBAIKAN: Arahkan ke rute publik /dashboard, bukan /desktop/dashboard
-      router.push("/desktop/dashboard"); // Menyesuaikan dengan path aslimu
+      router.push("/dashboard"); // Menyesuaikan dengan path aslimu
 
     } catch (error: unknown) {
       console.error(error);
@@ -167,7 +167,7 @@ export default function DesktopLoginPage() {
         createdAt: new Date()
       });
 
-      router.push("/desktop/dashboard"); 
+      router.push("/dashboard"); 
     } catch (error: unknown) {
       console.error(error);
       if (error instanceof Error) {

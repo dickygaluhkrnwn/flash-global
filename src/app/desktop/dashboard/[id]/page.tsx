@@ -73,7 +73,7 @@ export default function OrderDetailPage() {
 
   // Proteksi Route
   useEffect(() => {
-    if (isHydrated && !user) router.push("/desktop/login");
+    if (isHydrated && !user) router.push("/login");
   }, [user, isHydrated, router]);
 
   useEffect(() => {
@@ -307,7 +307,7 @@ export default function OrderDetailPage() {
         </div>
         <h2 className="text-2xl font-black text-slate-900 mb-2">Terjadi Kesalahan</h2>
         <p className="text-slate-500 font-medium mb-8">{errorMsg}</p>
-        <Button onClick={() => router.push("/desktop/dashboard")} variant="outline" className="h-12 border-slate-300">
+        <Button onClick={() => router.push("/dashboard")} variant="outline" className="h-12 border-slate-300">
           <ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Dashboard
         </Button>
       </div>
@@ -391,7 +391,7 @@ export default function OrderDetailPage() {
       <div className="max-w-[1200px] mx-auto relative z-10 space-y-6">
         
         {/* Navigation Back */}
-        <button onClick={() => router.push("/desktop/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-[#7A171D] font-bold text-sm transition-colors w-fit mb-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+        <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-slate-500 hover:text-[#7A171D] font-bold text-sm transition-colors w-fit mb-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
           <ArrowLeft className="w-4 h-4" /> Kembali ke Pesanan Saya
         </button>
 
@@ -656,7 +656,7 @@ export default function OrderDetailPage() {
                 </Button>
                 
                 {order.status === "Menunggu Pembayaran" ? (
-                  <Button onClick={() => router.push("/desktop/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
+                  <Button onClick={() => router.push("/pembayaran")} className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md font-bold">
                     <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
                   </Button>
                 ) : (
