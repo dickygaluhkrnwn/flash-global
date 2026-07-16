@@ -8,7 +8,7 @@ import {
   Clock, CheckCircle2, AlertCircle, LifeBuoy, ShieldAlert
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, query, orderBy } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, onSnapshot } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 
@@ -21,27 +21,29 @@ export default function AdminTicketsPage() {
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // State Filter & Search
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterPriority, setFilterPriority] = useState("All");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // REAL-TIME LISTENER (Menggunakan onSnapshot)
   useEffect(() => {
-    const fetchTickets = async () => {
-      setIsLoading(true);
-      try {
-        const q = query(collection(db, "support_tickets"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() } as SupportTicket)));
-      } catch (error) {
-        console.error("Gagal menarik tiket:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setIsLoading(true);
+    const q = query(collection(db, "support_tickets"), orderBy("createdAt", "desc"));
     
-    fetchTickets();
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ticketsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupportTicket));
+      setTickets(ticketsData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Gagal menarik tiket secara real-time:", error);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
@@ -53,11 +55,7 @@ export default function AdminTicketsPage() {
     try {
       await updateDoc(doc(db, "support_tickets", id), { status: newStatus });
       showToast("success", `Status tiket diperbarui menjadi ${newStatus}`);
-      
-      // Update state lokal untuk optimalisasi agar tidak fetch ulang
-      setTickets(prev => prev.map(t => 
-        t.id === id ? { ...t, status: newStatus } : t
-      ));
+      // Tidak perlu update state lokal karena onSnapshot akan memicunya otomatis
     } catch (error) {
       console.error(error);
       showToast("error", "Gagal memperbarui tiket.");
@@ -80,12 +78,19 @@ export default function AdminTicketsPage() {
     return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  // LOGIKA FILTER & SORTING MENGGUNAKAN useMemo
   const processedTickets = useMemo(() => {
     let res = [...tickets];
-    if (searchQuery) {
+    
+    if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      res = res.filter(t => (t.clientName || "").toLowerCase().includes(q) || t.id.toLowerCase().includes(q));
+      res = res.filter(t => 
+        (t.clientName || "").toLowerCase().includes(q) || 
+        t.id.toLowerCase().includes(q) ||
+        t.issueType.toLowerCase().includes(q)
+      );
     }
+    
     if (filterStatus !== "All") res = res.filter(t => t.status === filterStatus);
     if (filterPriority !== "All") res = res.filter(t => t.priority === filterPriority);
     
@@ -94,8 +99,13 @@ export default function AdminTicketsPage() {
       const timeB = getMillis(b.createdAt);
       return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
     });
+    
     return res;
   }, [tickets, searchQuery, filterStatus, filterPriority, sortOrder]);
+
+  // Kalkulasi Statistik
+  const totalOpen = tickets.filter(t => t.status === "Open").length;
+  const totalInProgress = tickets.filter(t => t.status === "In Progress").length;
 
   // =========================================================================
   // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
@@ -132,18 +142,36 @@ export default function AdminTicketsPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-2 font-medium">Manajemen komplain dan pertanyaan dari klien operasional.</p>
         </div>
+        
+        {/* Indikator Live SLA */}
+        <div className="relative z-10 flex gap-4">
+          <div className="bg-red-50 border border-red-100 px-4 py-2 rounded-xl text-center shadow-sm">
+            <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Baru (Open)</p>
+            <p className="text-xl font-black text-red-600">{totalOpen}</p>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 px-4 py-2 rounded-xl text-center shadow-sm">
+            <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Diproses</p>
+            <p className="text-xl font-black text-amber-600">{totalInProgress}</p>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col lg:flex-row gap-4 justify-between items-center shadow-sm">
         <div className="relative w-full lg:w-96 shrink-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Cari ID tiket atau nama klien..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-slate-900 outline-none text-xs font-semibold focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm" />
+          <input 
+            type="text" 
+            placeholder="Cari ID tiket, Kategori, atau Nama..." 
+            value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)} 
+            className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-slate-900 outline-none text-xs font-semibold focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all shadow-sm" 
+          />
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full lg:w-auto">
           <div className="relative shrink-0 flex-1 sm:flex-none">
             <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm">
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm cursor-pointer">
               <option value="All">Semua Status</option>
               <option value="Open">Open (Baru)</option>
               <option value="In Progress">In Progress</option>
@@ -152,7 +180,7 @@ export default function AdminTicketsPage() {
           </div>
           <div className="relative shrink-0 flex-1 sm:flex-none">
             <AlertCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm">
+            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 appearance-none shadow-sm cursor-pointer">
               <option value="All">Semua Prioritas</option>
               <option value="Urgent">Urgent</option>
               <option value="High">High</option>
@@ -170,63 +198,71 @@ export default function AdminTicketsPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center min-h-[400px]">
             <div className="w-10 h-10 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-400 font-bold animate-pulse text-sm">Menarik Tiket Bantuan...</p>
+            <p className="text-slate-400 font-bold animate-pulse text-sm uppercase tracking-widest">Sinkronisasi Tiket...</p>
           </div>
         ) : (
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
+              <thead className="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 shadow-sm">
+                <tr className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">
                   <th className="p-5 pl-6">ID & Pengirim</th>
-                  <th className="p-5">Kategori & Pesan Kendala</th>
+                  <th className="p-5 w-1/3">Kategori & Pesan Kendala</th>
                   <th className="p-5">Prioritas</th>
                   <th className="p-5 pr-6 text-right">Tindakan CS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {processedTickets.length === 0 ? (
-                  <tr><td colSpan={4} className="p-16 text-center text-slate-400 font-medium">Tidak ada tiket ditemukan.</td></tr>
-                ) : processedTickets.map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-5 pl-6 align-top">
-                      <p className="font-mono font-black text-slate-900 text-sm mb-1 uppercase">#{t.id.substring(0,8)}</p>
-                      <p className="text-[11px] text-slate-600 font-bold mb-1">{t.clientName || "Klien"}</p>
-                      <p className="text-[9px] text-slate-400 font-medium flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(t.createdAt)}</p>
-                    </td>
-                    <td className="p-5 align-top">
-                      <p className="text-slate-800 font-bold mb-1">{t.issueType}</p>
-                      <p className="text-[11px] text-slate-500 leading-relaxed max-w-[350px] line-clamp-2" title={t.message}>{t.message}</p>
-                    </td>
-                    <td className="p-5 align-top">
-                      <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border inline-block ${
-                        t.priority === 'Urgent' ? 'bg-red-50 text-red-600 border-red-200' :
-                        t.priority === 'High' ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                        t.priority === 'Medium' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                        'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {t.priority}
-                      </span>
-                    </td>
-                    <td className="p-5 pr-6 align-top flex flex-col items-end gap-2">
-                      <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border mb-2 ${
-                        t.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                        t.status === 'In Progress' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                        'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}>
-                        {t.status}
-                      </span>
-                      <select 
-                        value={t.status}
-                        onChange={(e) => handleUpdateTicket(t.id, e.target.value as "Open" | "In Progress" | "Resolved")}
-                        className="bg-white border border-slate-200 text-slate-700 text-[10px] font-bold rounded-lg px-2 py-1.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 w-36 appearance-none cursor-pointer hover:bg-slate-50 transition-colors shadow-sm"
-                      >
-                        <option value="Open">Ubah ke: Open</option>
-                        <option value="In Progress">Ubah ke: In Progress</option>
-                        <option value="Resolved">Tandai Selesai</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100 bg-white">
+                <AnimatePresence>
+                  {processedTickets.length === 0 ? (
+                    <tr><td colSpan={4} className="p-16 text-center text-slate-400 font-medium">Tidak ada tiket yang sesuai dengan filter.</td></tr>
+                  ) : processedTickets.map(t => (
+                    <motion.tr 
+                      key={t.id} 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="hover:bg-slate-50 transition-colors group"
+                    >
+                      <td className="p-5 pl-6 align-top">
+                        <p className="font-mono font-black text-slate-900 text-sm mb-1 uppercase bg-white border border-slate-200 shadow-sm px-2 py-0.5 rounded w-fit">#{t.id.substring(0,8)}</p>
+                        <p className="text-[11px] text-slate-600 font-bold mb-1">{t.clientName || "Klien"}</p>
+                        <p className="text-[9px] text-slate-400 font-medium flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(t.createdAt)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <p className="text-slate-800 font-bold mb-1.5">{t.issueType}</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed max-w-sm line-clamp-3 group-hover:line-clamp-none transition-all" title={t.message}>{t.message}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border inline-block ${
+                          t.priority === 'Urgent' ? 'bg-red-50 text-red-600 border-red-200 shadow-[0_0_8px_rgba(239,68,68,0.2)]' :
+                          t.priority === 'High' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                          t.priority === 'Medium' ? 'bg-blue-50 text-blue-600 border-blue-200' :
+                          'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {t.priority}
+                        </span>
+                      </td>
+                      <td className="p-5 pr-6 align-top flex flex-col items-end gap-2">
+                        <span className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border mb-2 ${
+                          t.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                          t.status === 'In Progress' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                          'bg-red-50 text-red-600 border-red-200' // Open/Baru pakai warna merah agar notice
+                        }`}>
+                          {t.status}
+                        </span>
+                        <select 
+                          value={t.status}
+                          onChange={(e) => handleUpdateTicket(t.id, e.target.value as "Open" | "In Progress" | "Resolved")}
+                          className="bg-white border border-slate-200 text-slate-700 text-[10px] font-bold rounded-lg px-2 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 w-36 appearance-none cursor-pointer hover:bg-slate-50 transition-colors shadow-sm"
+                        >
+                          <option value="Open">Ubah ke: Open</option>
+                          <option value="In Progress">Ubah ke: In Progress</option>
+                          <option value="Resolved">Tandai Selesai</option>
+                        </select>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               </tbody>
             </table>
           </div>

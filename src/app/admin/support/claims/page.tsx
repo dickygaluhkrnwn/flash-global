@@ -2,12 +2,17 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   FileWarning, Search, Filter, ArrowUpDown, 
-  Clock, CheckCircle2, AlertCircle, Eye, XCircle, CheckCircle, ChevronDown, Package, MapPin
+  Clock, CheckCircle2, AlertCircle, Eye, XCircle, 
+  CheckCircle, ChevronDown, Package, MapPin, ShieldAlert,
+  Wallet
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, query, orderBy, getDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, query, orderBy, getDoc, onSnapshot } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 // IMPORT DARI GLOBAL TYPES
@@ -15,6 +20,9 @@ import { InsuranceClaim } from "@/types/support";
 import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function AdminClaimsPage() {
+  const router = useRouter();
+  const { user: currentUser } = useAuthStore();
+
   const [claims, setClaims] = useState<InsuranceClaim[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -24,21 +32,20 @@ export default function AdminClaimsPage() {
   
   const [showImageModal, setShowImageModal] = useState<string | null>(null);
 
+  // REAL-TIME LISTENER
   useEffect(() => { 
-    const fetchClaims = async () => {
-      setIsLoading(true);
-      try {
-        const q = query(collection(db, "insurance_claims"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        setClaims(snap.docs.map(d => ({ id: d.id, ...d.data() } as InsuranceClaim)));
-      } catch (error) {
-        console.error("Gagal menarik klaim:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setIsLoading(true);
+    const q = query(collection(db, "insurance_claims"), orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setClaims(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InsuranceClaim)));
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Gagal menarik klaim secara real-time:", error);
+      setIsLoading(false);
+    });
 
-    fetchClaims(); 
+    return () => unsubscribe();
   }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
@@ -66,14 +73,16 @@ export default function AdminClaimsPage() {
     return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  // Fungsi refresh lokal untuk optimize (di passing ke props component anak)
-  const handleUpdateClaimState = (id: string, newStatus: "Approved" | "Rejected") => {
-    setClaims(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
-  };
-
   const processedClaims = useMemo(() => {
     let res = [...claims];
-    if (searchQuery) res = res.filter(c => (c.clientName || "").toLowerCase().includes(searchQuery.toLowerCase()) || (c.orderId || "").toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      res = res.filter(c => 
+        (c.clientName || "").toLowerCase().includes(q) || 
+        (c.orderId || "").toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q)
+      );
+    }
     if (filterStatus !== "All") res = res.filter(c => c.status === filterStatus);
     res.sort((a, b) => {
       const timeA = getMillis(a.createdAt);
@@ -82,6 +91,27 @@ export default function AdminClaimsPage() {
     });
     return res;
   }, [claims, searchQuery, filterStatus, sortOrder]);
+
+  // Kalkulasi Statistik
+  const totalPending = claims.filter(c => c.status === "Pending Review").length;
+  const totalApproved = claims.filter(c => c.status === "Approved").length;
+  const totalRejected = claims.filter(c => c.status === "Rejected").length;
+
+  // =========================================================================
+  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
+  // =========================================================================
+
+  // RBAC GUARD (Hanya Superadmin, Finance, & Operational)
+  if (currentUser && !['superadmin', 'admin_finance', 'admin_operational'].includes(currentUser.role)) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Klaim Asuransi ini hanya dapat dikelola oleh Divisi Finance atau Operasional.</p>
+        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 font-sans">
@@ -104,6 +134,25 @@ export default function AdminClaimsPage() {
         </div>
       </div>
 
+      {/* METRIK STATISTIK */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Clock className="w-16 h-16 text-amber-500"/></div>
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Menunggu Review</span>
+          <p className="text-3xl font-black text-amber-600 mt-2">{totalPending} Tiket</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Wallet className="w-16 h-16 text-emerald-500"/></div>
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Klaim Disetujui</span>
+          <p className="text-3xl font-black text-emerald-600 mt-2">{totalApproved} Tiket</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><XCircle className="w-16 h-16 text-red-500"/></div>
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Klaim Ditolak</span>
+          <p className="text-3xl font-black text-red-600 mt-2">{totalRejected} Tiket</p>
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col lg:flex-row gap-4 justify-between items-center shadow-sm">
         <div className="relative w-full lg:w-96 shrink-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -113,7 +162,7 @@ export default function AdminClaimsPage() {
         <div className="flex flex-wrap sm:flex-nowrap gap-3 w-full lg:w-auto">
           <div className="relative shrink-0 flex-1 sm:flex-none">
             <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-50 appearance-none shadow-sm">
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-50 appearance-none shadow-sm cursor-pointer">
               <option value="All">Semua Status</option>
               <option value="Pending Review">Pending Review</option>
               <option value="Approved">Approved</option>
@@ -130,34 +179,35 @@ export default function AdminClaimsPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center min-h-[400px]">
             <div className="w-10 h-10 border-4 border-slate-100 border-t-amber-500 rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-400 font-bold animate-pulse text-sm">Mensinkronkan Klaim...</p>
+            <p className="text-slate-400 font-bold animate-pulse text-sm uppercase tracking-widest">Mensinkronkan Klaim...</p>
           </div>
         ) : (
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
+              <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm border-b border-slate-200">
+                <tr className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">
                   <th className="p-5 pl-6 w-12"></th>
                   <th className="p-5">Klien & ID Manifest</th>
-                  <th className="p-5">Nilai Klaim</th>
+                  <th className="p-5 w-1/4">Nilai Klaim & Alasan</th>
                   <th className="p-5">Bukti Fisik</th>
                   <th className="p-5 pr-6 text-right">Keputusan (Finance)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {processedClaims.length === 0 ? (
-                  <tr><td colSpan={5} className="p-16 text-center text-slate-400 font-medium">Tidak ada klaim asuransi.</td></tr>
-                ) : processedClaims.map(c => (
-                  <ExpandableClaimRow 
-                    key={c.id} 
-                    claim={c} 
-                    formatTime={formatTime} 
-                    formatRupiah={formatRupiah} 
-                    setShowImageModal={setShowImageModal} 
-                    showToast={showToast} 
-                    updateLocalState={handleUpdateClaimState}
-                  />
-                ))}
+              <tbody className="divide-y divide-slate-100 bg-white">
+                <AnimatePresence>
+                  {processedClaims.length === 0 ? (
+                    <tr><td colSpan={5} className="p-16 text-center text-slate-400 font-medium">Tidak ada klaim asuransi yang sesuai filter.</td></tr>
+                  ) : processedClaims.map(c => (
+                    <ExpandableClaimRow 
+                      key={c.id} 
+                      claim={c} 
+                      formatTime={formatTime} 
+                      formatRupiah={formatRupiah} 
+                      setShowImageModal={setShowImageModal} 
+                      showToast={showToast} 
+                    />
+                  ))}
+                </AnimatePresence>
               </tbody>
             </table>
           </div>
@@ -185,17 +235,16 @@ export default function AdminClaimsPage() {
   );
 }
 
-// === KOMPONEN BARIS EXPANDABLE (LAZY LOADING) ===
+// === KOMPONEN BARIS EXPANDABLE ===
 interface ExpandableClaimRowProps {
   claim: InsuranceClaim;
   formatTime: (ts?: unknown) => string;
   formatRupiah: (val: number) => string;
   setShowImageModal: (url: string) => void;
   showToast: (type: "success" | "error", msg: string) => void;
-  updateLocalState: (id: string, newStatus: "Approved" | "Rejected") => void;
 }
 
-function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal, showToast, updateLocalState }: ExpandableClaimRowProps) {
+function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal, showToast }: ExpandableClaimRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [orderData, setOrderData] = useState<OrderDetail | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
@@ -229,7 +278,7 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
     try {
       await updateDoc(doc(db, "insurance_claims", claim.id), { status: newStatus });
       showToast("success", `Klaim berhasil diproses (${newStatus})`);
-      updateLocalState(claim.id, newStatus);
+      // onSnapshot di parent akan memperbarui UI otomatis
     } catch (error) {
       console.error(error);
       showToast("error", "Gagal memproses klaim.");
@@ -240,20 +289,30 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
 
   return (
     <>
-      <tr className={cn("hover:bg-slate-50 transition-colors", isExpanded && "bg-slate-50")}>
-        <td className="p-5 pl-6 align-top">
-          <button onClick={toggleExpand} className="p-1.5 rounded-full hover:bg-slate-200 transition-colors text-slate-400">
+      <motion.tr 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className={cn("hover:bg-slate-50 transition-colors group relative", isExpanded && "bg-slate-50")}
+      >
+        {/* Status Indikator Samping */}
+        <td className="p-0 absolute top-0 left-0 bottom-0 w-1.5 z-10">
+          <div className={`h-full w-full ${claim.status === 'Approved' ? 'bg-emerald-400' : claim.status === 'Rejected' ? 'bg-red-400' : 'bg-amber-400'}`} />
+        </td>
+
+        <td className="p-5 pl-8 align-top">
+          <button onClick={toggleExpand} className="p-1.5 rounded-full hover:bg-white border border-transparent hover:border-slate-200 transition-all text-slate-400 hover:text-slate-700 hover:shadow-sm">
             <ChevronDown className={cn("w-5 h-5 transition-transform", isExpanded && "rotate-180")} />
           </button>
         </td>
         <td className="p-5 align-top">
-          <p className="font-mono font-black text-amber-600 text-sm mb-1 uppercase">AWB: #{claim.orderId.substring(0,8)}</p>
+          <p className="font-mono font-black text-amber-600 text-sm mb-1 uppercase bg-amber-50 px-2 py-0.5 rounded w-fit border border-amber-200">AWB: #{claim.orderId.substring(0,8)}</p>
           <p className="text-[11px] text-slate-800 font-bold mb-1">{claim.clientName}</p>
-          <p className="text-[9px] text-slate-400 font-medium flex items-center gap-1"><Clock className="w-3 h-3"/> Diajukan: {formatTime(claim.createdAt)}</p>
+          <p className="text-[9px] text-slate-400 font-medium flex items-center gap-1"><Clock className="w-3 h-3"/> {formatTime(claim.createdAt)}</p>
         </td>
         <td className="p-5 align-top">
-          <p className="text-base font-black text-slate-900 mb-1">{formatRupiah(claim.claimedAmount)}</p>
-          <p className="text-[10px] text-slate-500 max-w-[250px] leading-relaxed"><span className="text-red-500 font-bold uppercase tracking-widest text-[9px] block mb-0.5">Alasan Kerusakan:</span> {claim.reason}</p>
+          <p className="text-base font-black text-slate-900 mb-1.5">{formatRupiah(claim.claimedAmount)}</p>
+          <p className="text-[11px] text-slate-500 max-w-[250px] leading-relaxed bg-white p-2 rounded-lg border border-slate-100 shadow-sm"><span className="text-red-500 font-bold uppercase tracking-widest text-[9px] block mb-0.5">Alasan:</span> {claim.reason}</p>
         </td>
         <td className="p-5 align-top">
           {claim.proofUrl ? (
@@ -261,7 +320,7 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
                <Eye className="w-4 h-4" /> Lihat Foto
              </button>
           ) : (
-            <span className="text-slate-400 text-xs italic">Tanpa Foto</span>
+            <span className="text-slate-400 text-xs italic bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">Tanpa Foto</span>
           )}
         </td>
         <td className="p-5 pr-6 align-top flex flex-col items-end gap-2">
@@ -271,18 +330,18 @@ function ExpandableClaimRow({ claim, formatTime, formatRupiah, setShowImageModal
               <button disabled={isProcessing} onClick={() => handleProcessClaim("Approved")} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-4 py-2 rounded-xl text-[10px] font-bold transition-all disabled:opacity-50 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Setujui</button>
             </div>
           ) : (
-            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border ${claim.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+            <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${claim.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
               {claim.status}
             </span>
           )}
         </td>
-      </tr>
+      </motion.tr>
 
       {/* RENDER EXPANDED DETAIL ORDER */}
       <AnimatePresence>
         {isExpanded && (
           <tr>
-            <td colSpan={5} className="p-0 border-b border-slate-200 bg-slate-50">
+            <td colSpan={6} className="p-0 border-b border-slate-200 bg-slate-50">
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                 <div className="p-6 pl-16 border-t border-slate-200/60 shadow-inner">
                   {isLoadingOrder ? (
