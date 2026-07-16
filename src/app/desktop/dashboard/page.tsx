@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, Package, AlertCircle } from "lucide-react";
+import { Search, SlidersHorizontal, Package, AlertCircle, CreditCard, ArrowRight } from "lucide-react";
 import Link from "next/link"; 
 import { useRouter } from "next/navigation";
 
@@ -25,6 +25,9 @@ export default function DesktopDashboardPage() {
   
   const [orders, setOrders] = useState<DashboardOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // State Tagihan B2B Proaktif
+  const [b2bOutstanding, setB2bOutstanding] = useState(0);
 
   // State Tabs & Search
   const [activeTab, setActiveTab] = useState<string>("Semua");
@@ -50,7 +53,7 @@ export default function DesktopDashboardPage() {
   };
 
   useEffect(() => {
-    if (isHydrated && !user) router.push("/login");
+    if (isHydrated && !user) router.push("/desktop/login");
   }, [user, isHydrated, router]);
 
   // REAL-TIME SYNCHRONIZATION MAPPING SUPER LENGKAP
@@ -77,6 +80,8 @@ export default function DesktopDashboardPage() {
     };
 
     unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+      let currentB2BDebt = 0; // Kalkulator piutang berjalan B2B
+
       localOrders = snapshot.docs.map((doc) => {
         const data = doc.data();
         const rawDate = (typeof data.createdAt === 'object' && data.createdAt?.toDate) ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
@@ -84,6 +89,13 @@ export default function DesktopDashboardPage() {
         let primaryDest = "Multi Tujuan";
         if (data.destinations && data.destinations.length === 1) {
             primaryDest = data.destinations[0].address || "Tujuan";
+        }
+
+        // Kalkulasi Tagihan B2B Aktif
+        if (user?.role === "b2b") {
+          if (data.isB2BApplied && (data.paymentStatus === "Piutang B2B" || data.paymentStatus === "Belum Bayar" || data.paymentStatus === "Ditolak")) {
+            currentB2BDebt += (data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost || 0);
+          }
         }
 
         return {
@@ -122,6 +134,8 @@ export default function DesktopDashboardPage() {
           items: data.destinations?.[0]?.items || data.items || []
         };
       });
+
+      if (user?.role === "b2b") setB2bOutstanding(currentB2BDebt);
       combineAndSetData();
     });
 
@@ -173,7 +187,7 @@ export default function DesktopDashboardPage() {
     // 1. Filter Tab Status
     if (activeTab !== "Semua") {
       if (activeTab === "Sedang Diproses") {
-        if (!["Sedang Diproses", "Menunggu Pembayaran", "Menunggu Verifikasi Finance", "Menunggu Follow Up"].includes(order.status)) return false;
+        if (!["Sedang Diproses", "Menunggu Pembayaran", "Menunggu Verifikasi Finance", "Menunggu Follow Up", "Menunggu Kurir", "Menuju Lokasi Jemput"].includes(order.status)) return false;
       } else {
         if (order.status !== activeTab) return false;
       }
@@ -231,7 +245,6 @@ export default function DesktopDashboardPage() {
     setSearchQuery("");
   };
 
-  // Menghapus parameter `price` yang tidak dipakai linter
   const handleWAConfirm = (orderId: string) => {
     const adminWhatsApp = "6281234567890"; 
     const message = `Halo Tim CS Flash Global,\n\nSaya ingin menanyakan status untuk pesanan saya:\n\n🧾 *ID Pesanan:* ${orderId}\n\nMohon dibantu pengecekannya. Terima kasih.`;
@@ -253,6 +266,39 @@ export default function DesktopDashboardPage() {
 
       <div className="max-w-[1000px] mx-auto relative z-10 space-y-6">
         
+        {/* ========================================================= */}
+        {/* BANNER TAGIHAN PROAKTIF (HANYA MUNCUL JIKA B2B & ADA HUTANG) */}
+        {/* ========================================================= */}
+        <AnimatePresence>
+          {user?.role === 'b2b' && b2bOutstanding > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20, height: 0 }} 
+              animate={{ opacity: 1, y: 0, height: "auto" }} 
+              exit={{ opacity: 0, y: -20, height: 0 }}
+              className="bg-red-50 border border-red-200 p-5 md:p-6 rounded-[2rem] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 overflow-hidden"
+            >
+              <div className="flex items-start md:items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200 shadow-sm">
+                  <CreditCard className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-red-800">Peringatan Tagihan Piutang (Net 30)</h3>
+                  <p className="text-xs md:text-sm text-red-700/90 font-medium mt-1">
+                    Anda memiliki total piutang berjalan sebesar <b className="text-red-800 text-sm md:text-base bg-red-100 px-2 py-0.5 rounded ml-1">{formatIDR(b2bOutstanding)}</b>. 
+                    Segera lakukan pelunasan agar plafon kredit Anda kembali penuh.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => router.push("/desktop/finance")}
+                className="w-full md:w-auto px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0"
+              >
+                Lunasi Tagihan <ArrowRight className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Atasan Dasbor */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
           <div>

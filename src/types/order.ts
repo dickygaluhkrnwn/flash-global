@@ -227,6 +227,7 @@ export interface DynamicVehicle {
   id: string;
   name: string;
   isMotor: boolean;
+  category?: "Motor" | "Mobil" | "Truk"; // BARU: Klasifikasi jenis armada
   maxWeight: number;
   baseFare: number;
   minKm: number;

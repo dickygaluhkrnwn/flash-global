@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { 
   Package, Search, User, Menu, Settings, 
   LogOut, LayoutDashboard, ChevronDown, 
-  X, TicketPercent, LifeBuoy 
+  X, TicketPercent, LifeBuoy, CreditCard 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -76,7 +76,7 @@ export default function Navbar() {
     try {
       await signOut(auth); 
       logout(); 
-      router.push("/login");
+      router.push("/login"); // Kembali menggunakan canonical route
     } catch (error) {
       console.error("Gagal Logout:", error);
     }
@@ -114,7 +114,8 @@ export default function Navbar() {
           {/* Menu Navigasi Tengah (Desktop) */}
           <div className="hidden md:flex items-center space-x-1">
             {navLinks.map((link) => {
-              const isActive = pathname === link.path || (link.path !== "/" && pathname.includes(link.path));
+              // Exact match untuk beranda, include match untuk sub-routes
+              const isActive = link.path === "/" ? pathname === "/" : pathname.includes(link.path);
               return (
                 <Link 
                   key={link.name} 
@@ -172,7 +173,7 @@ export default function Navbar() {
                         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                           <p className="text-sm font-black text-slate-900 truncate">{user?.displayName}</p>
                           <p className="text-xs font-medium text-slate-500 truncate mt-0.5">{user?.email}</p>
-                          <span className="inline-block mt-2 px-2 py-0.5 bg-[#C5A059]/10 text-[#A68345] text-[10px] font-bold uppercase tracking-wider rounded-md">
+                          <span className={cn("inline-block mt-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md", user?.role === 'b2b' ? "bg-indigo-50 text-indigo-700 border border-indigo-200" : "bg-[#C5A059]/10 text-[#A68345]")}>
                             {user?.role === 'b2b' ? "Corporate Account" : "Personal Account"}
                           </span>
                         </div>
@@ -181,6 +182,15 @@ export default function Navbar() {
                           <Link href="/dashboard" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-sm font-bold text-slate-600 hover:text-[#7A171D] hover:bg-[#7A171D]/5 rounded-xl transition-colors">
                             <LayoutDashboard className="w-4 h-4" /> Dasbor Portal
                           </Link>
+
+                          {/* ==================================================== */}
+                          {/* MENU KHUSUS B2B: PORTAL TAGIHAN KORPORAT             */}
+                          {/* ==================================================== */}
+                          {user?.role === 'b2b' && (
+                            <Link href="/finance" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors group">
+                              <CreditCard className="w-4 h-4 text-indigo-500 group-hover:text-indigo-700 transition-colors" /> Tagihan Korporat
+                            </Link>
+                          )}
                           
                           <Link href="/promo" onClick={() => setIsProfileOpen(false)} className="flex items-center justify-between px-3 py-2.5 text-sm font-bold text-slate-600 hover:text-[#7A171D] hover:bg-[#7A171D]/5 rounded-xl transition-colors group">
                             <div className="flex items-center gap-3">
@@ -275,12 +285,20 @@ export default function Navbar() {
                   <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex items-center justify-center gap-2 py-4 bg-slate-900 text-white rounded-xl font-bold text-center">
                     <LayoutDashboard className="w-5 h-5"/> Dasbor Portal
                   </Link>
+
+                  {/* ==================================================== */}
+                  {/* MENU KHUSUS B2B MOBILE: PORTAL TAGIHAN KORPORAT      */}
+                  {/* ==================================================== */}
+                  {user?.role === 'b2b' && (
+                    <Link href="/finance" onClick={() => setIsMobileMenuOpen(false)} className="col-span-2 w-full flex flex-row items-center justify-center gap-2 py-4 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-sm text-center mt-3">
+                      <CreditCard className="w-5 h-5" /> Tagihan Korporat B2B
+                    </Link>
+                  )}
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mt-3">
                     <Link href="/promo" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex flex-col items-center justify-center gap-2 py-4 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-bold text-sm text-center">
                       <TicketPercent className="w-5 h-5" /> Voucher Saya
                     </Link>
-                    {/* MENU BARU MOBILE: PUSAT BANTUAN */}
                     <Link href="/support" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex flex-col items-center justify-center gap-2 py-4 bg-blue-50 text-blue-600 border border-blue-200 rounded-xl font-bold text-sm text-center">
                       <LifeBuoy className="w-5 h-5" /> Pusat Bantuan
                     </Link>

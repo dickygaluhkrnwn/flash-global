@@ -3,10 +3,10 @@
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, Truck, Globe2, Info } from "lucide-react";
+import { AlertCircle, Truck, Globe2, Info, ShieldAlert, Wallet } from "lucide-react";
 
 import { db } from "@/lib/firebase"; 
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, serverTimestamp, query, where, getDocs, writeBatch, increment } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
@@ -37,6 +37,12 @@ function BookingForm() {
 
   const [isB2BClient, setIsB2BClient] = useState(false);
   const [b2bDiscountPercent, setB2bDiscountPercent] = useState(0);
+  
+  // --- STATE CREDIT CONTROL & DEPOSIT B2B ---
+  const [b2bLimit, setB2bLimit] = useState(0);
+  const [b2bOutstanding, setB2bOutstanding] = useState(0);
+  const [b2bDeposit, setB2bDeposit] = useState(0); // <-- BARU: Saldo Deposit
+
   const [tarifPerPorter, setTarifPerPorter] = useState<number>(50000);
   const [motorSettings, setMotorSettings] = useState({ weightSmall: 5, weightMedium: 20, warrantyPercent: 1.5, dimS: {p:20, l:20, t:20}, dimM: {p:40, l:40, t:40}, dimL: {p:50, l:50, t:50} });
   const [vehicles, setVehicles] = useState<DynamicVehicle[]>([]);
@@ -44,7 +50,6 @@ function BookingForm() {
 
   const [selectedService, setSelectedService] = useState<"Instan" | "Sameday">("Instan");
   
-  // PERBAIKAN: Menggunakan displayName dari Global User
   const [originData, setOriginData] = useState<OriginData>({ address: searchParams.get("origin") || "", detail: "", senderName: user?.displayName || "", senderPhone: "" });
   const [originCoords, setOriginCoords] = useState<Coordinates | null>(null);
 
@@ -68,9 +73,7 @@ function BookingForm() {
     if (isHydrated && !user) router.push("/login");
   }, [user, isHydrated, router]);
 
-  // =======================================================================
-  // AUTO GEOCODING API: Menerjemahkan Teks Alamat URL ke Titik Koordinat Peta
-  // =======================================================================
+  // AUTO GEOCODING API
   useEffect(() => {
     const autoGeocode = async () => {
       const originParam = searchParams.get("origin");
@@ -78,21 +81,16 @@ function BookingForm() {
 
       if (!MAPBOX_TOKEN) return;
 
-      // Terjemahkan Alamat Jemput (Origin)
       if (originParam && !originCoords) {
         try {
           const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(originParam)}.json?access_token=${MAPBOX_TOKEN}&country=id&limit=1`);
           const data = await res.json();
           if (data.features && data.features.length > 0) {
-            setOriginCoords({ 
-              lng: data.features[0].center[0], 
-              lat: data.features[0].center[1] 
-            });
+            setOriginCoords({ lng: data.features[0].center[0], lat: data.features[0].center[1] });
           }
         } catch (e) { console.error("Auto Geocoding origin error", e); }
       }
 
-      // Terjemahkan Alamat Tujuan (Destination)
       if (destParam && drops.length > 0 && !drops[0].lng) {
         try {
           const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(destParam)}.json?access_token=${MAPBOX_TOKEN}&country=id&limit=1`);
@@ -100,18 +98,13 @@ function BookingForm() {
           if (data.features && data.features.length > 0) {
             setDrops(prev => {
               const newDrops = [...prev];
-              newDrops[0] = {
-                ...newDrops[0],
-                lng: data.features[0].center[0],
-                lat: data.features[0].center[1]
-              };
+              newDrops[0] = { ...newDrops[0], lng: data.features[0].center[0], lat: data.features[0].center[1] };
               return newDrops;
             });
           }
         } catch (e) { console.error("Auto Geocoding dest error", e); }
       }
     };
-
     autoGeocode();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -120,7 +113,35 @@ function BookingForm() {
     const fetchCoreData = async () => {
       setIsFetchingData(true);
       try {
-        if (user?.role === "b2b") setIsB2BClient(true);
+        if (user?.role === "b2b") {
+          setIsB2BClient(true);
+          
+          // 1. Tarik Limit Kredit & Saldo Deposit dari Profil User
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setB2bLimit(userData.b2bLimit || 0);
+            setB2bDeposit(userData.depositBalance || 0); // SET SALDO DEPOSIT
+          }
+
+          // 2. Kalkulasi Piutang Berjalan (Outstanding Debt)
+          const qDebt = query(
+            collection(db, "orders"),
+            where("userId", "==", user.uid),
+            where("isB2BApplied", "==", true)
+          );
+          
+          const debtSnap = await getDocs(qDebt);
+          let totalHutang = 0;
+          debtSnap.forEach(d => {
+            const oData = d.data();
+            if (oData.paymentStatus !== "Lunas") {
+              totalHutang += (oData.finalGrandTotal || oData.breakdown?.grandTotal || oData.totalCost || 0);
+            }
+          });
+          setB2bOutstanding(totalHutang);
+        }
+
         const [vSnap, pSnap] = await Promise.all([ getDoc(doc(db, "settings", "vehicles")), getDoc(doc(db, "settings", "pricing")) ]);
 
         if (vSnap.exists() && vSnap.data().motor) setMotorSettings(vSnap.data().motor);
@@ -145,7 +166,6 @@ function BookingForm() {
     if (user) fetchCoreData();
   }, [user]);
 
-  // SMART KALKULASI BERAT OTOMATIS MEMINDAH ARMADA
   let totalWeight = 0; 
   let totalItemValue = 0; 
   let motorWarrantyTotal = 0;
@@ -177,7 +197,6 @@ function BookingForm() {
 
   const isOverweight = selectedVehicle ? totalWeight > selectedVehicle.maxWeight : false;
 
-  // MAPBOX RUTING & AUTO ZOOM
   useEffect(() => {
     const fetchRealRoute = async () => {
       const validDrops = drops.filter(d => d.lng !== undefined && d.lat !== undefined);
@@ -231,7 +250,6 @@ function BookingForm() {
   }, [activeInfo]);
 
   const handleInfoClick = (title: string, text: string) => setActiveInfo({ title, text });
-  
   const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setOriginData({ ...originData, [e.target.name]: e.target.value });
   
   const handleMarkerDragEnd = useCallback((lng: number, lat: number, type: "origin" | string) => {
@@ -261,22 +279,62 @@ function BookingForm() {
   const b2bDiscountAmount = isB2BClient ? subTotal * (b2bDiscountPercent / 100) : 0;
   const grandTotal = subTotal - b2bDiscountAmount;
 
+  // Cek apakah saldo deposit cukup, kalau cukup -> pakai deposit, kalau kurang -> pakai limit kredit
+  const isDepositSufficient = isB2BClient && b2bDeposit >= grandTotal;
+  
+  // Hanya peringatkan "Limit Exceeded" jika saldo deposit juga tidak cukup (mengandalkan kredit)
+  const isLimitExceeded = isB2BClient && !isDepositSufficient && b2bLimit > 0 && (b2bOutstanding + grandTotal > b2bLimit);
+
   const formatRupiah = (val: number) => isNaN(val) ? "Rp 0" : new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.uid) return;
     if (isOverweight) { setErrorMsg(`Total estimasi berat (${totalWeight.toFixed(1)} Kg) melebihi kapasitas ${selectedVehicle?.name}.`); return; }
     if (routeDistanceKm === 0) { setErrorMsg(`Rute belum ditemukan. Pastikan alamat jemput dan tujuan sudah dipin pada peta satelit.`); return; }
+    if (isLimitExceeded) { 
+      setErrorMsg(`Plafon kredit B2B dan Saldo Deposit Anda tidak mencukupi. Hubungi Finance atau Top-Up Deposit Anda.`); 
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return; 
+    }
     
     setIsLoading(true); setErrorMsg("");
+    
     try {
+      // 1. Siapkan Resi (AWB)
+      const resiInduk = `FLG-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
       const dropsWithResi = drops.map((drop, idx) => ({
         ...drop,
-        resi: `FLG-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}-${idx+1}`
+        resi: `${resiInduk}-${idx+1}`
       }));
 
-      await addDoc(collection(db, "orders"), {
-        userId: user?.uid,
+      // 2. Tentukan Status & Metode Pembayaran B2B
+      let finalStatus = "Menunggu Pembayaran";
+      let finalPaymentStatus = "Belum Bayar";
+      let finalPaymentMethod = "Belum Dipilih";
+
+      if (isB2BClient) {
+        if (isDepositSufficient) {
+          // SKENARIO 1: SALDO DEPOSIT MENCUKUPI (OTOMATIS POTONG DEPOSIT)
+          finalStatus = "Menunggu Kurir"; // Langsung bypass ke kurir
+          finalPaymentStatus = "Lunas";
+          finalPaymentMethod = "Potong Saldo Deposit";
+        } else {
+          // SKENARIO 2: SALDO KURANG, MASUK KE PIUTANG KREDIT
+          finalStatus = "Menunggu Kurir"; // Langsung bypass ke kurir
+          finalPaymentStatus = "Piutang B2B";
+          finalPaymentMethod = "Invoice / Net 30";
+        }
+      }
+
+      // 3. Gunakan BATCH WRITE (Atomic Transaction) agar uang dan order aman
+      const batch = writeBatch(db);
+
+      // A. Simpan Order ke koleksi 'orders'
+      const newOrderRef = doc(collection(db, "orders"));
+      batch.set(newOrderRef, {
+        userId: user.uid,
+        resi: resiInduk,
         origin: { ...originData, ...originCoords }, 
         destinations: dropsWithResi, 
         serviceType: selectedService, 
@@ -286,11 +344,44 @@ function BookingForm() {
         totalDistance: routeDistanceKm, 
         isB2BApplied: isB2BClient,
         breakdown: { deliveryFee: baseDeliveryCost, insuranceFee: finalInsuranceCost, porterFee: porterCost, tollFee: Number(tollFee), b2bDiscount: b2bDiscountAmount, grandTotal }, 
-        status: "Menunggu Pembayaran", 
+        status: finalStatus, 
+        paymentStatus: finalPaymentStatus,
+        paymentMethod: finalPaymentMethod,
         createdAt: serverTimestamp(),
         porterCount 
       });
-      router.push("/pembayaran");
+
+      // B. Jika potong deposit, kurangi saldo user & catat di Ledger
+      if (isB2BClient && isDepositSufficient) {
+        // Kurangi saldo di tabel User
+        const userRef = doc(db, "users", user.uid);
+        batch.update(userRef, { depositBalance: increment(-grandTotal) });
+
+        // Catat ke Buku Besar (Wallet Logs)
+        const logRef = doc(collection(db, "wallet_logs"));
+        batch.set(logRef, {
+          entityId: user.uid,
+          entityName: user.companyName || user.displayName || "Klien B2B",
+          entityType: "B2B",
+          type: "payment", // Jenis mutasi
+          amount: grandTotal,
+          timestamp: serverTimestamp(),
+          adminNote: `Pembayaran otomatis AWB #${resiInduk}`
+        });
+      }
+
+      // 4. Eksekusi semua transaksi sekaligus (Commit)
+      await batch.commit();
+      
+      // Routing Dinamis
+      if (isB2BClient) {
+        // Jika B2B langsung ke dashboard untuk nge-track resi
+        router.push("/desktop/dashboard");
+      } else {
+        // Jika personal, tetap lempar ke halaman pembayaran
+        router.push("/desktop/pembayaran");
+      }
+
     } catch (error) { 
       console.error("Kesalahan sistem submit order", error); 
       setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda."); 
@@ -317,10 +408,10 @@ function BookingForm() {
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <Button onClick={() => router.push("/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
+            <Button onClick={() => router.push("/desktop/delivery/booking")} variant="primary" className="shadow-md h-11 text-xs px-5">
               <Truck className="w-4 h-4 mr-1.5"/> Pesan Kurir
             </Button>
-            <Button onClick={() => router.push("/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
+            <Button onClick={() => router.push("/desktop/forwarding/quote")} variant="outline" className="border-slate-200 h-11 text-xs px-5">
               <Globe2 className="w-4 h-4 mr-1.5 text-slate-500"/> Kargo Global
             </Button>
           </div>
@@ -368,8 +459,64 @@ function BookingForm() {
 
           {/* KOLOM KANAN: LIVE MAPBOX & RINGKASAN BIAYA */}
           <div className="w-full lg:w-[40%] xl:w-[35%] flex flex-col gap-6 lg:sticky lg:top-28">
+            
+            {/* ======================================================== */}
+            {/* PANEL KONTROL KREDIT B2B DEPOSIT                         */}
+            {/* ======================================================== */}
+            {isB2BClient && (
+              <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-xl relative overflow-hidden text-white">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
+                <h3 className="text-sm font-black flex items-center gap-2 mb-4 text-[#C5A059]">
+                  <ShieldAlert className="w-4 h-4"/> Corporate Credit Line
+                </h3>
+                
+                <div className="space-y-3 text-sm font-medium">
+                  {/* Tampilkan Info Deposit */}
+                  <div className="flex justify-between items-center text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                    <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5"/> Saldo Prabayar (Deposit)</span>
+                    <span className="font-bold">{formatRupiah(b2bDeposit)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-400 mt-2">
+                    <span>Plafon Piutang B2B</span>
+                    <span className="text-white font-bold">{formatRupiah(b2bLimit)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-400">
+                    <span>Piutang Berjalan</span>
+                    <span className="text-red-400 font-bold">{formatRupiah(b2bOutstanding)}</span>
+                  </div>
+
+                  {/* LOGIKA INDIKATOR STATUS PEMBAYARAN CERDAS */}
+                  <div className="border-t border-slate-700/50 pt-3 mt-3">
+                    {isDepositSufficient ? (
+                      <div className="flex items-center gap-2 text-emerald-400 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Tagihan ini akan memotong Saldo Deposit Anda.
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center text-amber-400">
+                        <span>Sisa Plafon Kredit</span>
+                        <span className={`font-black ${b2bLimit - b2bOutstanding - grandTotal < 0 ? 'text-red-500' : 'text-amber-400'}`}>
+                          {formatRupiah(b2bLimit - b2bOutstanding - grandTotal)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Peringatan Limit Habis (Hanya jika deposit tak cukup & limit habis) */}
+                {isLimitExceeded && (
+                  <div className="mt-5 bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-200 leading-relaxed font-semibold">
+                      Tagihan order ini melebihi sisa plafon kredit Anda. Harap isi Saldo Deposit atau lunasi tagihan bulan sebelumnya.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <BookingReceipt 
-              selectedVehicle={selectedVehicle} drops={drops} totalWeight={totalWeight} isOverweight={isOverweight}
+              selectedVehicle={selectedVehicle} drops={drops} totalWeight={totalWeight} isOverweight={isOverweight || isLimitExceeded}
               baseDeliveryCost={baseDeliveryCost} finalInsuranceCost={finalInsuranceCost} porterCount={porterCount}
               porterCost={porterCost} tollFee={tollFee} isB2BClient={isB2BClient} b2bDiscountPercent={b2bDiscountPercent}
               b2bDiscountAmount={b2bDiscountAmount} grandTotal={grandTotal} isLoading={isLoading} isFetchingData={isFetchingData}

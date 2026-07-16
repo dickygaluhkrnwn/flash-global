@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Package, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, Weight, UserPlus, X, Clock, ShieldAlert, 
-  Calendar
+  Calendar, MapPin, Truck, Building2, User
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -44,16 +44,23 @@ export default function DomesticOrdersPage() {
   });
 
   useEffect(() => {
+    // 1. Tarik Data Sopir (Terintegrasi dengan FMS Baru)
     const fetchDrivers = async () => {
       try {
         const snap = await getDocs(collection(db, "driver_wallets"));
-        setDrivers(snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData)));
+        const rawDrivers = snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData));
+        
+        // Filter: Jangan tampilkan "Vendor" (karena itu akun Manager PT, bukan fisik armada)
+        // Hanya tampilkan Individu, FleetDriver, dan FleetVehicle yang tidak disuspend
+        const assignableDrivers = rawDrivers.filter(d => d.partnerType !== "Vendor" && !d.isSuspended);
+        setDrivers(assignableDrivers);
       } catch (error) {
         console.error("Gagal menarik data sopir:", error);
       }
     };
     fetchDrivers();
 
+    // 2. Tarik Data Order (Live)
     const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderDetail)));
@@ -70,7 +77,7 @@ export default function DomesticOrdersPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   
-  // Safe Date Formatting untuk Strict Mode
+  // Safe Date Formatting
   const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
     let d: Date;
@@ -87,7 +94,6 @@ export default function DomesticOrdersPage() {
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  // Safe Milliseconds Parser untuk Sorting
   const getMillis = (ts: FirebaseTimestamp) => {
     if (!ts) return 0;
     if (typeof ts === 'object' && ts !== null) {
@@ -100,12 +106,17 @@ export default function DomesticOrdersPage() {
 
   const openStatusModal = (order: OrderDetail) => {
     setSelectedOrderId(order.id);
-    setStatusForm({ status: "Menuju Lokasi Jemput", location: "Pusat Hub Penjemputan", description: "", timeMode: "auto", customDate: "" });
+    // Set default status di form berdasarkan status order saat ini
+    const nextStatus = order.status === "Menunggu Kurir" ? "Menuju Lokasi Jemput" : 
+                       order.status === "Menuju Lokasi Jemput" ? "Sedang Diproses" : 
+                       order.status === "Sedang Diproses" ? "Dikirim" : "Selesai";
+
+    setStatusForm({ status: nextStatus, location: "Pusat Hub Penjemputan", description: "", timeMode: "auto", customDate: "" });
     setShowStatusModal(true);
   };
 
   // =======================================================================
-  // LOGIKA CERDAS: AUTO ID UNION AGAR LOG TIDAK TERTIMPA (REPLACE)
+  // LOGIKA CERDAS: UPDATE STATUS BAKU (SINKRON DENGAN RADAR)
   // =======================================================================
   const handleConfirmStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,8 +132,10 @@ export default function DomesticOrdersPage() {
 
       let finalDesc = statusForm.description;
       if (!finalDesc) {
-        if (statusForm.status.includes("Transit")) finalDesc = "Paket berhasil diamankan oleh kurir dan dalam perjalanan.";
-        else if (statusForm.status.includes("Selesai")) finalDesc = "Paket logistik sukses diserahterimakan kepada penerima.";
+        if (statusForm.status === "Menuju Lokasi Jemput") finalDesc = "Kurir sedang dalam perjalanan menuju lokasi pengirim.";
+        else if (statusForm.status === "Sedang Diproses") finalDesc = "Paket telah tiba di gudang sortir / hub dan sedang diproses.";
+        else if (statusForm.status === "Dikirim") finalDesc = "Paket sedang dalam perjalanan menuju alamat penerima (In Transit).";
+        else if (statusForm.status === "Selesai") finalDesc = "Paket logistik sukses diserahterimakan kepada penerima.";
         else finalDesc = "Status manifes diperbarui oleh Operasional.";
       }
 
@@ -147,23 +160,31 @@ export default function DomesticOrdersPage() {
     }
   };
 
-  const handleAssignDriver = async (driverId: string, driverName: string) => {
+  // =======================================================================
+  // LOGIKA CERDAS: AUTO-ASSIGN DRIVER (SINKRON DENGAN RADAR & FMS)
+  // =======================================================================
+  const handleAssignDriver = async (driver: DriverData) => {
     if (!selectedOrderId) return;
     try {
       const logDate = new Date().toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
       const uniqueId = Date.now().toString();
+      
+      const safeDriverName = String(driver.companyName || driver.name || "Mitra Kurir");
 
       await updateDoc(doc(db, "orders", selectedOrderId), {
-        driverId: driverId, driverName: driverName, status: "Menuju Lokasi Jemput",
+        driverId: driver.id, 
+        driverName: safeDriverName, 
+        vehicleName: driver.vehicleType || "Armada Mitra",
+        status: "Menuju Lokasi Jemput",
         trackingHistory: arrayUnion({ 
           id: uniqueId,
           status: "Menuju Lokasi Jemput", 
           date: logDate, 
-          description: `Sopir ${driverName} ditugaskan untuk menjemput barang.`, 
+          description: `Sopir ${safeDriverName} ditugaskan untuk menjemput barang.`, 
           location: "Pusat Distribusi Flash" 
         })
       });
-      showToast("success", `Sopir ${driverName} berhasil ditugaskan!`);
+      showToast("success", `Sopir ${safeDriverName} berhasil ditugaskan!`);
       setShowDriverModal(false);
     } catch (error) { 
       console.error(error);
@@ -171,7 +192,6 @@ export default function DomesticOrdersPage() {
     }
   };
 
-  // USEMEMO HARUS DI ATAS GUARD RETURN
   const processedOrders = useMemo(() => {
     let result = [...orders];
     if (searchQuery) {
@@ -188,8 +208,8 @@ export default function DomesticOrdersPage() {
     result.sort((a, b) => {
       const wA = a.totalWeight || a.weight || 0; 
       const wB = b.totalWeight || b.weight || 0;
-      const cA = a.breakdown?.grandTotal || 0; 
-      const cB = b.breakdown?.grandTotal || 0;
+      const cA = a.breakdown?.grandTotal || a.finalGrandTotal || a.totalCost || 0; 
+      const cB = b.breakdown?.grandTotal || b.finalGrandTotal || b.totalCost || 0;
       
       const tA = getMillis(a.createdAt); 
       const tB = getMillis(b.createdAt);
@@ -203,13 +223,9 @@ export default function DomesticOrdersPage() {
     return result;
   }, [orders, searchQuery, filterStatus, sortOrder]);
 
-  const totalOmset = orders.reduce((acc, o) => acc + (o.breakdown?.grandTotal || 0), 0);
-  const totalPending = orders.filter(o => o.status.includes("Menunggu Kurir")).length;
+  const totalOmset = orders.reduce((acc, o) => acc + (o.finalGrandTotal || o.breakdown?.grandTotal || o.totalCost || 0), 0);
+  const totalPending = orders.filter(o => o.status.includes("Menunggu Kurir") || !o.driverId).length;
 
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
-  
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
@@ -231,10 +247,10 @@ export default function DomesticOrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-50 p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[100] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
             {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toast.msg}
           </motion.div>
         )}
@@ -265,7 +281,7 @@ export default function DomesticOrdersPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
         
         <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
@@ -278,7 +294,8 @@ export default function DomesticOrdersPage() {
               <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#7A171D] shadow-sm appearance-none font-semibold text-slate-700 min-w-[140px]">
                 <option value="All">Semua Status</option>
                 <option value="Menunggu">Pending</option>
-                <option value="Transit">In Transit</option>
+                <option value="Sedang Diproses">Di Gudang / Hub</option>
+                <option value="Dikirim">Dalam Perjalanan</option>
                 <option value="Selesai">Selesai</option>
               </select>
             </div>
@@ -294,13 +311,13 @@ export default function DomesticOrdersPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[400px]">
           {processedOrders.length === 0 ? (
             <div className="p-20 text-center text-slate-500 font-medium">Tidak ada data order yang cocok dengan filter pencarian.</div>
           ) : (
             <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-white text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
+              <thead className="sticky top-0 bg-white shadow-sm z-10">
+                <tr className="text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
                   <th className="p-5 pl-6">Resi & Tanggal</th>
                   <th className="p-5">Rute & Klien</th>
                   <th className="p-5">Spek & Tagihan</th>
@@ -319,42 +336,50 @@ export default function DomesticOrdersPage() {
                   return (
                     <tr key={o.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-5 pl-6 align-top">
-                        <p className="font-mono font-black text-[#7A171D] text-sm uppercase">{o.id}</p>
+                        <p className="font-mono font-black text-[#7A171D] text-sm uppercase">#{o.id}</p>
                         <p className="text-xs text-slate-500 font-semibold mt-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> {formatDate(o.createdAt)}</p>
                       </td>
                       <td className="p-5 align-top">
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Pengirim</p>
-                            <p className="font-bold text-slate-900 truncate max-w-[200px]" title={originAddr}>
-                              {originName}
-                            </p>
+                        <div className="space-y-2.5">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                            <div className="overflow-hidden">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-0.5">Asal</p>
+                              <p className="font-bold text-slate-900 truncate max-w-[200px]" title={originAddr}>{originName}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Tujuan</p>
-                            <p className="font-bold text-slate-900 truncate max-w-[200px]" title={destAddr}>
-                              {o.destinations && o.destinations.length > 1 ? `${o.destinations.length} Titik Tujuan` : destName}
-                            </p>
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-[#7A171D] shrink-0 mt-0.5" />
+                            <div className="overflow-hidden">
+                              <p className="text-[9px] font-bold text-[#7A171D] uppercase leading-none mb-0.5">Tujuan</p>
+                              <p className="font-bold text-slate-900 truncate max-w-[200px]" title={destAddr}>
+                                {o.destinations && o.destinations.length > 1 ? `${o.destinations.length} Titik Tujuan` : destName}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="p-5 align-top">
                          <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-1 rounded text-[10px] uppercase border border-slate-200 mb-2 inline-block">{o.serviceType} - {o.vehicleName || o.vehicle}</span>
                          <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5"><Weight className="w-3.5 h-3.5"/> {o.totalWeight || o.weight} Kg</p>
-                         <p className="text-sm text-emerald-600 font-black mt-1">{formatRupiah(o.breakdown?.grandTotal || 0)}</p>
+                         <p className="text-sm text-emerald-600 font-black mt-1.5">{formatRupiah(o.finalGrandTotal || o.breakdown?.grandTotal || o.totalCost || 0)}</p>
                       </td>
                       <td className="p-5 align-top">
-                        <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block border ${
+                        <span className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest inline-block border shadow-sm ${
                           o.status.includes("Selesai") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-                          o.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200"
+                          o.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" : 
+                          o.status.includes("Dikirim") ? "bg-blue-50 text-blue-600 border-blue-200" :
+                          "bg-purple-50 text-purple-600 border-purple-200"
                         }`}>{o.status}</span>
-                        <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5 bg-white px-2 py-1 rounded border border-slate-200 w-fit mt-2">
-                          <UserPlus className="w-3 h-3 text-slate-400" /> {o.driverName || "Belum Ada Kurir"}
+                        
+                        <div className={`text-[10px] font-bold flex items-center gap-1.5 px-2 py-1 rounded border w-fit mt-2 ${o.driverId ? "bg-slate-50 border-slate-200 text-slate-600" : "bg-red-50 border-red-200 text-red-600"}`}>
+                          <UserPlus className="w-3 h-3" /> 
+                          <span className="truncate max-w-[120px]">{o.driverName || "Belum Ada Kurir"}</span>
                         </div>
                       </td>
                       <td className="p-5 pr-6 align-top text-right">
                         <div className="flex flex-col items-end gap-2">
-                          <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200" variant="outline">Update Log</Button>
+                          <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200 bg-white hover:bg-slate-50 text-slate-600" variant="outline">Update Log</Button>
                           {!o.driverId && (
                             <Button size="sm" onClick={() => { setSelectedOrderId(o.id); setShowDriverModal(true); }} className="h-8 text-[10px] w-32 shadow-sm bg-[#7A171D] hover:bg-[#5A0E13]">Tunjuk Sopir</Button>
                           )}
@@ -373,47 +398,48 @@ export default function DomesticOrdersPage() {
         {showStatusModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStatusModal(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-lg relative z-10 shadow-2xl flex flex-col max-h-[95vh] overflow-y-auto custom-scrollbar">
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-lg relative z-10 shadow-2xl flex flex-col max-h-[95vh] overflow-y-auto custom-scrollbar">
               <div className="flex justify-between items-center mb-6 border-b pb-4 border-slate-100">
                 <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><Clock className="w-5 h-5 text-[#7A171D]"/> Update Status & Log</h2>
                 <button type="button" onClick={() => setShowStatusModal(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-red-50 text-slate-400 hover:text-red-500"><X className="w-4 h-4"/></button>
               </div>
               <form onSubmit={handleConfirmStatusUpdate} className="space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Manifes (Operasional)</label>
-                  <select value={statusForm.status} onChange={(e) => setStatusForm({...statusForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 text-sm font-bold outline-none focus:border-[#7A171D]">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Baku Operasional</label>
+                  <select value={statusForm.status} onChange={(e) => setStatusForm({...statusForm, status: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 text-sm font-bold outline-none focus:border-[#7A171D] shadow-sm">
+                    <option value="Menunggu Kurir">Menunggu Kurir / Belum Dijemput</option>
                     <option value="Menuju Lokasi Jemput">Sopir Menuju Lokasi Jemput</option>
-                    <option value="Picked Up (In Transit)">In Transit (Paket Dibawa Armada)</option>
-                    <option value="Tiba di Hub Transit">Tiba di Hub Transit</option>
-                    <option value="Delivered (Selesai)">Delivered (Paket Sukses Sampai)</option>
+                    <option value="Sedang Diproses">Paket Tiba di Gudang Sortir (Diproses)</option>
+                    <option value="Dikirim">Paket Dikirim ke Penerima (In Transit)</option>
+                    <option value="Selesai">Pesanan Selesai (Delivered)</option>
                     <option value="Retur / Gagal Kirim">Retur / Pengiriman Gagal</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lokasi Checkpoint</label>
-                  <Input type="text" value={statusForm.location} onChange={(e) => setStatusForm({...statusForm, location: e.target.value})} placeholder="Cth: Gudang Sortir Lombok Tengah" className="font-bold h-12" required />
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lokasi / Checkpoint Saat Ini</label>
+                  <Input type="text" value={statusForm.location} onChange={(e) => setStatusForm({...statusForm, location: e.target.value})} placeholder="Cth: Gudang Sortir Lombok Tengah" className="font-bold h-12 shadow-sm" required />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Deskripsi Kustom (Opsional)</label>
-                  <Input type="text" value={statusForm.description} onChange={(e) => setStatusForm({...statusForm, description: e.target.value})} placeholder="Kosongkan untuk otomatis" className="font-semibold h-12" />
+                  <Input type="text" value={statusForm.description} onChange={(e) => setStatusForm({...statusForm, description: e.target.value})} placeholder="Kosongkan untuk kalimat otomatis sistem" className="font-semibold h-12 shadow-sm" />
                 </div>
                 
-                <div className="space-y-2 border-t border-dashed border-slate-200 pt-4 mt-2">
+                <div className="space-y-2 border-t border-dashed border-slate-200 pt-5 mt-3">
                   <label className="text-[10px] font-bold text-[#7A171D] uppercase tracking-widest block">Metode Pencatatan Waktu</label>
                   <div className="flex gap-4 mb-3">
-                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer"><input type="radio" name="timeMode" checked={statusForm.timeMode === "auto"} onChange={() => setStatusForm({...statusForm, timeMode: "auto"})} className="w-4 h-4 accent-[#7A171D]" /> Otomatis</label>
+                    <label className="flex items-center gap-2 text-xs font-bold cursor-pointer"><input type="radio" name="timeMode" checked={statusForm.timeMode === "auto"} onChange={() => setStatusForm({...statusForm, timeMode: "auto"})} className="w-4 h-4 accent-[#7A171D]" /> Real-time Otomatis</label>
                     <label className="flex items-center gap-2 text-xs font-bold cursor-pointer"><input type="radio" name="timeMode" checked={statusForm.timeMode === "custom"} onChange={() => setStatusForm({...statusForm, timeMode: "custom"})} className="w-4 h-4 accent-[#7A171D]" /> Manual (Backdate)</label>
                   </div>
                   {statusForm.timeMode === "custom" && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
-                      <input type="datetime-local" required value={statusForm.customDate} onChange={(e) => setStatusForm({...statusForm, customDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 text-sm font-bold outline-none focus:border-[#7A171D]" />
+                      <input type="datetime-local" required value={statusForm.customDate} onChange={(e) => setStatusForm({...statusForm, customDate: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 h-12 text-sm font-bold outline-none focus:border-[#7A171D] shadow-sm" />
                     </motion.div>
                   )}
                 </div>
                 
                 <div className="flex gap-3 pt-4 border-t border-slate-100 mt-4">
                   <Button type="button" variant="outline" onClick={() => setShowStatusModal(false)} className="flex-1 h-12 font-bold text-xs border-slate-300">Batal</Button>
-                  <Button type="submit" variant="primary" className="flex-1 h-12 font-bold text-xs">Simpan Log Update</Button>
+                  <Button type="submit" variant="primary" className="flex-1 h-12 font-bold text-xs shadow-md shadow-[#7A171D]/20">Simpan Log Update</Button>
                 </div>
               </form>
             </motion.div>
@@ -425,21 +451,31 @@ export default function DomesticOrdersPage() {
         {showDriverModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowDriverModal(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-md relative z-10 shadow-2xl">
-              <h2 className="text-xl font-black text-slate-900 mb-2">Penugasan Sopir Manual</h2>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Pilih mitra kurir aktif untuk mengeksekusi manifes pengiriman ini secara paksa (override).</p>
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-lg relative z-10 shadow-2xl">
+              <h2 className="text-xl font-black text-slate-900 mb-2">Penugasan Kurir Operasional</h2>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Pilih mitra kurir atau armada vendor yang siap (idle) untuk mengeksekusi manifes pengiriman ini secara manual.</p>
               
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
-                {drivers.filter(d => !d.isSuspended).length === 0 ? (
-                  <p className="text-xs text-center text-red-500 py-6 bg-red-50 rounded-2xl border border-red-100">Tidak ada sopir aktif yang tersedia.</p>
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar border-y border-slate-100 py-4">
+                {drivers.length === 0 ? (
+                  <p className="text-xs text-center text-red-500 py-6 bg-red-50 rounded-2xl border border-red-100 font-bold">Tidak ada mitra kurir yang aktif di sistem.</p>
                 ) : (
-                  drivers.filter(d => !d.isSuspended).map(driver => (
-                    <button key={driver.id} type="button" onClick={() => handleAssignDriver(driver.id, driver.name)} className="w-full text-left p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#7A171D] hover:bg-[#7A171D]/5 transition-all flex justify-between items-center group shadow-sm">
+                  drivers.map(driver => (
+                    <button key={driver.id} type="button" onClick={() => handleAssignDriver(driver)} className="w-full text-left p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#7A171D] hover:bg-[#7A171D]/5 transition-all flex justify-between items-center group shadow-sm">
                       <div>
-                        <p className="text-sm font-black text-slate-900 group-hover:text-[#7A171D] transition-colors">{driver.name}</p>
-                        <p className="text-[10px] text-slate-500 font-bold mt-1 bg-white px-2 py-0.5 rounded w-fit border border-slate-200">{driver.vehicleType}</p>
+                        <p className="text-sm font-black text-slate-900 group-hover:text-[#7A171D] transition-colors flex items-center gap-2">
+                          {String(driver.companyName || driver.name || "Mitra Kurir")}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1"><Truck className="w-3 h-3"/> {String(driver.vehicleType || "Armada")}</span>
+                           <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border flex items-center gap-1 ${
+                             driver.partnerType === 'FleetDriver' || driver.partnerType === 'FleetVehicle' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                           }`}>
+                             {driver.partnerType === 'FleetDriver' || driver.partnerType === 'FleetVehicle' ? <Building2 className="w-3 h-3"/> : <User className="w-3 h-3"/>}
+                             {driver.partnerType === 'Individual' ? 'Individu' : 'Vendor PT'}
+                           </span>
+                        </div>
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 group-hover:bg-[#7A171D] flex items-center justify-center transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 group-hover:bg-[#7A171D] flex items-center justify-center transition-colors shrink-0">
                         <UserPlus className="w-4 h-4 text-slate-400 group-hover:text-white" />
                       </div>
                     </button>

@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import { Building, Scale, ArrowRight, MapPinned } from "lucide-react";
-// IMPORT DARI GLOBAL TYPES
-import { DropDestination, DynamicVehicle, Coordinates, MapViewState } from "@/types/order";
+// IMPORT DARI GLOBAL TYPES (Tambahkan MapDropItem)
+import { DropDestination, DynamicVehicle, Coordinates, MapViewState, MapDropItem } from "@/types/order";
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
@@ -39,6 +39,14 @@ export default function BookingReceipt({
   isFetchingData, routeDistanceKm, mapViewState, originCoords, routeData, activeDraggable, handleMarkerDragEnd, formatRupiah
 }: Props) {
 
+  // Lakukan mapping agar sesuai persis dengan kebutuhan MapBase (Type-Safe 100%)
+  const dropsForMap: MapDropItem[] = drops.map(drop => ({
+    id: drop.id,
+    lng: drop.lng || 0,
+    lat: drop.lat || 0,
+    address: drop.address
+  }));
+
   return (
     <>
       {/* PETA RADAR */}
@@ -59,8 +67,7 @@ export default function BookingReceipt({
             interactive={true}
             className="w-full h-full"
             originCoords={originCoords}
-            // Type Casting yang aman untuk mengatasi konflik Index Signature antara DropDestination dan MapBase
-            drops={drops as unknown as Array<{ id: string; lng?: number; lat?: number; [key: string]: unknown }>}
+            drops={dropsForMap} // Gunakan hasil mapping di atas
             routeData={routeData}
             activeDraggable={activeDraggable}
             onMarkerDragEnd={handleMarkerDragEnd}

@@ -7,11 +7,12 @@ import {
   Receipt, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, XCircle, Eye, Image as ImageIcon,
   ShieldAlert, Clock, FileText, User, MapPin, Package, 
-  Truck, X, Scale, TicketPercent
+  Truck, X, Scale, TicketPercent, Wallet, CheckCircle, PlusCircle,
+  Building2
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp, arrayUnion, increment } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp, arrayUnion, increment, writeBatch } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
@@ -19,32 +20,58 @@ import { Button } from "@/components/ui/Button";
 // MENGGUNAKAN GLOBAL TYPES
 import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
 
+// Tipe Data Lokal untuk Top-Up Request
+interface DepositRequest {
+  id: string;
+  userId: string;
+  clientName: string;
+  amount: number;
+  proofUrl: string;
+  status: string; // 'Pending', 'Approved', 'Rejected'
+  createdAt: FirebaseTimestamp;
+  verifiedAt?: FirebaseTimestamp;
+}
+
 export default function FinanceVerificationPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
+  const [activeTab, setActiveTab] = useState<"orders" | "deposits">("orders");
   const [orders, setOrders] = useState<OrderDetail[]>([]);
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Menunggu Verifikasi Finance");
+  const [filterStatus, setFilterStatus] = useState("Pending"); // "Pending", "Approved", "Rejected" dll
   const [sortOrder, setSortOrder] = useState("newest");
 
-  // State Detail Order
+  // State Detail Order & Deposit
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderDetail | null>(null);
+  const [selectedDeposit, setSelectedDeposit] = useState<DepositRequest | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    // Tarik data order untuk diverifikasi
-    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    setIsLoading(true);
+
+    // 1. Tarik data order untuk diverifikasi
+    const qOrders = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as OrderDetail)));
+    });
+
+    // 2. Tarik data Deposit Requests (B2B Top Up)
+    const qDeposits = query(collection(db, "deposit_requests"), orderBy("createdAt", "desc"));
+    const unsubDeposits = onSnapshot(qDeposits, (snapshot) => {
+      setDepositRequests(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DepositRequest)));
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubOrders();
+      unsubDeposits();
+    };
   }, []);
 
   const showToast = (type: "success" | "error", msg: string) => {
@@ -57,11 +84,8 @@ export default function FinanceVerificationPage() {
   // =======================================================================
   // PERBAIKAN TS STRICT MODE: HELPER TIMESTAMP FIREBASE
   // =======================================================================
-  
-  // 1. Format String Tanggal
   const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
-    
     let d: Date;
     if (typeof timestamp === 'object' && timestamp !== null) {
       const objTs = timestamp as Record<string, unknown>;
@@ -73,11 +97,9 @@ export default function FinanceVerificationPage() {
     } else {
       d = new Date(timestamp as string | number);
     }
-    
     return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  // 2. Format Milliseconds (Untuk Sorting) - Aman dari error 'ts.seconds is possibly undefined'
   const getMillis = (ts: FirebaseTimestamp) => {
     if (!ts) return 0;
     if (typeof ts === 'object' && ts !== null) {
@@ -88,9 +110,6 @@ export default function FinanceVerificationPage() {
     return new Date(ts as string | number).getTime();
   };
 
-  // =======================================================================
-  // LOGIKA CERDAS: AUTO TRIGGER TIMELINE LOG & POTONG KUOTA PROMO
-  // =======================================================================
   const handleVerifyPayment = async (orderId: string, action: "Approve" | "Reject") => {
     setIsProcessing(true);
     try {
@@ -115,9 +134,7 @@ export default function FinanceVerificationPage() {
 
         if (targetOrder && targetOrder.appliedPromoCode) {
           const promoRef = doc(db, "promos", targetOrder.appliedPromoCode);
-          await updateDoc(promoRef, {
-            usedCount: increment(1)
-          });
+          await updateDoc(promoRef, { usedCount: increment(1) });
         }
 
         showToast("success", "Pembayaran disetujui! Otomatis diteruskan ke Operasional.");
@@ -141,14 +158,66 @@ export default function FinanceVerificationPage() {
       showToast("error", "Terjadi kesalahan saat memproses verifikasi.");
     } finally {
       setIsProcessing(false);
-      setSelectedOrderDetail(null); // Tutup modal setelah aksi
+      setSelectedOrderDetail(null);
     }
   };
 
-  // USEMEMO HARUS DI ATAS SEMUA GUARD RETURN
-  const processedData = useMemo(() => {
+  // =======================================================================
+  // LOGIKA CERDAS: BATCH WRITE UNTUK TOP-UP B2B DEPOSIT
+  // =======================================================================
+  const handleVerifyDeposit = async (reqId: string, action: "Approve" | "Reject") => {
+    setIsProcessing(true);
+    try {
+      const targetReq = depositRequests.find(d => d.id === reqId);
+      if (!targetReq) throw new Error("Data Top-Up tidak ditemukan");
+
+      if (action === "Approve") {
+        // Transaksi Atomic (Jika 1 gagal, semua batal)
+        const batch = writeBatch(db);
+        
+        // 1. Update status request
+        const reqRef = doc(db, "deposit_requests", reqId);
+        batch.update(reqRef, { status: "Approved", verifiedAt: serverTimestamp() });
+        
+        // 2. Tambah saldo deposit user B2B
+        const userRef = doc(db, "users", targetReq.userId);
+        batch.update(userRef, { depositBalance: increment(targetReq.amount) });
+        
+        // 3. Catat mutasi di Buku Besar (wallet_logs)
+        const logRef = doc(collection(db, "wallet_logs"));
+        batch.set(logRef, {
+          entityId: targetReq.userId,
+          entityName: targetReq.clientName,
+          entityType: "B2B",
+          type: "topup",
+          amount: targetReq.amount,
+          timestamp: serverTimestamp(),
+          adminNote: "Setoran Deposit disetujui via Verifikasi Finance"
+        });
+
+        await batch.commit();
+        showToast("success", "Top-Up disetujui! Saldo deposit klien berhasil ditambahkan.");
+      } else {
+        await updateDoc(doc(db, "deposit_requests", reqId), { 
+          status: "Rejected", 
+          verifiedAt: serverTimestamp() 
+        });
+        showToast("error", "Pengajuan Top-Up ditolak.");
+      }
+    } catch (error) {
+      console.error("Gagal verifikasi Top-Up:", error);
+      showToast("error", "Terjadi kesalahan sistem saat memproses Top-Up.");
+    } finally {
+      setIsProcessing(false);
+      setSelectedDeposit(null);
+    }
+  };
+
+  // =======================================================================
+  // FILTERING LOGIC
+  // =======================================================================
+  const processedOrders = useMemo(() => {
     let result = orders.filter(o => o.paymentMethod === "Transfer Bank Manual" || o.paymentStatus === "Menunggu Verifikasi Finance" || o.paymentStatus === "Lunas" || o.paymentStatus === "Ditolak");
-    
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(o => {
@@ -156,15 +225,15 @@ export default function FinanceVerificationPage() {
         return o.id.toLowerCase().includes(q) || (o.email || "").toLowerCase().includes(q) || (originName || "").toLowerCase().includes(q);
       });
     }
-    if (filterStatus !== "All") result = result.filter(o => o.paymentStatus === filterStatus);
+    // Karena filter awal di set "Pending", kita map agar cocok dengan string aslinya
+    const mappedStatus = filterStatus === "Pending" ? "Menunggu Verifikasi Finance" : filterStatus;
+    if (filterStatus !== "All") result = result.filter(o => o.paymentStatus === mappedStatus);
     
     result.sort((a, b) => {
       const cA = a.breakdown?.grandTotal || a.finalGrandTotal || a.totalCost || 0; 
       const cB = b.breakdown?.grandTotal || b.finalGrandTotal || b.totalCost || 0;
-      
       const tA = getMillis(a.createdAt);
       const tB = getMillis(b.createdAt);
-
       if (sortOrder === "newest") return tB - tA;
       if (sortOrder === "oldest") return tA - tB;
       if (sortOrder === "highest_value") return cB - cA;
@@ -173,12 +242,31 @@ export default function FinanceVerificationPage() {
     return result;
   }, [orders, searchQuery, filterStatus, sortOrder]);
 
-  const totalMenunggu = orders.filter(o => o.paymentStatus === "Menunggu Verifikasi Finance").length;
-  const totalDanaDiverifikasiHariIni = orders.filter(o => o.paymentStatus === "Lunas").reduce((acc, curr) => acc + (curr.finalGrandTotal || curr.breakdown?.grandTotal || 0), 0);
+  const processedDeposits = useMemo(() => {
+    let result = [...depositRequests];
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(d => d.clientName.toLowerCase().includes(q) || d.id.toLowerCase().includes(q));
+    }
+    if (filterStatus !== "All") result = result.filter(d => d.status === filterStatus);
+    
+    result.sort((a, b) => {
+      const tA = getMillis(a.createdAt);
+      const tB = getMillis(b.createdAt);
+      const cA = a.amount;
+      const cB = b.amount;
+      if (sortOrder === "newest") return tB - tA;
+      if (sortOrder === "oldest") return tA - tB;
+      if (sortOrder === "highest_value") return cB - cA;
+      return 0;
+    });
+    return result;
+  }, [depositRequests, searchQuery, filterStatus, sortOrder]);
 
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
+  // Statistik Dinamis
+  const totalOrdersPending = orders.filter(o => o.paymentStatus === "Menunggu Verifikasi Finance").length;
+  const totalDepositsPending = depositRequests.filter(d => d.status === "Pending").length;
+  const totalVerifiedLunas = orders.filter(o => o.paymentStatus === "Lunas").reduce((acc, curr) => acc + (curr.finalGrandTotal || curr.breakdown?.grandTotal || curr.totalCost || 0), 0);
 
   // RBAC GUARD
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
@@ -202,7 +290,7 @@ export default function FinanceVerificationPage() {
   }
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="space-y-6 font-sans pb-12">
       <AnimatePresence>
         {toast && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-50 p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
@@ -211,146 +299,209 @@ export default function FinanceVerificationPage() {
         )}
       </AnimatePresence>
 
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-            <Receipt className="w-7 h-7 text-emerald-600" /> Verifikasi Pembayaran
+      <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 rounded-full blur-[80px] pointer-events-none" />
+        <div className="relative z-10">
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
+            <Receipt className="w-8 h-8 text-emerald-600" /> Verifikasi Pembayaran
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5">Validasi rincian transaksi dan bukti transfer yang diunggah oleh Klien untuk mencairkan resi.</p>
+          <p className="text-slate-500 text-sm mt-1.5 font-medium">Validasi bukti transfer untuk Tagihan Invoice dan Setoran Top-Up Klien (B2B).</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* STATS CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10"><Clock className="w-16 h-16 text-amber-500"/></div>
-          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Antrean Verifikasi (Menunggu Cek)</span>
-          <p className="text-3xl font-black text-amber-600 mt-2">{totalMenunggu} Tiket</p>
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Antrean Invoice (Orders)</span>
+          <p className="text-3xl font-black text-amber-600 mt-2">{totalOrdersPending} Tiket</p>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Wallet className="w-16 h-16 text-blue-500"/></div>
+          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Antrean Top-Up (Deposit)</span>
+          <p className="text-3xl font-black text-blue-600 mt-2">{totalDepositsPending} Pengajuan</p>
         </div>
         <div className="bg-gradient-to-br from-emerald-900 to-emerald-800 border border-emerald-700 rounded-2xl p-5 shadow-lg relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign className="w-16 h-16 text-white"/></div>
-          <span className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Total Nilai Tervalidasi (Lunas)</span>
-          <p className="text-3xl font-black text-white mt-2">{formatRupiah(totalDanaDiverifikasiHariIni)}</p>
+          <span className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Total Nilai Lunas Hari Ini</span>
+          <p className="text-2xl md:text-3xl font-black text-white mt-2">{formatRupiah(totalVerifiedLunas)}</p>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row gap-4">
+      {/* WORKSPACE AREA */}
+      <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden min-h-[500px] flex flex-col">
+        
+        {/* TABS SWITCHER */}
+        <div className="flex bg-slate-50 p-2 border-b border-slate-200 w-full relative">
+          <button onClick={() => { setActiveTab("orders"); setFilterStatus("Pending"); setSearchQuery(""); }} className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "orders" ? "text-slate-900 shadow-sm bg-white" : "text-slate-500 hover:text-slate-700"}`}>
+            <Receipt className="w-4 h-4"/> Tagihan Invoice (Pesanan)
+            {totalOrdersPending > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center ml-1">{totalOrdersPending}</span>}
+          </button>
+          <button onClick={() => { setActiveTab("deposits"); setFilterStatus("Pending"); setSearchQuery(""); }} className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "deposits" ? "text-emerald-700 shadow-sm bg-white" : "text-slate-500 hover:text-slate-700"}`}>
+            <Wallet className="w-4 h-4"/> Setoran Deposit (Prabayar)
+            {totalDepositsPending > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center ml-1">{totalDepositsPending}</span>}
+          </button>
+        </div>
+
+        {/* TOOLBAR FILTER */}
+        <div className="p-4 border-b border-slate-100 bg-white flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Cari ID Manifes, Email, Nama..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-4 py-2.5 text-slate-900 outline-none text-sm focus:border-emerald-600 transition-all shadow-sm" />
+            <input type="text" placeholder={activeTab === 'orders' ? "Cari ID Manifes atau Nama..." : "Cari Nama Klien atau ID Top-Up..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-slate-900 outline-none text-sm focus:border-emerald-500 focus:bg-white transition-all shadow-inner" />
           </div>
           <div className="flex gap-3">
             <div className="relative">
               <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-emerald-600 shadow-sm appearance-none font-semibold text-slate-700 min-w-[170px]">
-                <option value="All">Semua Status Bayar</option>
-                <option value="Menunggu Verifikasi Finance">Menunggu Verifikasi</option>
-                <option value="Lunas">Telah Lunas</option>
-                <option value="Ditolak">Ditolak</option>
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white shadow-sm appearance-none font-bold text-slate-700 min-w-[150px]">
+                <option value="All">Semua Status</option>
+                <option value="Pending">Menunggu Cek</option>
+                <option value="Approved">{activeTab === 'orders' ? 'Telah Lunas' : 'Disetujui'}</option>
+                <option value={activeTab === 'orders' ? 'Ditolak' : 'Rejected'}>Ditolak</option>
               </select>
             </div>
             <div className="relative">
               <ArrowUpDown className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-emerald-600 shadow-sm appearance-none font-semibold text-slate-700 min-w-[160px]">
+              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-emerald-500 focus:bg-white shadow-sm appearance-none font-bold text-slate-700 min-w-[160px]">
                 <option value="newest">Terbaru</option>
                 <option value="oldest">Terlama</option>
-                <option value="highest_value">Tagihan Terbesar</option>
+                <option value="highest_value">Nominal Terbesar</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          {processedData.length === 0 ? (
-            <div className="p-20 text-center text-slate-500 font-medium">Tidak ada data pembayaran yang sesuai dengan kriteria.</div>
-          ) : (
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-white text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
-                  <th className="p-5 pl-6">ID Manifes & Klien</th>
-                  <th className="p-5">Total Tagihan Akhir</th>
-                  <th className="p-5">Status Pembayaran</th>
-                  <th className="p-5 pr-6 text-right">Aksi Penanganan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {processedData.map(v => (
-                  <tr key={v.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-5 pl-6 align-top">
-                      <p className="font-mono font-black text-slate-900 text-sm uppercase">#{v.id}</p>
-                      <p className="text-xs text-slate-500 font-semibold mt-1">
-                        {v.email || (typeof v.origin === 'object' && v.origin !== null ? (v.origin as LocationDetail).senderName : "") || "Klien"}
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-1">{formatDate(v.createdAt)}</p>
-                    </td>
-                    <td className="p-5 align-top">
-                      <div className="flex flex-col">
-                        <p className="text-base font-black text-emerald-600">{formatRupiah(v.finalGrandTotal || v.breakdown?.grandTotal || v.totalCost || 0)}</p>
-                        {v.appliedPromoCode && (
-                          <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded w-fit mt-1.5 font-bold flex items-center gap-1"><TicketPercent className="w-3 h-3"/> Promo Aktif</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-5 align-top">
-                      <span className={`text-[9px] px-2 py-0.5 rounded inline-block font-bold uppercase tracking-widest border ${
-                        v.paymentStatus === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
-                        v.paymentStatus === 'Ditolak' ? 'bg-red-50 text-red-600 border-red-200' :
-                        'bg-amber-50 text-amber-600 border-amber-200'
-                      }`}>
-                        {v.paymentStatus}
-                      </span>
-                    </td>
-                    <td className="p-5 pr-6 align-top text-right">
-                       <Button 
-                          onClick={() => setSelectedOrderDetail(v)}
-                          size="sm" 
-                          variant="outline" 
-                          className="border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-9 font-bold shadow-sm"
-                        >
-                          <Eye className="w-4 h-4 mr-1.5" /> Lihat Detail & Validasi
-                        </Button>
-                    </td>
+        {/* TABEL DINAMIS */}
+        <div className="overflow-x-auto flex-1 bg-white">
+          
+          {/* RENDER TAB ORDERS */}
+          {activeTab === "orders" && (
+            processedOrders.length === 0 ? (
+              <div className="p-20 text-center text-slate-500 font-medium flex flex-col items-center">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-3 opacity-50"/>
+                Semua antrean tagihan invoice telah bersih.
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse text-sm">
+                <thead className="sticky top-0 bg-white shadow-sm z-10">
+                  <tr className="text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
+                    <th className="p-5 pl-6">ID Manifes & Klien</th>
+                    <th className="p-5">Total Tagihan Akhir</th>
+                    <th className="p-5">Status Pembayaran</th>
+                    <th className="p-5 pr-6 text-right">Aksi Penanganan</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {processedOrders.map(v => (
+                    <tr key={v.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5 pl-6 align-top">
+                        <p className="font-mono font-black text-slate-900 text-sm uppercase">#{v.id}</p>
+                        <p className="text-xs text-slate-500 font-semibold mt-1">
+                          {v.email || (typeof v.origin === 'object' && v.origin !== null ? (v.origin as LocationDetail).senderName : "") || "Klien"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">{formatDate(v.createdAt)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <div className="flex flex-col">
+                          <p className="text-base font-black text-emerald-600">{formatRupiah(v.finalGrandTotal || v.breakdown?.grandTotal || v.totalCost || 0)}</p>
+                          {v.appliedPromoCode && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded w-fit mt-1.5 font-bold flex items-center gap-1"><TicketPercent className="w-3 h-3"/> Promo Aktif</span>}
+                        </div>
+                      </td>
+                      <td className="p-5 align-top">
+                        <span className={`text-[9px] px-2 py-0.5 rounded inline-block font-bold uppercase tracking-widest border ${
+                          v.paymentStatus === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                          v.paymentStatus === 'Ditolak' ? 'bg-red-50 text-red-600 border-red-200' :
+                          'bg-amber-50 text-amber-600 border-amber-200'
+                        }`}>
+                          {v.paymentStatus}
+                        </span>
+                      </td>
+                      <td className="p-5 pr-6 align-top text-right">
+                         <Button onClick={() => setSelectedOrderDetail(v)} size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-9 font-bold shadow-sm">
+                            <Eye className="w-4 h-4 mr-1.5" /> Lihat Detail & Validasi
+                          </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+
+          {/* RENDER TAB DEPOSITS */}
+          {activeTab === "deposits" && (
+            processedDeposits.length === 0 ? (
+              <div className="p-20 text-center text-slate-500 font-medium flex flex-col items-center">
+                <Wallet className="w-12 h-12 text-slate-300 mb-3 opacity-50"/>
+                Tidak ada pengajuan Top-Up saldo yang tertunda.
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse text-sm">
+                <thead className="sticky top-0 bg-white shadow-sm z-10">
+                  <tr className="text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
+                    <th className="p-5 pl-6">ID Top-Up & Entitas B2B</th>
+                    <th className="p-5">Setoran Deposit</th>
+                    <th className="p-5">Status Validasi</th>
+                    <th className="p-5 pr-6 text-right">Tindakan Admin</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {processedDeposits.map(d => (
+                    <tr key={d.id} className="hover:bg-emerald-50/30 transition-colors">
+                      <td className="p-5 pl-6 align-top">
+                        <p className="font-mono font-black text-slate-900 text-sm uppercase">#{d.id.substring(0,8)}</p>
+                        <p className="text-xs text-slate-600 font-black mt-1 uppercase flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-slate-400"/> {d.clientName}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{formatDate(d.createdAt)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <p className="text-base font-black text-emerald-600 flex items-center gap-1.5"><PlusCircle className="w-4 h-4"/> {formatRupiah(d.amount)}</p>
+                      </td>
+                      <td className="p-5 align-top">
+                        <span className={`text-[9px] px-2 py-0.5 rounded inline-block font-bold uppercase tracking-widest border ${
+                          d.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                          d.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-200' :
+                          'bg-amber-50 text-amber-600 border-amber-200'
+                        }`}>
+                          {d.status}
+                        </span>
+                      </td>
+                      <td className="p-5 pr-6 align-top text-right">
+                         <Button onClick={() => setSelectedDeposit(d)} size="sm" variant="outline" className="border-slate-300 text-slate-700 hover:border-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-9 font-bold shadow-sm">
+                            <Eye className="w-4 h-4 mr-1.5" /> Verifikasi Mutasi
+                          </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
           )}
         </div>
       </div>
 
-      {/* MODAL VIEWER READ-ONLY */}
+      {/* ========================================================= */}
+      {/* MODAL VIEWER: DETAIL INVOICE ORDER                        */}
+      {/* ========================================================= */}
       <AnimatePresence>
         {selectedOrderDetail && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => !isProcessing && setSelectedOrderDetail(null)}></motion.div>
             
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0, y: 20 }} 
-              animate={{ scale: 1, opacity: 1, y: 0 }} 
-              exit={{ scale: 0.95, opacity: 0, y: 20 }} 
-              className="relative w-full max-w-5xl bg-slate-50 rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200"
-            >
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-5xl bg-slate-50 rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
               {/* Header Modal */}
               <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between shrink-0 relative z-10">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                    <FileText className="w-6 h-6 text-[#7A171D]" /> Detail Transaksi
-                  </h2>
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-3"><FileText className="w-6 h-6 text-[#7A171D]" /> Detail Pembayaran Transaksi</h2>
                   <p className="text-sm text-slate-500 font-mono mt-1 uppercase tracking-widest font-bold">#{selectedOrderDetail.id}</p>
                 </div>
-                <button onClick={() => !isProcessing && setSelectedOrderDetail(null)} className="p-2 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+                <button onClick={() => !isProcessing && setSelectedOrderDetail(null)} className="p-2 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"><X className="w-5 h-5" /></button>
               </div>
 
-              {/* Body Modal - Scrollable Grid */}
+              {/* Body Modal */}
               <div className="overflow-y-auto p-6 flex-1 custom-scrollbar">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   
                   {/* KIRI: INFO PENGIRIMAN */}
                   <div className="lg:col-span-7 space-y-6">
-                    
-                    {/* Profil Klien & Routing */}
                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
                       <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
                         <User className="w-5 h-5 text-slate-400" />
@@ -359,7 +510,6 @@ export default function FinanceVerificationPage() {
                           <p className="text-sm font-black text-slate-900">{selectedOrderDetail.email || "Guest User"}</p>
                         </div>
                       </div>
-
                       <div className="relative pl-2">
                         <div className="absolute left-[27px] top-6 bottom-6 w-0.5 bg-slate-100 border-dashed border-l-2 border-slate-200 z-0"></div>
                         <div className="space-y-6 relative z-10">
@@ -368,9 +518,6 @@ export default function FinanceVerificationPage() {
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Titik Asal Pengirim</p>
                               <p className="font-bold text-slate-900 text-sm">{typeof selectedOrderDetail.origin === 'object' && selectedOrderDetail.origin !== null ? (selectedOrderDetail.origin as LocationDetail).address : selectedOrderDetail.origin}</p>
-                              {typeof selectedOrderDetail.origin === 'object' && selectedOrderDetail.origin !== null && (selectedOrderDetail.origin as LocationDetail).senderName && (
-                                <p className="text-xs text-slate-500 font-medium mt-1">{(selectedOrderDetail.origin as LocationDetail).senderName} ({(selectedOrderDetail.origin as LocationDetail).senderPhone})</p>
-                              )}
                             </div>
                           </div>
                           <div className="flex items-start gap-4">
@@ -378,10 +525,7 @@ export default function FinanceVerificationPage() {
                             <div>
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Titik Tujuan (Destinasi)</p>
                               {selectedOrderDetail.destinations ? selectedOrderDetail.destinations.map((dest: LocationDetail, idx: number) => (
-                                <div key={idx} className="mb-3 last:mb-0 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                  <p className="font-bold text-slate-900 text-sm">{dest.address}</p>
-                                  {dest.receiverName && <p className="text-xs text-slate-500 font-medium mt-1">{dest.receiverName} ({dest.receiverPhone})</p>}
-                                </div>
+                                <p key={idx} className="font-bold text-slate-900 text-sm mb-2">{dest.address}</p>
                               )) : (
                                 <p className="font-bold text-slate-900 text-sm">{selectedOrderDetail.destination || "-"}</p>
                               )}
@@ -391,7 +535,6 @@ export default function FinanceVerificationPage() {
                       </div>
                     </div>
 
-                    {/* Spesifikasi Kargo */}
                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
                       <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-2"><Package className="w-4 h-4 text-[#C5A059]" /> Spesifikasi Kargo</h4>
                       <div className="grid grid-cols-2 gap-4">
@@ -405,13 +548,10 @@ export default function FinanceVerificationPage() {
                         </div>
                       </div>
                     </div>
-
                   </div>
 
-                  {/* KANAN: RINCIAN TAGIHAN & BUKTI */}
+                  {/* KANAN: BUKTI & AKSI */}
                   <div className="lg:col-span-5 space-y-6">
-                    
-                    {/* Panel Bukti Transfer */}
                     <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
                       <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-4"><ImageIcon className="w-4 h-4 text-blue-500" /> Lampiran Bukti Pembayaran</h4>
                       {selectedOrderDetail.receiptUrl ? (
@@ -432,101 +572,116 @@ export default function FinanceVerificationPage() {
                       )}
                     </div>
 
-                    {/* Rincian Tagihan (Billing Breakdown) */}
                     <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800 shadow-xl text-white relative overflow-hidden">
                       <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-10 pointer-events-none"></div>
-                      <h4 className="text-sm font-black flex items-center gap-2 mb-4"><Receipt className="w-4 h-4 text-[#C5A059]" /> Rincian Biaya (Billing)</h4>
-                      
-                      <div className="space-y-3 mb-4 text-sm font-medium">
-                        {selectedOrderDetail.breakdown ? (
-                          <>
-                            <div className="flex justify-between items-center text-slate-400">
-                              <span>Tarif Dasar Rute</span>
-                              <span className="text-white">{formatRupiah(selectedOrderDetail.breakdown.deliveryFee || 0)}</span>
-                            </div>
-                            {(selectedOrderDetail.breakdown.insuranceFee || 0) > 0 && (
-                              <div className="flex justify-between items-center text-slate-400">
-                                <span>Asuransi</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.insuranceFee || 0)}</span>
-                              </div>
-                            )}
-                            {(selectedOrderDetail.breakdown.porterFee || 0) > 0 && (
-                              <div className="flex justify-between items-center text-slate-400">
-                                <span>Jasa Porter</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.porterFee || 0)}</span>
-                              </div>
-                            )}
-                            {(selectedOrderDetail.breakdown.tollFee || 0) > 0 && (
-                              <div className="flex justify-between items-center text-slate-400">
-                                <span>Deposit Tol/Parkir</span>
-                                <span className="text-emerald-400">+ {formatRupiah(selectedOrderDetail.breakdown.tollFee || 0)}</span>
-                              </div>
-                            )}
-                            {(selectedOrderDetail.breakdown.b2bDiscount || 0) > 0 && (
-                              <div className="flex justify-between items-center text-amber-400">
-                                <span>Diskon Klien (B2B)</span>
-                                <span>- {formatRupiah(selectedOrderDetail.breakdown.b2bDiscount || 0)}</span>
-                              </div>
-                            )}
-                            
-                            {/* Jika ada promo di order ini */}
-                            {selectedOrderDetail.appliedPromoCode && (
-                              <div className="flex justify-between items-center text-pink-400 border-t border-slate-700/50 pt-2 mt-2">
-                                <span className="flex items-center gap-1.5"><TicketPercent className="w-3.5 h-3.5"/> Promo: {selectedOrderDetail.appliedPromoCode}</span>
-                                <span>- {formatRupiah(selectedOrderDetail.discountPromoAmount || 0)}</span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="flex justify-between items-center text-slate-400">
-                            <span>Total Harga Global</span>
-                            <span className="text-white">{formatRupiah(selectedOrderDetail.totalCost || selectedOrderDetail.offeredPrice || 0)}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="pt-4 border-t-2 border-dashed border-slate-700 flex justify-between items-end">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Uang Masuk Kas</p>
-                          <p className="text-2xl font-black text-emerald-400">
-                            {formatRupiah(selectedOrderDetail.finalGrandTotal || selectedOrderDetail.breakdown?.grandTotal || selectedOrderDetail.totalCost || selectedOrderDetail.offeredPrice || 0)}
-                          </p>
-                        </div>
-                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tagihan & Uang Kas Masuk</p>
+                      <p className="text-3xl font-black text-emerald-400">
+                        {formatRupiah(selectedOrderDetail.finalGrandTotal || selectedOrderDetail.breakdown?.grandTotal || selectedOrderDetail.totalCost || selectedOrderDetail.offeredPrice || 0)}
+                      </p>
                     </div>
 
-                    {/* Tombol Aksi - Hanya muncul jika statusnya "Menunggu Verifikasi" */}
                     {selectedOrderDetail.paymentStatus === "Menunggu Verifikasi Finance" && (
                       <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                        <Button 
-                          onClick={() => handleVerifyPayment(selectedOrderDetail.id, "Approve")} 
-                          disabled={isProcessing}
-                          className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2"
-                        >
+                        <Button onClick={() => handleVerifyPayment(selectedOrderDetail.id, "Approve")} disabled={isProcessing} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
                           <CheckCircle2 className="w-4 h-4" /> VERIFIKASI LUNAS
                         </Button>
-                        <Button 
-                          onClick={() => {
-                            if(confirm("Tolak bukti pembayaran ini? Klien harus mengunggah ulang.")) {
-                              handleVerifyPayment(selectedOrderDetail.id, "Reject");
-                            }
-                          }} 
-                          disabled={isProcessing}
-                          variant="outline"
-                          className="w-16 h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl flex items-center justify-center shrink-0"
-                          title="Tolak Bukti"
-                        >
+                        <Button onClick={() => { if(confirm("Tolak bukti pembayaran ini? Klien harus mengunggah ulang.")) { handleVerifyPayment(selectedOrderDetail.id, "Reject"); } }} disabled={isProcessing} variant="outline" className="w-16 h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl flex items-center justify-center shrink-0">
                           <XCircle className="w-5 h-5" />
                         </Button>
                       </div>
                     )}
-                    {selectedOrderDetail.paymentStatus === "Lunas" && (
-                      <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-200 font-bold text-center text-sm flex items-center justify-center gap-2">
-                        <CheckCircle2 className="w-5 h-5" /> Transaksi Sudah Dinyatakan Lunas
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================= */}
+      {/* MODAL VIEWER: DETAIL TOP-UP DEPOSIT (NEW)                   */}
+      {/* ========================================================= */}
+      <AnimatePresence>
+        {selectedDeposit && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => !isProcessing && setSelectedDeposit(null)}></motion.div>
+            
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-4xl bg-slate-50 rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+              {/* Header Modal */}
+              <div className="bg-white border-b border-slate-200 p-6 flex items-center justify-between shrink-0 relative z-10">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-3"><Wallet className="w-6 h-6 text-emerald-600" /> Detail Top-Up Saldo</h2>
+                  <p className="text-sm text-slate-500 font-mono mt-1 uppercase tracking-widest font-bold">#{selectedDeposit.id}</p>
+                </div>
+                <button onClick={() => !isProcessing && setSelectedDeposit(null)} className="p-2 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+
+              {/* Body Modal */}
+              <div className="overflow-y-auto p-6 flex-1 custom-scrollbar">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                  
+                  {/* KIRI: INFO B2B */}
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                        <Building2 className="w-5 h-5 text-slate-400" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Klien Korporat B2B</p>
+                          <p className="text-sm font-black text-slate-900 uppercase">{selectedDeposit.clientName}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Waktu Pengajuan</p>
+                        <p className="font-bold text-slate-900 bg-slate-50 p-3 rounded-xl border border-slate-100">{formatDate(selectedDeposit.createdAt)}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-emerald-900 rounded-2xl p-6 border border-emerald-800 shadow-xl text-white relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
+                      <p className="text-[10px] font-bold text-emerald-200 uppercase tracking-widest mb-1">Setoran Mutasi Bank Masuk</p>
+                      <p className="text-3xl font-black text-white">
+                        {formatRupiah(selectedDeposit.amount)}
+                      </p>
+                    </div>
+
+                    {selectedDeposit.status === "Pending" && (
+                      <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mt-4">
+                        <Button onClick={() => handleVerifyDeposit(selectedDeposit.id, "Approve")} disabled={isProcessing} className="flex-1 h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" /> TERIMA & TAMBAH SALDO
+                        </Button>
+                        <Button onClick={() => { if(confirm("Tolak bukti transfer Top-Up ini? Saldo klien tidak akan bertambah.")) { handleVerifyDeposit(selectedDeposit.id, "Reject"); } }} disabled={isProcessing} variant="outline" className="w-16 h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-xl flex items-center justify-center shrink-0" title="Tolak">
+                          <XCircle className="w-5 h-5" />
+                        </Button>
                       </div>
                     )}
-
+                    {selectedDeposit.status === "Approved" && (
+                      <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-200 font-bold text-center text-sm flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-5 h-5" /> Top-Up Berhasil Divalidasi
+                      </div>
+                    )}
                   </div>
+
+                  {/* KANAN: BUKTI TRANSFER */}
+                  <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-4"><ImageIcon className="w-4 h-4 text-emerald-500" /> Lampiran Bukti Setoran</h4>
+                    {selectedDeposit.proofUrl ? (
+                      <div className="bg-slate-100 p-2 rounded-xl border border-slate-200 flex items-center justify-center min-h-[400px] relative group overflow-hidden">
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img src={selectedDeposit.proofUrl} alt="Bukti Transfer Top Up" className="w-full h-full object-contain max-h-[500px] rounded-lg" />
+                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <a href={selectedDeposit.proofUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-slate-900 px-4 py-2 rounded-lg font-bold text-xs shadow-xl flex items-center gap-2 hover:bg-slate-100 transition-colors">
+                              <Eye className="w-4 h-4" /> Buka Full Screen
+                            </a>
+                         </div>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 p-10 rounded-xl border border-dashed border-slate-300 text-center min-h-[400px] flex flex-col justify-center">
+                        <XCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-500">Tidak ada bukti setoran terlampir.</p>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </div>
             </motion.div>

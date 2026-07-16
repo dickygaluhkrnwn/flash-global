@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, MapPin, Package, Truck, 
   ReceiptText, CalendarClock, User, Phone, 
   CheckCircle2, Clock, MapPinned,
-  TicketPercent, Building, CreditCard, AlertCircle, Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, XCircle
+  TicketPercent, Building, CreditCard, AlertCircle, Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, XCircle, Printer, FileText
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -18,6 +18,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
+
+// TAMBAHKAN LIBRARY PRINT DAN TEMPLATE RESI & INVOICE
+import { useReactToPrint } from "react-to-print";
+import { ReceiptTemplate, ReceiptProps } from "@/components/shared/ReceiptTemplate";
+import { InvoiceA4Template, InvoiceA4Props } from "@/components/shared/InvoiceA4Template";
 
 // IMPORT GLOBAL TYPES
 import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
@@ -43,9 +48,23 @@ export default function OrderDetailPage() {
     proofUrl: ""
   });
 
+  // === SETUP REACT-TO-PRINT UNTUK RESI THERMAL ===
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const handlePrintReceipt = useReactToPrint({
+    contentRef: receiptRef,
+    documentTitle: `Resi-${order?.resi || orderId}`,
+  });
+
+  // === SETUP REACT-TO-PRINT UNTUK INVOICE A4 ===
+  const invoiceRef = useRef<HTMLDivElement>(null);
+  const handlePrintInvoice = useReactToPrint({
+    contentRef: invoiceRef,
+    documentTitle: `Invoice-${order?.resi || orderId}`,
+  });
+
   // Proteksi Route
   useEffect(() => {
-    if (isHydrated && !user) router.push("/login");
+    if (isHydrated && !user) router.push("/desktop/login");
   }, [user, isHydrated, router]);
 
   useEffect(() => {
@@ -87,13 +106,12 @@ export default function OrderDetailPage() {
         console.error("Gagal menarik data pesanan:", error);
         setErrorMsg("Terjadi kesalahan sistem saat memuat data pesanan.");
         setIsLoading(false);
-        return; // Hentikan eksekusi jika pesanan utama gagal ditarik
+        return; 
       }
 
       // BLOK 2: CEK KLAIM ASURANSI SECARA TERPISAH (KEBAL CRASH)
       if (fetchedOrderDocId) {
         try {
-          // Tambahkan where userId agar Firebase Security Rules mengizinkan klien membaca data mereka sendiri
           const claimQ = query(
             collection(db, "insurance_claims"), 
             where("orderId", "==", fetchedOrderDocId),
@@ -104,9 +122,7 @@ export default function OrderDetailPage() {
             setHasExistingClaim(true);
           }
         } catch (claimError) {
-          // Jika gagal ngecek asuransi (misal karena rules), jangan crash-kan aplikasi!
-          // Log saja errornya, tapi biarkan pesanan utama tetap tampil.
-          console.warn("Peringatan: Gagal mengecek status klaim asuransi (Abaikan jika bukan error kritikal):", claimError);
+          console.warn("Peringatan: Gagal mengecek status klaim asuransi:", claimError);
         }
       }
 
@@ -145,7 +161,7 @@ export default function OrderDetailPage() {
       await addDoc(collection(db, "insurance_claims"), {
         userId: user.uid,
         orderId: order.id,
-        clientName: user.displayName || "Klien", // FIXED BUG: MENGGUNAKAN displayName
+        clientName: user.displayName || "Klien", 
         clientEmail: user.email || "",
         claimedAmount: Number(claimData.claimedAmount),
         reason: claimData.reason,
@@ -165,7 +181,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  // Rendering Log Timeline
   const renderTimeline = () => {
     if (!order) return [];
 
@@ -211,26 +226,61 @@ export default function OrderDetailPage() {
   }
 
   const timelineData = renderTimeline();
-  const isLunas = order.paymentStatus === "Lunas";
+  const isLunas = order.paymentStatus === "Lunas" || order.paymentStatus === "Piutang B2B"; // Piutang B2B juga dianggap lunas secara operasional (bisa diprint)
   const resiNumber = order.resi || order.quoteId || order.id.slice(-12).toUpperCase();
 
   const originAddress = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).address : order.origin;
   const originName = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderName : order.senderName;
   const originPhone = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderPhone : order.senderPhone;
 
-  // === CEK KELAYAKAN ASURANSI (DILONGGARKAN UNTUK TESTING) ===
+  let destAddress = order.destination || "-";
+  if (order.destinations && order.destinations.length > 0) {
+    destAddress = order.destinations.length > 1 ? `${order.destinations.length} Titik Tujuan` : (order.destinations[0].address || "Tujuan");
+  }
+
+  // === CEK KELAYAKAN ASURANSI ===
   const hasInsurance = order.breakdown && order.breakdown.insuranceFee > 0;
-  
-  // NOTE: Diubah untuk Testing -> Tombol akan muncul pada status apapun selama bayar asuransi.
   const isEligibleForClaim = hasInsurance; 
   
-  // Hitung Nilai Maksimal Klaim yang lebih aman
   const calculateMaxClaim = () => {
     if (!order.breakdown) return 0;
     if (order.totalItemValue) return order.totalItemValue; 
     return (order.breakdown.deliveryFee || 0) * 10;
   };
   const maxClaimAllowed = calculateMaxClaim();
+
+  // === LOGIKA DATA INVOICE A4 ===
+  const issueDateObj = order.createdAt ? (typeof order.createdAt === 'object' && (order.createdAt as any).toDate ? (order.createdAt as any).toDate() : new Date(order.createdAt as any)) : new Date();
+  const dueDateObj = new Date(issueDateObj);
+  dueDateObj.setDate(dueDateObj.getDate() + (user?.role === 'b2b' ? 30 : 1)); // Net 30 untuk B2B, Net 1 untuk B2C
+
+  const issueDateStr = issueDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dueDateStr = dueDateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  // Pemecahan Rincian Biaya (Breakdown) untuk Tabel Invoice
+  const invoiceItems = [];
+  invoiceItems.push({
+    id: resiNumber,
+    date: issueDateStr,
+    description: `Rute Pengiriman: ${originAddress?.substring(0,25)}... ➔ ${destAddress?.substring(0,25)}...`,
+    service: `${order.serviceType} (${order.vehicleName || order.vehicle})`,
+    weight: order.totalWeight || order.weight || 0,
+    amount: order.breakdown?.deliveryFee || order.totalCost || 0
+  });
+
+  if (order.breakdown?.insuranceFee) {
+    invoiceItems.push({ id: "INS-01", date: issueDateStr, description: "Premi Asuransi Muatan", service: "Add-on", weight: 0, amount: order.breakdown.insuranceFee });
+  }
+  if (order.breakdown?.porterFee) {
+    invoiceItems.push({ id: "PRT-01", date: issueDateStr, description: `Jasa Porter / Helper (${order.porterCount || 1}x)`, service: "Add-on", weight: 0, amount: order.breakdown.porterFee });
+  }
+  if (order.breakdown?.tollFee) {
+    invoiceItems.push({ id: "TOL-01", date: issueDateStr, description: "Deposit Tol & Parkir", service: "Add-on", weight: 0, amount: order.breakdown.tollFee });
+  }
+
+  const invoiceSubTotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
+  const invoiceDiscount = (order.breakdown?.b2bDiscount || 0) + (order.discountPromoAmount || 0);
+  const invoiceGrandTotal = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
 
   return (
     <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 relative overflow-hidden font-sans pb-24">
@@ -490,7 +540,7 @@ export default function OrderDetailPage() {
               <div className="h-3 w-full bg-[radial-gradient(circle,transparent_4px,#0f172a_5px)] bg-[length:10px_10px] -mb-1 opacity-50"></div>
             </div>
 
-            {/* ACTION BUTTONS (TERMASUK KLAIM ASURANSI) */}
+            {/* ACTION BUTTONS (TERMASUK KLAIM ASURANSI & PRINT) */}
             <div className="flex flex-col gap-3 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Button 
@@ -531,11 +581,79 @@ export default function OrderDetailPage() {
                    <Clock className="w-4 h-4" /> Pengajuan klaim asuransi sedang ditinjau.
                 </div>
               )}
+
+              {/* === TOMBOL CETAK RESI THERMAL & INVOICE A4 (MUNCUL JIKA LUNAS/PIUTANG) === */}
+              {isLunas && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                  <Button 
+                    onClick={handlePrintReceipt}
+                    variant="outline"
+                    className="w-full h-12 border-[#7A171D] text-[#7A171D] hover:bg-[#7A171D]/10 shadow-sm font-bold"
+                  >
+                    <Printer className="w-4 h-4 mr-2" /> Cetak Resi (Thermal)
+                  </Button>
+                  <Button 
+                    onClick={handlePrintInvoice}
+                    variant="outline"
+                    className="w-full h-12 border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm font-bold"
+                  >
+                    <FileText className="w-4 h-4 mr-2" /> Unduh Invoice (A4)
+                  </Button>
+                </div>
+              )}
             </div>
 
           </div>
         </div>
 
+      </div>
+
+      {/* ================================================= */}
+      {/* HIDDEN RECEIPT COMPONENT UNTUK DIPRINT              */}
+      {/* ================================================= */}
+      <div style={{ display: 'none' }}>
+        {order && (
+          <ReceiptTemplate 
+            ref={receiptRef}
+            resi={resiNumber}
+            senderName={(originName as string) || user?.displayName || "-"}
+            senderPhone={(originPhone as string) || "-"}
+            originAddress={(originAddress as string) || "-"}
+            receiverName={(order.destinations?.[0]?.receiverName as string) || (order.receiverName as string) || "-"}
+            receiverPhone={(order.destinations?.[0]?.receiverPhone as string) || (order.receiverPhone as string) || "-"}
+            destAddress={destAddress}
+            weight={order.totalWeight || order.weight || 0}
+            serviceType={order.serviceType || "Kargo"}
+            vehicleName={order.vehicleName || order.vehicle || "Armada"}
+            date={formatFirebaseDate(order.createdAt)}
+            totalCost={order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost}
+            itemsDesc={((order.destinations?.[0]?.items as any[])?.[0]?.name) || "Paket Kargo"}
+          />
+        )}
+      </div>
+
+      {/* ================================================= */}
+      {/* HIDDEN INVOICE A4 COMPONENT UNTUK DIPRINT           */}
+      {/* ================================================= */}
+      <div style={{ display: 'none' }}>
+        {order && (
+          <InvoiceA4Template 
+            ref={invoiceRef}
+            invoiceNumber={`INV-${resiNumber}`}
+            issueDate={issueDateStr}
+            dueDate={dueDateStr}
+            clientName={user?.displayName || (originName as string) || "Klien Yth."}
+            clientCompany={user?.companyName}
+            clientAddress={(originAddress as string) || "-"}
+            clientEmail={user?.email || order.email || "-"}
+            clientPhone={(originPhone as string) || user?.phoneNumber || "-"}
+            items={invoiceItems}
+            subTotal={invoiceSubTotal}
+            discountAmount={invoiceDiscount}
+            taxAmount={0} // Diset 0 atau bisa diubah menjadi 11% dari subtotal jika diperlukan
+            grandTotal={invoiceGrandTotal}
+          />
+        )}
       </div>
 
       {/* ================================================= */}

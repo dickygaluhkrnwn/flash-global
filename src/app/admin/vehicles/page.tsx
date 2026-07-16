@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Save, CheckCircle2, Truck, 
   Box, Scale, AlertCircle, Plus, 
-  Trash2, X, Search, Filter, ArrowUpDown, ShieldAlert, Activity, Edit2
+  Trash2, X, Search, Filter, ArrowUpDown, ShieldAlert, Activity, Edit2, Car, Info
 } from "lucide-react";
 
 // --- IMPORT FIREBASE CORE ---
@@ -42,7 +42,7 @@ export default function AdminVehiclesPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   const [currentVehicle, setCurrentVehicle] = useState<Partial<DynamicVehicle>>({
-    name: "", id: "", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
+    name: "", id: "", category: "Mobil", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
     dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
   });
 
@@ -70,7 +70,7 @@ export default function AdminVehiclesPage() {
     fetchSettings();
   }, []);
 
-  // Mencegah scroll body saat modal terbuka (HARUS DI ATAS GUARD)
+  // Mencegah scroll body saat modal terbuka
   useEffect(() => {
     if (isModalOpen) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "auto";
@@ -101,7 +101,7 @@ export default function AdminVehiclesPage() {
   const handleOpenAddModal = () => {
     setModalMode("add");
     setCurrentVehicle({
-      name: "", id: "", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
+      name: "", id: "", category: "Mobil", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
       dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
     });
     setIsModalOpen(true);
@@ -109,12 +109,15 @@ export default function AdminVehiclesPage() {
 
   const handleOpenEditModal = (vehicle: DynamicVehicle) => {
     setModalMode("edit");
-    // Cari index global asli berdasarkan ID
     const globalIndex = pricingConfig.customVehicles.findIndex((v: DynamicVehicle) => v.id === vehicle.id);
     setEditingIndex(globalIndex);
     
+    // Set fallback category jika data lama belum memilikinya
+    const fallbackCategory = vehicle.category || (vehicle.isMotor ? "Motor" : "Mobil");
+
     setCurrentVehicle({
       ...vehicle,
+      category: fallbackCategory,
       dimS: vehicle.dimS || { p: 20, l: 20, t: 20 },
       dimM: vehicle.dimM || { p: 40, l: 40, t: 40 },
       dimL: vehicle.dimL || { p: 50, l: 50, t: 50 }
@@ -131,7 +134,8 @@ export default function AdminVehiclesPage() {
     const vehicleData: DynamicVehicle = {
       id: currentVehicle.id.toLowerCase().replace(/\s+/g, '-'),
       name: currentVehicle.name,
-      isMotor: currentVehicle.isMotor || false,
+      category: currentVehicle.category as "Motor" | "Mobil" | "Truk",
+      isMotor: currentVehicle.category === "Motor", // Backward compatibility
       maxWeight: Number(currentVehicle.maxWeight) || 100,
       baseFare: Number(currentVehicle.baseFare) || 0,
       minKm: Number(currentVehicle.minKm) || 0,
@@ -139,18 +143,15 @@ export default function AdminVehiclesPage() {
       insurancePercent: Number(currentVehicle.insurancePercent) || 0,
     };
 
-    // Tambahkan dimensi jika ia motor
     if (vehicleData.isMotor) {
       vehicleData.dimS = currentVehicle.dimS;
       vehicleData.dimM = currentVehicle.dimM;
       vehicleData.dimL = currentVehicle.dimL;
     }
 
-    // Menggunakan const karena kita tidak me-reassign variablenya, melainkan memutasi isinya
     const updatedVehicles = [...(pricingConfig.customVehicles || [])];
     
     if (modalMode === "add") {
-      // Cek apakah ID sudah ada
       if (updatedVehicles.find(v => v.id === vehicleData.id)) {
         alert("ID Armada sudah digunakan. Silakan gunakan nama/ID lain.");
         return;
@@ -172,11 +173,11 @@ export default function AdminVehiclesPage() {
 
   const vehiclesArray = pricingConfig.customVehicles || [];
 
-  // Logic Advanced Filter & Sort
   const processedData = vehiclesArray
     .filter((v: DynamicVehicle) => {
       const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchType = filterType === "all" ? true : filterType === "motor" ? v.isMotor : !v.isMotor;
+      const vCat = v.category || (v.isMotor ? "Motor" : "Mobil");
+      const matchType = filterType === "all" ? true : vCat.toLowerCase() === filterType.toLowerCase();
       return matchSearch && matchType;
     })
     .sort((a: DynamicVehicle, b: DynamicVehicle) => {
@@ -186,16 +187,12 @@ export default function AdminVehiclesPage() {
       return 0;
     });
 
-  // Statistik
+  // Statistik Dinamis
   const totalVehicles = vehiclesArray.length;
-  const totalMotor = vehiclesArray.filter((v: DynamicVehicle) => v.isMotor).length;
-  const totalMobil = vehiclesArray.filter((v: DynamicVehicle) => !v.isMotor).length;
+  const totalMotor = vehiclesArray.filter((v: DynamicVehicle) => (v.category || (v.isMotor ? "Motor" : "Mobil")) === "Motor").length;
+  const totalMobil = vehiclesArray.filter((v: DynamicVehicle) => (v.category || (v.isMotor ? "Motor" : "Mobil")) === "Mobil").length;
+  const totalTruk = vehiclesArray.filter((v: DynamicVehicle) => v.category === "Truk").length;
 
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
-  
-  // RBAC GUARD (Hanya Superadmin & Operasional)
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
@@ -234,9 +231,9 @@ export default function AdminVehiclesPage() {
             <Truck className="w-3 h-3 fill-current"/> Operational Control Panel
           </Badge>
           <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
-            Master Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Kendaraan & Spesifikasi</span>
+            Master Data <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Kendaraan & Klasifikasi</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5 max-w-2xl">Atur jenis armada, batas maksimal muatan, dimensi ruang, dan spesifikasi pendukung operasional.</p>
+          <p className="text-slate-500 text-sm mt-1.5 max-w-2xl">Atur jenis armada dan klasifikasi tingkat kendaraan (Personal / Fleet) untuk sistem pendaftaran Driver.</p>
         </div>
         
         <Button onClick={handleOpenAddModal} className="w-full md:w-auto h-12 px-6 text-sm font-bold shrink-0">
@@ -245,19 +242,23 @@ export default function AdminVehiclesPage() {
       </div>
 
       {/* ADVANCED STATISTIK */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10"><Truck className="w-16 h-16 text-white"/></div>
-          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Tipe Armada</span>
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Box className="w-16 h-16 text-white"/></div>
+          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Total Tipe Armada</span>
           <p className="text-3xl font-black text-white mt-2">{totalVehicles}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Armada Roda Dua (Motor)</span>
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Motor (Roda 2)</span>
           <p className="text-3xl font-black text-slate-900 mt-2">{totalMotor}</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Armada Roda Empat (Mobil/Truk)</span>
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Mobil/Van (Roda 4)</span>
           <p className="text-3xl font-black text-slate-900 mt-2">{totalMobil}</p>
+        </div>
+        <div className="bg-[#7A171D]/5 border border-[#7A171D]/10 rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <span className="text-[#7A171D] text-[10px] font-bold uppercase tracking-wider">Truk/Heavy Duty (Roda 6+)</span>
+          <p className="text-3xl font-black text-[#7A171D] mt-2">{totalTruk}</p>
         </div>
       </div>
 
@@ -273,9 +274,10 @@ export default function AdminVehiclesPage() {
             <div className="relative">
               <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-white border border-slate-300 rounded-lg pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#7A171D] shadow-sm appearance-none font-semibold text-slate-700 min-w-[140px]">
-                <option value="all">Semua Jenis</option>
-                <option value="motor">Roda Dua</option>
-                <option value="mobil">Roda Empat+</option>
+                <option value="all">Semua Kategori</option>
+                <option value="motor">Roda Dua (Motor)</option>
+                <option value="mobil">Mobil / Van</option>
+                <option value="truk">Truk / Kargo Berat</option>
               </select>
             </div>
             <div className="relative">
@@ -317,19 +319,16 @@ export default function AdminVehiclesPage() {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-            {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
               onClick={() => setIsModalOpen(false)} 
             />
             
-            {/* Modal Box */}
             <motion.div 
               initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
               className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]"
             >
-              {/* Modal Header */}
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
                 <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                   {modalMode === "add" ? <><Plus className="w-5 h-5 text-[#7A171D]" /> Tambah Armada</> : <><Edit2 className="w-5 h-5 text-[#7A171D]" /> Edit Spesifikasi</>}
@@ -339,47 +338,83 @@ export default function AdminVehiclesPage() {
                 </button>
               </div>
 
-              {/* Modal Body (Scrollable) */}
               <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
                 
-                {/* Info Dasar */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Armada</label>
-                    <Input placeholder="Cth: Blind Van" value={currentVehicle.name} onChange={(e) => setCurrentVehicle({...currentVehicle, name: e.target.value, id: modalMode === "add" ? e.target.value : currentVehicle.id})} className="border-slate-200" />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nama Armada</label>
+                    <Input placeholder="Cth: Truk Engkel Box" value={currentVehicle.name} onChange={(e) => setCurrentVehicle({...currentVehicle, name: e.target.value, id: modalMode === "add" ? e.target.value : currentVehicle.id})} className="border-slate-200 font-bold" />
                   </div>
                   <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Kode ID (Unik)</label>
-                    <Input placeholder="cth: blind-van" value={currentVehicle.id} disabled={modalMode === "edit"} onChange={(e) => setCurrentVehicle({...currentVehicle, id: e.target.value})} className="border-slate-200 bg-slate-100" />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Kode ID (Unik)</label>
+                    <Input placeholder="cth: truk-engkel" value={currentVehicle.id} disabled={modalMode === "edit"} onChange={(e) => setCurrentVehicle({...currentVehicle, id: e.target.value})} className="border-slate-200 bg-slate-100 font-mono" />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" /> Maks Kapasitas</label>
-                    <div className="relative">
-                      <Input type="number" placeholder="Cth: 800" value={currentVehicle.maxWeight || ""} onChange={(e) => setCurrentVehicle({...currentVehicle, maxWeight: Number(e.target.value)})} className="border-slate-200 pr-10 font-bold" />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">KG</span>
+                {/* PILIHAN KATEGORI ARMADA (ENTERPRISE) */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Kategori Klasifikasi Kendaraan</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* Opsi Motor */}
+                    <div 
+                      onClick={() => setCurrentVehicle({...currentVehicle, category: "Motor"})}
+                      className={cn("cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 text-center transition-all", currentVehicle.category === "Motor" ? "border-[#C5A059] bg-[#C5A059]/10 shadow-sm" : "border-slate-200 bg-slate-50 hover:border-[#C5A059]/50")}
+                    >
+                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", currentVehicle.category === "Motor" ? "bg-[#C5A059] text-white" : "bg-slate-200 text-slate-500")}><Truck className="w-4 h-4"/></div>
+                      <span className={cn("text-[10px] font-bold uppercase", currentVehicle.category === "Motor" ? "text-[#A68345]" : "text-slate-600")}>Motor</span>
+                    </div>
+
+                    {/* Opsi Mobil */}
+                    <div 
+                      onClick={() => setCurrentVehicle({...currentVehicle, category: "Mobil"})}
+                      className={cn("cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 text-center transition-all", currentVehicle.category === "Mobil" ? "border-blue-500 bg-blue-50 shadow-sm" : "border-slate-200 bg-slate-50 hover:border-blue-300")}
+                    >
+                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", currentVehicle.category === "Mobil" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-500")}><Car className="w-4 h-4"/></div>
+                      <span className={cn("text-[10px] font-bold uppercase", currentVehicle.category === "Mobil" ? "text-blue-700" : "text-slate-600")}>Mobil / Van</span>
+                    </div>
+
+                    {/* Opsi Truk */}
+                    <div 
+                      onClick={() => setCurrentVehicle({...currentVehicle, category: "Truk"})}
+                      className={cn("cursor-pointer border-2 rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 text-center transition-all", currentVehicle.category === "Truk" ? "border-[#7A171D] bg-[#7A171D]/10 shadow-sm" : "border-slate-200 bg-slate-50 hover:border-[#7A171D]/50")}
+                    >
+                      <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", currentVehicle.category === "Truk" ? "bg-[#7A171D] text-white" : "bg-slate-200 text-slate-500")}><Truck className="w-4 h-4"/></div>
+                      <span className={cn("text-[10px] font-bold uppercase", currentVehicle.category === "Truk" ? "text-[#7A171D]" : "text-slate-600")}>Truk Kargo</span>
                     </div>
                   </div>
-                  <div className="col-span-2 sm:col-span-1 flex items-end">
-                    <div className="w-full flex items-center gap-3 p-3.5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer" onClick={() => setCurrentVehicle({...currentVehicle, isMotor: !currentVehicle.isMotor})}>
-                      <input type="checkbox" checked={currentVehicle.isMotor} onChange={(e) => setCurrentVehicle({...currentVehicle, isMotor: e.target.checked})} className="w-4 h-4 accent-[#7A171D] pointer-events-none" />
-                      <span className="text-sm font-bold text-slate-700">Roda Dua (Motor)</span>
-                    </div>
+                </div>
+
+                <AnimatePresence mode="wait">
+                  {currentVehicle.category === "Truk" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                      <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex gap-3 shadow-inner">
+                        <Info className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-red-800 text-[11px] leading-relaxed font-medium">
+                          <b className="text-red-900 block mb-1">Fleet / Vendor Management Aktif</b>
+                          Kategori Truk akan mengaktifkan sistem registrasi Perusahaan (Company), Driver, dan Vehicle (Armada) secara terpisah di Portal Driver. Pendaftaran mewajibkan unggah dokumen STNK, KIR, dan NPWP Perusahaan.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Scale className="w-3.5 h-3.5" /> Maks Kapasitas (Kg)</label>
+                  <div className="relative">
+                    <Input type="number" placeholder="Cth: 800" value={currentVehicle.maxWeight || ""} onChange={(e) => setCurrentVehicle({...currentVehicle, maxWeight: Number(e.target.value)})} className="border-slate-200 pr-10 font-bold" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">KG</span>
                   </div>
                 </div>
 
                 {/* DIMENSI KHUSUS MOTOR */}
                 <AnimatePresence>
-                  {currentVehicle.isMotor && (
+                  {currentVehicle.category === "Motor" && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                       <div className="space-y-4 pt-4 border-t border-dashed border-slate-200">
-                        <h3 className="text-xs font-bold text-[#C5A059] flex items-center gap-2 uppercase tracking-widest">
-                          <Box className="w-4 h-4" /> Template Dimensi Kotak (P x L x T cm)
+                        <h3 className="text-[10px] font-bold text-[#C5A059] flex items-center gap-2 uppercase tracking-widest">
+                          <Box className="w-3.5 h-3.5" /> Template Dimensi Kotak (P x L x T cm)
                         </h3>
                         
-                        {/* Size S */}
                         <div className="flex items-center gap-3 bg-amber-50/50 p-3 rounded-xl border border-amber-100">
                           <span className="w-8 h-8 flex items-center justify-center bg-white border border-amber-200 rounded-lg font-black text-amber-600 shrink-0 shadow-sm">S</span>
                           <div className="flex flex-1 gap-2">
@@ -389,7 +424,6 @@ export default function AdminVehiclesPage() {
                           </div>
                         </div>
 
-                        {/* Size M */}
                         <div className="flex items-center gap-3 bg-amber-50/50 p-3 rounded-xl border border-amber-100">
                           <span className="w-8 h-8 flex items-center justify-center bg-white border border-amber-200 rounded-lg font-black text-amber-600 shrink-0 shadow-sm">M</span>
                           <div className="flex flex-1 gap-2">
@@ -399,7 +433,6 @@ export default function AdminVehiclesPage() {
                           </div>
                         </div>
 
-                        {/* Size L */}
                         <div className="flex items-center gap-3 bg-amber-50/50 p-3 rounded-xl border border-amber-100">
                           <span className="w-8 h-8 flex items-center justify-center bg-white border border-amber-200 rounded-lg font-black text-amber-600 shrink-0 shadow-sm">L</span>
                           <div className="flex flex-1 gap-2">
@@ -413,20 +446,11 @@ export default function AdminVehiclesPage() {
                   )}
                 </AnimatePresence>
 
-                {!currentVehicle.isMotor && (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      <b className="text-slate-800">Catatan Dimensi:</b> Karena ini armada Mobil/Besar, Klien akan diwajibkan memasukkan ukuran dimensi (P x L x T) secara manual pada form pemesanan untuk mengakomodasi berbagai jenis muatan.
-                    </p>
-                  </div>
-                )}
-
               </div>
 
-              {/* Modal Footer */}
               <div className="p-6 border-t border-slate-100 bg-white shrink-0 flex gap-4">
-                <Button onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1 border-slate-300">Batal</Button>
-                <Button onClick={handleSubmitModal} className="flex-1 bg-[#7A171D] hover:bg-[#5A0E13] text-white">
+                <Button onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1 border-slate-300 font-bold">Batal</Button>
+                <Button onClick={handleSubmitModal} className="flex-1 bg-[#7A171D] hover:bg-[#5A0E13] text-white shadow-md font-bold">
                   {isSaving ? "Memproses..." : <><Save className="w-4 h-4 mr-2" /> Simpan Data</>}
                 </Button>
               </div>
@@ -449,15 +473,33 @@ interface VehicleCardProps {
 }
 
 function VehicleCard({ data, onEdit, onDelete }: VehicleCardProps) {
-  const isMotor = data.isMotor;
-  const badgeClass = isMotor ? "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20" : "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20";
+  const vCat = data.category || (data.isMotor ? "Motor" : "Mobil");
+  
+  // Custom styling berdasarkan kategori
+  let badgeClass = "";
+  let icon = <Car className="w-6 h-6" />;
+  let label = "";
+
+  if (vCat === "Motor") {
+    badgeClass = "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20";
+    icon = <Truck className="w-6 h-6" />;
+    label = "Motor (Roda 2)";
+  } else if (vCat === "Mobil") {
+    badgeClass = "bg-blue-50 text-blue-600 border-blue-200";
+    icon = <Car className="w-6 h-6" />;
+    label = "Mobil / Van";
+  } else {
+    badgeClass = "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20";
+    icon = <Truck className="w-6 h-6" />;
+    label = "Truk Kargo";
+  }
 
   return (
     <Card className="shadow-sm border-slate-200 overflow-hidden relative group hover:shadow-md transition-all">
       <CardHeader className="p-5 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between space-y-0">
         <div className="flex items-center gap-3">
           <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border", badgeClass)}>
-            <Truck className="w-6 h-6" />
+            {icon}
           </div>
           <div className="overflow-hidden">
             <h2 className="text-lg font-black text-slate-900 truncate" title={data.name}>{data.name}</h2>
@@ -465,7 +507,6 @@ function VehicleCard({ data, onEdit, onDelete }: VehicleCardProps) {
           </div>
         </div>
         
-        {/* Tombol Aksi (Edit & Hapus) */}
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={onEdit} className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-colors shadow-sm" title="Edit Spesifikasi">
             <Edit2 className="w-4 h-4" />
@@ -479,10 +520,10 @@ function VehicleCard({ data, onEdit, onDelete }: VehicleCardProps) {
       <CardContent className="p-6 space-y-5">
         
         <div className="flex justify-between items-center pb-4 border-b border-dashed border-slate-200">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Kategori Armada</span>
-          <Badge variant={isMotor ? "gold" : "brand"} className="px-3">
-            {isMotor ? "Roda Dua (Motor)" : "Roda Empat+"}
-          </Badge>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Kategori Armada</span>
+          <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border", badgeClass)}>
+            {label}
+          </span>
         </div>
 
         <div className="flex justify-between items-center pb-4 border-b border-dashed border-slate-200">
@@ -496,14 +537,18 @@ function VehicleCard({ data, onEdit, onDelete }: VehicleCardProps) {
         <div className="space-y-3 pt-2">
           <div className="flex items-center gap-2 mb-2">
             <Box className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dimensi Ruang</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Dimensi Ruang</span>
           </div>
           
-          {isMotor ? (
+          {vCat === "Motor" ? (
             <div className="flex items-center justify-between text-xs font-bold">
               <div className="bg-slate-100 px-3 py-1.5 rounded text-slate-600 border border-slate-200">S: {data.dimS?.p}x{data.dimS?.l}x{data.dimS?.t}</div>
               <div className="bg-slate-100 px-3 py-1.5 rounded text-slate-600 border border-slate-200">M: {data.dimM?.p}x{data.dimM?.l}x{data.dimM?.t}</div>
               <div className="bg-slate-100 px-3 py-1.5 rounded text-slate-600 border border-slate-200">L: {data.dimL?.p}x{data.dimL?.l}x{data.dimL?.t}</div>
+            </div>
+          ) : vCat === "Truk" ? (
+             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+              <span className="text-xs font-bold text-red-700">Vendor Fleet Management</span>
             </div>
           ) : (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">

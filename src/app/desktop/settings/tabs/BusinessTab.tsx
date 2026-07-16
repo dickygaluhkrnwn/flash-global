@@ -6,7 +6,7 @@ import {
   Crown, ArrowRight, Building, 
   MapPin, User, Briefcase, TrendingUp, 
   FileCheck, ShieldAlert, MessageCircle, 
-  CheckCircle2, AlertCircle, Clock
+  CheckCircle2, AlertCircle, Clock, CreditCard
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -82,7 +82,7 @@ export default function BusinessTab() {
             setContractStatus(data.contractStatus || null);
             setB2bLimit(data.b2bLimit || 0);
 
-            // Jika role di database sudah b2b tapi di zustand belum, update zustand
+            // Jika role di database sudah b2b tapi di zustand belum, update zustand otomatis
             if (data.role === "b2b" && user.role !== "b2b") {
               login({ ...user, role: "b2b" });
             }
@@ -161,15 +161,15 @@ export default function BusinessTab() {
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
         <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Branch & Store Profile</h2>
-            <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium">Kelola nama entitas dan lokasi gudang default untuk mempercepat penjemputan.</p>
+            <h2 className="text-xl font-black text-slate-900">Profil Cabang Gudang</h2>
+            <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium">Kelola nama entitas dan lokasi gudang default untuk mempercepat form penjemputan.</p>
           </div>
           {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)} variant="outline" className="h-10 text-xs font-bold w-full sm:w-auto">
+            <Button onClick={() => setIsEditing(true)} variant="outline" className="h-10 text-xs font-bold w-full sm:w-auto border-slate-300">
               Edit Data Cabang
             </Button>
           ) : (
-            <Button onClick={handleSaveCompany} disabled={isSaving} variant="primary" className="h-10 text-xs font-bold w-full sm:w-auto">
+            <Button onClick={handleSaveCompany} disabled={isSaving} variant="primary" className="h-10 text-xs font-bold w-full sm:w-auto shadow-md">
               {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
           )}
@@ -177,7 +177,7 @@ export default function BusinessTab() {
 
         <div className="p-6 md:p-8 space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Display Name / Branch Name</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Cabang / Toko</label>
             <div className="relative">
               <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input 
@@ -185,13 +185,13 @@ export default function BusinessTab() {
                 disabled={!isEditing} 
                 value={formData.companyName} 
                 onChange={(e) => setFormData({...formData, companyName: e.target.value})} 
-                className="pl-11 disabled:bg-slate-100 disabled:text-slate-500 font-bold" 
+                className="pl-11 disabled:bg-slate-50 disabled:text-slate-500 font-bold focus-visible:border-[#7A171D]" 
                 placeholder="Cth: Toko Flash Global Pusat" 
               />
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Default Warehouse Address</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Alamat Penjemputan Default</label>
             <div className="relative">
               <MapPin className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
               <textarea 
@@ -199,7 +199,7 @@ export default function BusinessTab() {
                 value={formData.defaultAddress} 
                 onChange={(e) => setFormData({...formData, defaultAddress: e.target.value})} 
                 rows={3} 
-                className="flex w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pl-11 text-sm font-bold text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:border-[#7A171D] disabled:bg-slate-100 disabled:text-slate-500 resize-none" 
+                className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pl-11 text-sm font-bold text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:border-[#7A171D] disabled:bg-slate-50 disabled:text-slate-500 resize-none shadow-sm" 
                 placeholder="Alamat lengkap pergudangan..."
               ></textarea>
             </div>
@@ -223,31 +223,45 @@ export default function BusinessTab() {
         
         {/* Konten Tergantung Status */}
         {contractStatus === "Approved" ? (
-          // UI JIKA SUDAH APPROVED (KARTU VIP)
+          // UI JIKA SUDAH APPROVED (KARTU VIP B2B ENTERPRISE)
           <div className="relative z-10 flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg mb-5 border border-white/20">
               <Crown className="w-8 h-8 text-[#7A171D]" />
             </div>
             <h2 className="text-2xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#C5A059]">Verified Corporate Partner</h2>
-            <p className="text-white/80 text-sm font-medium mb-8 max-w-md mx-auto">Akun bisnis Anda telah tervalidasi. Anda sekarang berhak mendapatkan diskon khusus dan fitur pembayaran tempo (Net 30).</p>
+            <p className="text-white/80 text-sm font-medium mb-8 max-w-md mx-auto">Akun bisnis Anda telah tervalidasi. Anda sekarang berhak mendapatkan diskon khusus dan fitur bypass pembayaran (Piutang Net 30).</p>
             
-            <div className="w-full max-w-sm bg-black/20 backdrop-blur-md rounded-2xl p-5 border border-white/10 text-left">
-              <p className="text-[10px] text-[#DFBE7B] font-bold uppercase tracking-widest mb-1">Limit Piutang (Credit Line)</p>
-              <p className="text-3xl font-black text-white">Rp {(b2bLimit / 1000000).toLocaleString('id-ID')} Juta</p>
-              <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-white/60 font-medium">
-                <span>Status Akun: Aktif</span>
-                <span className="flex items-center gap-1"><CheckCircle2 className="w-4 h-4 text-emerald-400"/> Tervalidasi</span>
+            <div className="w-full max-w-md bg-black/30 backdrop-blur-md rounded-2xl p-6 border border-white/10 text-left shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard className="w-16 h-16 text-white"/></div>
+              
+              <div className="relative z-10">
+                <p className="text-[10px] text-[#DFBE7B] font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5" /> Plafon Kredit Tersedia
+                </p>
+                <p className="text-3xl md:text-4xl font-black text-white tracking-tight">Rp {(b2bLimit / 1000000).toLocaleString('id-ID')} Juta</p>
+                
+                <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between text-xs text-white/70 font-medium">
+                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400"/> Status Kontrak Aktif</span>
+                  <span className="font-mono bg-white/10 px-2 py-1 rounded text-white">{b2bData.npwp || "B2B-VIP"}</span>
+                </div>
               </div>
             </div>
+            
+            <p className="text-[10px] text-white/50 mt-4 max-w-xs font-medium">Rincian penggunaan limit dan sisa saldo hutang (Outstanding) dapat dipantau melalui portal Finance bulanan Anda.</p>
           </div>
         ) : contractStatus === "Pending" ? (
-          // UI JIKA PENDING REVIEW
+          // UI JIKA PENDING REVIEW (KUNCI UI AGAR TIDAK SPAM)
           <div className="relative z-10 flex flex-col items-center text-center py-8">
-            <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center shadow-lg mb-5 border border-amber-500/30">
-              <Clock className="w-8 h-8 text-amber-400" />
+            <div className="w-20 h-20 bg-amber-500/20 rounded-[2rem] flex items-center justify-center shadow-lg mb-6 border border-amber-500/30">
+              <Clock className="w-10 h-10 text-amber-400" />
             </div>
             <h2 className="text-2xl font-black mb-2 text-white">Pengajuan Sedang Ditinjau</h2>
-            <p className="text-slate-400 text-sm font-medium max-w-md mx-auto">Tim Kemitraan kami sedang memvalidasi data perusahaan Anda. Proses ini biasanya memakan waktu 1-2 hari kerja. Tim kami akan menghubungi Anda via WhatsApp.</p>
+            <p className="text-slate-400 text-sm font-medium max-w-md mx-auto leading-relaxed">
+              Tim Kemitraan kami sedang memvalidasi data perusahaan Anda. Proses ini biasanya memakan waktu 1-2 hari kerja. Tim kami akan segera menghubungi Anda via WhatsApp.
+            </p>
+            <div className="mt-8 px-6 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-white/60 tracking-widest uppercase">
+              Mohon Kesediaannya Menunggu
+            </div>
           </div>
         ) : (
           // UI AWAL (BELUM MENGAJUKAN ATAU REJECTED)
@@ -259,7 +273,7 @@ export default function BusinessTab() {
                 </div>
                 <div>
                   <h2 className="text-xl md:text-2xl font-black mb-1">B2B Corporate Account</h2>
-                  <p className="text-slate-400 text-xs md:text-sm font-medium">Daftarkan entitas bisnis Anda untuk fitur pembayaran tempo.</p>
+                  <p className="text-slate-400 text-xs md:text-sm font-medium">Daftarkan entitas bisnis Anda untuk mendapatkan fitur pembayaran tempo (Net 30).</p>
                 </div>
               </div>
               {!showB2BForm && (
@@ -274,7 +288,7 @@ export default function BusinessTab() {
                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                  <div>
                    <p className="text-sm font-bold text-red-400">Pengajuan Sebelumnya Ditolak</p>
-                   <p className="text-xs text-red-200 mt-1">Dokumen atau legalitas Anda mungkin kurang lengkap. Silakan ajukan ulang dengan data yang benar.</p>
+                   <p className="text-xs text-red-200 mt-1">Dokumen atau legalitas perusahaan Anda mungkin tidak sesuai. Silakan ajukan ulang dengan data yang benar.</p>
                  </div>
               </div>
             )}
@@ -285,7 +299,7 @@ export default function BusinessTab() {
                   
                   <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-2 backdrop-blur-sm">
                     <h3 className="text-[#C5A059] font-bold text-base md:text-lg mb-5 flex items-center gap-2">
-                      <Briefcase className="w-5 h-5" /> Business Information
+                      <Briefcase className="w-5 h-5" /> Informasi Profil Bisnis
                     </h3>
                     
                     <form onSubmit={handleSubmitB2B} className="space-y-5">
@@ -324,7 +338,7 @@ export default function BusinessTab() {
                           <div className="relative">
                             <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                             <select value={b2bData.industry} onChange={(e) => setB2bData({...b2bData, industry: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
-                              <option value="" disabled className="text-slate-500">Select an industry...</option>
+                              <option value="" disabled className="text-slate-500">Pilih sektor industri...</option>
                               {industryOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
                             </select>
                           </div>
@@ -336,7 +350,7 @@ export default function BusinessTab() {
                           <div className="relative">
                             <TrendingUp className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                             <select value={b2bData.volume} onChange={(e) => setB2bData({...b2bData, volume: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
-                              <option value="" disabled className="text-slate-500">Select delivery volume...</option>
+                              <option value="" disabled className="text-slate-500">Pilih estimasi volume...</option>
                               {volumeOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
                             </select>
                           </div>
@@ -345,18 +359,18 @@ export default function BusinessTab() {
                       </div>
 
                       <div className="pt-6 flex flex-col-reverse md:flex-row items-center justify-end gap-3 border-t border-white/10 mt-6">
-                        <Button type="button" variant="ghost" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto h-12 text-slate-400 hover:text-white hover:bg-white/10">
-                          Batal
+                        <Button type="button" variant="ghost" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto h-12 text-slate-400 hover:text-white hover:bg-white/10 font-bold">
+                          Batalkan
                         </Button>
-                        <Button type="submit" disabled={isSaving} variant="gold" className="w-full md:w-auto h-12 px-8 shadow-lg">
-                          {isSaving ? "Mengirim..." : <><MessageCircle className="w-4 h-4 mr-2" /> Ajukan Kemitraan B2B</>}
+                        <Button type="submit" disabled={isSaving} variant="gold" className="w-full md:w-auto h-12 px-8 shadow-lg font-bold">
+                          {isSaving ? "Memproses..." : <><MessageCircle className="w-4 h-4 mr-2" /> Ajukan Kemitraan B2B</>}
                         </Button>
                       </div>
                     </form>
 
                   </div>
                   
-                  <div className="flex gap-3 text-[11px] text-slate-400 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 mt-4 font-medium leading-relaxed">
+                  <div className="flex gap-3 text-[11px] text-slate-400 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 mt-4 font-medium leading-relaxed shadow-inner">
                     <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
                     <p>Dokumen legalitas fisik (SIUP/NIB/KTP Direktur) akan diminta oleh tim representatif kami setelah validasi profil bisnis awal ini disetujui.</p>
                   </div>

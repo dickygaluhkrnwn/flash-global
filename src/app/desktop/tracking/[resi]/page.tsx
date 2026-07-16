@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, Clock, MapPin, Plane, 
   Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, User, Banknote
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 // --- IMPORT GLOBAL TYPES ---
 import { 
   FirebaseTimestamp, Coordinates, LocationDetail, 
-  MapDropItem, TrackingHistoryItem, TrackingData, MapViewState 
+  MapDropItem, TrackingData, MapViewState 
 } from "@/types/order";
 
 // --- DYNAMIC IMPORT MAPBASE ---
@@ -43,6 +43,9 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
 
   const [mapViewState, setMapViewState] = useState<MapViewState>({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
+  
+  // State untuk animasi simulasi pergerakan truk
+  const [simulatedDriverCoords, setSimulatedDriverCoords] = useState<Coordinates | null>(null);
 
   // Type-Safe getCoords
   const getCoords = (locationData: unknown): Coordinates | null => {
@@ -71,7 +74,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   }
 
   // ====================================================================
-  // SUPER SMART FALLBACK TRACKING LOGIC (UPDATE)
+  // SUPER SMART FALLBACK TRACKING LOGIC
   // ====================================================================
   useEffect(() => {
     let unsub = () => {};
@@ -84,7 +87,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       let isGlobal = false;
 
       try {
-        // 1. Coba pencarian Exact Match (Sama Persis) ID Dokumen
         let docRef = doc(db, "orders", targetId);
         let docSnap = await getDoc(docRef);
 
@@ -96,24 +98,20 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
             targetCollection = "quotes";
             isGlobal = true;
           } else {
-            // 3. PENCARIAN CERDAS KE SELURUH DATABASE
             const ordersSnap = await getDocs(collection(db, "orders"));
             const queryUpper = awbNumber.toUpperCase();
 
             const foundOrder = ordersSnap.docs.find(d => {
               const data = d.data();
-              // Cek ID Dokumen
               const matchId = d.id.toUpperCase().includes(queryUpper);
-              // Cek Resi di Array Destinations
               const matchResiArray = data.destinations?.some((dest: LocationDetail) => dest.resi?.toUpperCase().includes(queryUpper));
-              // Cek Resi di Induk
               const matchResiMain = data.resi?.toUpperCase().includes(queryUpper);
               
               return matchId || matchResiArray || matchResiMain;
             });
             
             if (foundOrder) {
-              targetId = foundOrder.id; // Kunci Target ID dengan ID Asli Database
+              targetId = foundOrder.id; 
               targetCollection = "orders";
             } else {
               const quotesSnap = await getDocs(collection(db, "quotes"));
@@ -126,19 +124,16 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
               } else {
                  setIsLoading(false);
                  setIsNotFound(true);
-                 return; // Gagal Semua
+                 return;
               }
             }
           }
         }
 
-        // Jika berhasil ditemukan, lakukan Live Data Snapshot
         const finalDocRef = doc(db, targetCollection, targetId);
         unsub = onSnapshot(finalDocRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            
-            // Ambil resi representatif jika ada
             const resiStr = data.destinations?.[0]?.resi || data.resi || snap.id;
 
             setTrackingData({
@@ -165,7 +160,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     };
 
     findAndListenOrder();
-
     return () => unsub();
   }, [awbNumber]);
 
@@ -218,6 +212,52 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingData]);
 
+  // ====================================================================
+  // ALGORITMA SIMULASI TRUK BERJALAN (LIVE ROUTE ANIMATION)
+  // ====================================================================
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    const status = trackingData?.status || "";
+    const isActiveStatus = status === "Dikirim" || status.includes("Transit") || status.includes("Jemput");
+    const isCompletedStatus = status.includes("Selesai") || status.includes("Tiba");
+
+    if (isActiveStatus && routeData && typeof routeData === "object" && "coordinates" in routeData) {
+      // 1. Jika barang sedang dalam perjalanan, animasikan truk di atas garis rute
+      const geometry = routeData as { coordinates: [number, number][] };
+      const coords = geometry.coordinates;
+      let currentIndex = 0;
+
+      if (coords && coords.length > 0) {
+        interval = setInterval(() => {
+          if (currentIndex < coords.length) {
+            setSimulatedDriverCoords({ lng: coords[currentIndex][0], lat: coords[currentIndex][1] });
+            // Lewati beberapa titik agar truk berjalan dengan kecepatan proporsional
+            const step = Math.max(1, Math.floor(coords.length / 80)); 
+            currentIndex += step;
+          } else {
+            currentIndex = 0; // Loop kembali untuk keperluan simulasi
+          }
+        }, 150);
+      }
+    } else if (isCompletedStatus) {
+      // 2. Jika status selesai, parkirkan truk di titik tujuan (drop terakhir)
+      if (dropsForMap.length > 0) {
+        const lastDrop = dropsForMap[dropsForMap.length - 1];
+        setSimulatedDriverCoords({ lng: lastDrop.lng!, lat: lastDrop.lat! });
+      }
+    } else {
+      // 3. Jika baru diproses (belum dikirim), parkirkan truk di titik awal (Origin) atau sembunyikan
+      setSimulatedDriverCoords(trackingData?.driverCoords || originLatLng || null);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingData?.status, routeData]);
+
+
   const formatFirebaseDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "Baru saja";
     const date = (typeof timestamp === "object" && "toDate" in timestamp && typeof timestamp.toDate === "function") ? timestamp.toDate() : new Date(timestamp as string | number);
@@ -228,7 +268,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     const s = statusText.toLowerCase();
     if (s.includes("terbang") || s.includes("udara") || s.includes("pesawat")) return Plane;
     if (s.includes("laut") || s.includes("kapal") || s.includes("pelabuhan")) return Ship;
-    if (s.includes("kurir") || s.includes("truk") || s.includes("jalan") || s.includes("antar") || s.includes("jemput")) return Truck;
+    if (s.includes("kurir") || s.includes("truk") || s.includes("jalan") || s.includes("antar") || s.includes("jemput") || s.includes("transit")) return Truck;
     if (s.includes("tiba") || s.includes("sampai") || s.includes("selesai") || s.includes("lunas") || s.includes("terverifikasi")) return CheckCircle2;
     if (s.includes("pembayaran")) return Banknote;
     return Package;
@@ -237,17 +277,15 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   const renderTimeline = () => {
     if (!trackingData) return [];
     
-    // Reverse array agar log terbaru berada di paling atas
     if (trackingData.trackingHistory && Array.isArray(trackingData.trackingHistory) && trackingData.trackingHistory.length > 0) {
       return [...trackingData.trackingHistory].reverse().map((item, idx) => ({
         ...item,
         icon: getIconForStatus(item.status),
-        isCurrent: idx === 0, // Item paling atas adalah status teraktual
+        isCurrent: idx === 0, 
         isCompleted: true
       }));
     }
 
-    // Fallback pertama kali order dibuat
     return [
       {
         id: "def-1",
@@ -313,7 +351,8 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
                   <div className="flex items-center gap-4 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 shadow-inner">
                     <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-[#7A171D] border border-slate-100 shrink-0">
-                      {trackingData.status === "Selesai" ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Package className="w-6 h-6" />}
+                      {}
+                      {trackingData.status?.includes("Selesai") ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Package className="w-6 h-6" />}
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Status Terkini</p>
@@ -341,7 +380,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                     originCoords={originLatLng}
                     drops={dropsForMap}
                     routeData={routeData}
-                    driverCoords={trackingData.driverCoords}
+                    driverCoords={simulatedDriverCoords} 
                   />
 
                   {!originLatLng && (
@@ -411,46 +450,53 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                     <div className="absolute top-4 bottom-8 left-[23px] md:left-[31px] w-[2px] bg-slate-100"></div>
 
                     <div className="space-y-8 relative">
-                      {timelineData.map((item, index) => {
-                        const NodeIcon = item.icon;
-                        return (
-                          <div key={item.id || index} className="flex gap-4 md:gap-6 relative items-start group">
-                            
-                            {/* Ring Progress Node Status */}
-                            <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 z-10 border-[3px] shadow-sm transition-all duration-300 ${
-                              item.isCurrent 
-                                ? "bg-[#7A171D] text-white border-white shadow-lg shadow-[#7A171D]/30 scale-110" 
-                                : "bg-slate-50 text-slate-400 border-white group-hover:border-slate-200 group-hover:bg-slate-100"
-                            }`}>
-                              <NodeIcon className="w-4 h-4 md:w-5 md:h-5" />
-                            </div>
+                      <AnimatePresence>
+                        {timelineData.map((item, index) => {
+                          const NodeIcon = item.icon;
+                          return (
+                            <motion.div 
+                              key={item.id || index}
+                              initial={{ opacity: 0, x: 20, filter: "blur(4px)" }}
+                              animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                              transition={{ duration: 0.4, delay: index * 0.15, ease: "easeOut" }}
+                              className="flex gap-4 md:gap-6 relative items-start group"
+                            >
+                              {/* Ring Progress Node Status */}
+                              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 z-10 border-[3px] shadow-sm transition-all duration-300 ${
+                                item.isCurrent 
+                                  ? "bg-[#7A171D] text-white border-white shadow-lg shadow-[#7A171D]/30 scale-110" 
+                                  : "bg-slate-50 text-slate-400 border-white group-hover:border-slate-200 group-hover:bg-slate-100"
+                              }`}>
+                                <NodeIcon className="w-4 h-4 md:w-5 md:h-5" />
+                              </div>
 
-                            {/* Text Deskripsi Node */}
-                            <div className={`flex-1 p-5 rounded-2xl transition-all duration-300 ${
-                              item.isCurrent
-                                ? "bg-white border-2 border-slate-200 shadow-md"
-                                : "bg-slate-50/50 border border-slate-100 group-hover:bg-slate-50"
-                            }`}>
-                              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
-                                <h4 className={`text-sm font-black tracking-wide ${item.isCurrent ? "text-slate-900" : "text-slate-700"}`}>
-                                  {item.status}
-                                </h4>
-                                <span className={`text-[10px] font-bold whitespace-nowrap px-2.5 py-1 rounded-md border w-fit ${
-                                  item.isCurrent ? "bg-red-50 text-red-600 border-red-100" : "bg-white text-slate-500 border-slate-200"
-                                }`}>
-                                  {item.date}
-                                </span>
+                              {/* Text Deskripsi Node */}
+                              <div className={`flex-1 p-5 rounded-2xl transition-all duration-300 ${
+                                item.isCurrent
+                                  ? "bg-white border-2 border-slate-200 shadow-md"
+                                  : "bg-slate-50/50 border border-slate-100 group-hover:bg-slate-50"
+                              }`}>
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
+                                  <h4 className={`text-sm font-black tracking-wide ${item.isCurrent ? "text-slate-900" : "text-slate-700"}`}>
+                                    {item.status}
+                                  </h4>
+                                  <span className={`text-[10px] font-bold whitespace-nowrap px-2.5 py-1 rounded-md border w-fit ${
+                                    item.isCurrent ? "bg-red-50 text-red-600 border-red-100" : "bg-white text-slate-500 border-slate-200"
+                                  }`}>
+                                    {item.date}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed mb-3">{item.description}</p>
+                                
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-white w-fit px-2.5 py-1.5 rounded-lg border border-slate-100">
+                                  <MapPin className="w-3.5 h-3.5" /> {item.location || "Pusat Logistik"}
+                                </div>
                               </div>
-                              <p className="text-xs text-slate-500 font-medium leading-relaxed mb-3">{item.description}</p>
                               
-                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-white w-fit px-2.5 py-1.5 rounded-lg border border-slate-100">
-                                <MapPin className="w-3.5 h-3.5" /> {item.location || "Pusat Logistik"}
-                              </div>
-                            </div>
-                            
-                          </div>
-                        );
-                      })}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   </div>
                 </CardContent>
