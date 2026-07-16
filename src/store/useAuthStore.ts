@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Role } from '@/types/user';
+import { User } from '@/types/user';
 
 // Interface untuk data preferensi regional
 export interface UserRegional {

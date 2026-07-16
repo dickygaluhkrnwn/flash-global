@@ -10,10 +10,10 @@ import Image from "next/image";
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { UserRole } from "@/store/useAuthStore"; // Menggunakan tipe role dari store
+import { Role } from "@/types/user"; // Menggunakan tipe role global yang baru
 
-// Daftar role yang diizinkan masuk portal admin (Sinkron dengan Fase 1.1)
-const allowedRoles: UserRole[] = ["superadmin", "admin_finance", "admin_ops", "admin_cs"];
+// Daftar role yang diizinkan masuk portal admin (Sinkron dengan AuthProvider)
+const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
 
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        const userRole = (userData?.role || "") as UserRole;
+        const userRole = (userData?.role || "") as Role;
         
         if (allowedRoles.includes(userRole)) {
           router.push("/admin"); // Dilempar ke halaman Dashboard Utama Admin
@@ -221,7 +221,7 @@ export default function AdminLoginPage() {
             <div className="relative group">
               <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
               <input 
-                type={showPassword ? "text" : "password"} 
+                type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" 
@@ -236,18 +236,18 @@ export default function AdminLoginPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            
-            {/* Tombol Lupa Kata Sandi */}
-            <div className="flex justify-end mt-2">
-              <button 
-                type="button" 
-                onClick={handleForgotPassword}
-                disabled={isResetting || isLoading}
-                className="text-[11px] font-bold text-slate-500 hover:text-[#7A171D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isResetting ? "Mengirim Tautan..." : "Lupa Kata Sandi?"}
-              </button>
-            </div>
+          </div>
+          
+          {/* Tombol Lupa Kata Sandi */}
+          <div className="flex justify-end mt-2">
+            <button 
+              type="button" 
+              onClick={handleForgotPassword}
+              disabled={isResetting || isLoading}
+              className="text-[11px] font-bold text-slate-500 hover:text-[#7A171D] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isResetting ? "Mengirim Tautan..." : "Lupa Kata Sandi?"}
+            </button>
           </div>
 
           <button 

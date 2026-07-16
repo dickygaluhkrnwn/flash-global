@@ -11,7 +11,7 @@ import {
   Anchor, Plane
 } from "lucide-react";
 import { db } from "@/lib/firebase"; 
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, FieldValue } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 // --- IMPORT GLOBAL TYPES ---
@@ -97,7 +97,7 @@ function QuoteForm() {
       const quoteId = `FFW-${Date.now().toString().slice(-6)}`;
       
       // TYPE-SAFE PAYLOAD: Memastikan payload sesuai dengan Interface Quote
-      const quotePayload: Omit<Quote, 'createdAt'> & { createdAt: any } = {
+      const quotePayload: Omit<Quote, 'createdAt'> & { createdAt: FieldValue } = {
         id: quoteId,
         userId: user?.uid || "guest",
         name: formData.name,
@@ -177,7 +177,7 @@ function QuoteForm() {
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <Button onClick={() => router.push("/delivery/booking")} variant="outline" className="border-slate-200 h-11 text-xs px-5 text-slate-600 hover:text-[#7A171D] hover:border-[#7A171D]/50 hover:bg-[#7A171D]/5 transition-colors">
-             Domestic Cargo
+              Domestic Cargo
           </Button>
           <Button variant="gold" className="shadow-md h-11 text-xs px-5 cursor-default hover:scale-100">
             <Globe2 className="w-4 h-4 mr-1.5"/> Global Cargo

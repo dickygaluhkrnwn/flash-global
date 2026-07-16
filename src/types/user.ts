@@ -1,3 +1,5 @@
+import { FirebaseTimestamp } from './order';
+
 export type Role = 'superadmin' | 'admin_finance' | 'admin_operational' | 'b2b' | 'b2c' | 'driver' | 'staff';
 
 export interface UserPreferences {
@@ -30,16 +32,16 @@ export interface User {
   monthlyVolume?: string;
   contractStatus?: 'Pending' | 'Approved' | 'Rejected' | null;
   b2bLimit?: number;
-  b2bRequestedAt?: Date | any;
+  b2bRequestedAt?: Date | FirebaseTimestamp;
 
   // --- Preferensi & Keamanan ---
   preferences?: UserPreferences;
   notifications?: UserNotifications;
   isSuspended?: boolean; // BARU: Indikator blokir/suspend untuk pengguna B2C/Driver
   
-  // Menggunakan 'any' sementara untuk timestamp Firestore agar fleksibel saat parsing
-  createdAt: Date | any; 
-  updatedAt?: Date | any;
+  // Menggunakan FirebaseTimestamp agar fleksibel saat parsing dari Firestore
+  createdAt: Date | FirebaseTimestamp; 
+  updatedAt?: Date | FirebaseTimestamp;
 }
 
 export interface B2BRequest {
@@ -51,6 +53,6 @@ export interface B2BRequest {
   address: string;
   status: 'pending' | 'approved' | 'rejected';
   reviewedBy?: string; // ID admin yang menyetujui
-  createdAt: Date | any;
-  updatedAt?: Date | any;
+  createdAt: Date | FirebaseTimestamp;
+  updatedAt?: Date | FirebaseTimestamp;
 }

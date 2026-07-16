@@ -1,6 +1,6 @@
 import React, { forwardRef } from "react";
 import Barcode from "react-barcode";
-import { Package, MapPin, User, Truck, Clock } from "lucide-react";
+import { Package } from "lucide-react";
 
 export interface ReceiptProps {
   resi: string;

@@ -21,11 +21,11 @@ import { cn } from "@/lib/utils";
 
 // TAMBAHKAN LIBRARY PRINT DAN TEMPLATE RESI & INVOICE
 import { useReactToPrint } from "react-to-print";
-import { ReceiptTemplate, ReceiptProps } from "@/components/shared/ReceiptTemplate";
-import { InvoiceA4Template, InvoiceA4Props } from "@/components/shared/InvoiceA4Template";
+import { ReceiptTemplate } from "@/components/shared/ReceiptTemplate";
+import { InvoiceA4Template } from "@/components/shared/InvoiceA4Template";
 
 // IMPORT GLOBAL TYPES
-import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
+import { OrderDetail, FirebaseTimestamp, LocationDetail, DeliveryItem } from "@/types/order";
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -342,7 +342,15 @@ export default function OrderDetailPage() {
   const canCancelOrder = (order.status === "Menunggu Pembayaran" || order.status === "Menunggu Kurir") && !order.status.includes("Batal");
 
   // === LOGIKA DATA INVOICE A4 ===
-  const issueDateObj = order.createdAt ? (typeof order.createdAt === 'object' && (order.createdAt as any).toDate ? (order.createdAt as any).toDate() : new Date(order.createdAt as any)) : new Date();
+  let issueDateObj = new Date();
+  if (order.createdAt) {
+    if (typeof order.createdAt === "object" && "toDate" in order.createdAt && typeof order.createdAt.toDate === "function") {
+      issueDateObj = order.createdAt.toDate();
+    } else {
+      issueDateObj = new Date(order.createdAt as string | number);
+    }
+  }
+
   const dueDateObj = new Date(issueDateObj);
   dueDateObj.setDate(dueDateObj.getDate() + (user?.role === 'b2b' ? 30 : 1)); // Net 30 untuk B2B, Net 1 untuk B2C
 
@@ -746,7 +754,7 @@ export default function OrderDetailPage() {
             vehicleName={order.vehicleName || order.vehicle || "Armada"}
             date={formatFirebaseDate(order.createdAt)}
             totalCost={order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost}
-            itemsDesc={((order.destinations?.[0]?.items as any[])?.[0]?.name) || "Paket Kargo"}
+            itemsDesc={((order.destinations?.[0]?.items as DeliveryItem[])?.[0]?.name) || "Paket Kargo"}
           />
         )}
       </div>

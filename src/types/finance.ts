@@ -1,4 +1,4 @@
-import { OrderDetail } from './order';
+import { OrderDetail, FirebaseTimestamp } from './order';
 
 export interface Invoice {
   id: string;
@@ -6,9 +6,9 @@ export interface Invoice {
   userId: string; // Bisa B2B atau B2C
   amount: number;
   status: 'unpaid' | 'paid' | 'overdue' | 'cancelled';
-  dueDate: Date | any;
-  paidAt?: Date | any;
-  createdAt: Date | any;
+  dueDate: Date | FirebaseTimestamp;
+  paidAt?: Date | FirebaseTimestamp;
+  createdAt: Date | FirebaseTimestamp;
 }
 
 // Menggantikan "Driver Wallet" dengan Corporate Balance yang lebih enterprise
@@ -17,7 +17,7 @@ export interface CorporateBalance {
   balance: number; // Deposit (Prabayar)
   creditLimit: number; // Limit Tempo (Pascabayar)
   usedCredit: number; // Hutang berjalan
-  updatedAt: Date | any;
+  updatedAt: Date | FirebaseTimestamp;
 }
 
 export interface WalletLog {
@@ -27,7 +27,7 @@ export interface WalletLog {
   type: 'deposit' | 'deduction' | 'credit_payment' | 'refund';
   description: string;
   recordedBy?: string; // Jika admin yang menginput manual
-  createdAt: Date | any;
+  createdAt: Date | FirebaseTimestamp;
 }
 
 export interface Promo {
@@ -36,7 +36,7 @@ export interface Promo {
   value: number;
   quota: number;
   usedCount: number;
-  expiresAt: string | Date | any;
+  expiresAt: string | Date | FirebaseTimestamp;
   isActive?: boolean;
   targetService?: 'all' | 'domestik' | 'forwarding'; 
   targetUser?: string; // Spesifik ke email user tertentu, atau "all"
@@ -117,6 +117,6 @@ export interface RefundRequest {
   rekeningTujuan: string; // Format: "Nama Bank - No Rekening - Atas Nama"
   status: 'Pending' | 'Approved' | 'Rejected';
   proofUrl?: string; // Bukti transfer pengembalian dana dari Finance
-  createdAt: Date | any;
-  processedAt?: Date | any;
+  createdAt: Date | FirebaseTimestamp;
+  processedAt?: Date | FirebaseTimestamp;
 }

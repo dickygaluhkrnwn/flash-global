@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Navigation, ShieldAlert, Power, 
   Map as MapIcon, Filter, 
-  RefreshCcw, Truck, Package, Clock,
+  RefreshCcw, Truck, Clock,
   MapPin, Activity, AlertCircle, TrendingUp, Building2, User
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -20,7 +20,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 
 // --- IMPORT GLOBAL TYPES ---
 import { ActiveNode, DriverData } from "@/types/admin";
-import { OrderDetail, LocationDetail } from "@/types/order";
+import { OrderDetail, LocationDetail, MapDropItem } from "@/types/order";
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
@@ -124,7 +124,7 @@ export default function RadarPage() {
   // ALGORITMA CLUSTERING (ORDER) & MERGING DENGAN FLEET BASE
   // =======================================================================
   const clusteredDrops = useMemo(() => {
-    let combinedMapDrops: any[] = [];
+    let combinedMapDrops: MapDropItem[] = [];
     
     // LAYER 1: ORDER DESTINATIONS (Dengan Clustering Jarak)
     if (mapLayer === "all" || mapLayer === "orders") {
@@ -134,7 +134,7 @@ export default function RadarPage() {
       filteredNodes.forEach(n => {
         if (!n.coords) return;
         let added = false;
-        for (let c of clusters) {
+        for (const c of clusters) {
           if (Math.abs(c.lat - n.coords.lat) < threshold && Math.abs(c.lng - n.coords.lng) < threshold) {
             c.count += 1;
             c.ids.push(n.id);
@@ -182,7 +182,6 @@ export default function RadarPage() {
   // Kalkulasi Live Stats
   const statsInTransit = nodes.filter(n => n.status.includes("Dikirim") || n.status.includes("Menuju")).length;
   const statsPending = nodes.filter(n => n.status.includes("Sedang Diproses") || n.status.includes("Menunggu")).length;
-  const uniqueVehiclesMoving = new Set(nodes.filter(n => n.status.includes("Dikirim") || n.status.includes("Menuju")).map(n => n.vehicle)).size;
   const standbyFleetCount = idleFleets.length;
 
   if (isHydrated && currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {

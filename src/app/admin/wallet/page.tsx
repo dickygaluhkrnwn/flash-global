@@ -7,7 +7,7 @@ import {
   Wallet, Search, ArrowUpCircle, 
   ArrowDownCircle, UserCircle, CheckCircle2, 
   AlertCircle, History, ShieldAlert, BarChart3, 
-  Building2, ArrowUpDown, Filter, Activity, CreditCard
+  Building2, ArrowUpDown, Activity, CreditCard
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, serverTimestamp, increment, addDoc, query, where } from "firebase/firestore";
@@ -152,30 +152,30 @@ export default function AdminWalletPage() {
   // ENGINE FILTERING & SORTING ADVANCED
   // =======================================================================
   const processedData = useMemo(() => {
-    let result: any[] = activeTab === "driver" ? [...drivers] : [...b2bClients];
+    let result: (DriverData | B2BWalletData)[] = activeTab === "driver" ? [...drivers] : [...b2bClients];
 
     // Filter Pencarian
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(item => {
         if (activeTab === "driver") {
-          return (item.name || "").toLowerCase().includes(q) || (item.phone || "").includes(q);
+          return ((item as DriverData).name || "").toLowerCase().includes(q) || ((item as DriverData).phone || "").includes(q);
         } else {
-          return (item.companyName || "").toLowerCase().includes(q) || (item.email || "").toLowerCase().includes(q);
+          return ((item as B2BWalletData).companyName || "").toLowerCase().includes(q) || ((item as B2BWalletData).email || "").toLowerCase().includes(q);
         }
       });
     }
 
     // Sorting
     result.sort((a, b) => {
-      const balA = activeTab === "driver" ? (a.balance || 0) : (a.depositBalance || 0);
-      const balB = activeTab === "driver" ? (b.balance || 0) : (b.depositBalance || 0);
+      const balA = activeTab === "driver" ? ((a as DriverData).balance || 0) : ((a as B2BWalletData).depositBalance || 0);
+      const balB = activeTab === "driver" ? ((b as DriverData).balance || 0) : ((b as B2BWalletData).depositBalance || 0);
       
       if (sortOrder === "highest") return balB - balA;
       if (sortOrder === "lowest") return balA - balB;
       
-      const nameA = activeTab === "driver" ? (a.name || "") : (a.companyName || "");
-      const nameB = activeTab === "driver" ? (b.name || "") : (b.companyName || "");
+      const nameA = activeTab === "driver" ? ((a as DriverData).name || "") : ((a as B2BWalletData).companyName || "");
+      const nameB = activeTab === "driver" ? ((b as DriverData).name || "") : ((b as B2BWalletData).companyName || "");
       return nameA.localeCompare(nameB);
     });
 
@@ -183,17 +183,17 @@ export default function AdminWalletPage() {
   }, [drivers, b2bClients, activeTab, searchQuery, sortOrder]);
 
   // Kalkulasi Statistik Dinamis berdasarkan Tab Aktif
-  const totalBalance = processedData.reduce((sum, item) => sum + (activeTab === "driver" ? (item.balance || 0) : (item.depositBalance || 0)), 0);
+  const totalBalance = processedData.reduce((sum, item) => sum + (activeTab === "driver" ? ((item as DriverData).balance || 0) : ((item as B2BWalletData).depositBalance || 0)), 0);
   const criticalLimit = activeTab === "driver" ? 15000 : 100000;
-  const lowBalanceCount = processedData.filter(item => (activeTab === "driver" ? (item.balance || 0) : (item.depositBalance || 0)) < criticalLimit).length;
+  const lowBalanceCount = processedData.filter(item => (activeTab === "driver" ? ((item as DriverData).balance || 0) : ((item as B2BWalletData).depositBalance || 0)) < criticalLimit).length;
   
   // Data Chart: Top 5 Saldo Tertinggi
   const topEntities = [...processedData].sort((a, b) => {
-    const balA = activeTab === "driver" ? (a.balance || 0) : (a.depositBalance || 0);
-    const balB = activeTab === "driver" ? (b.balance || 0) : (b.depositBalance || 0);
+    const balA = activeTab === "driver" ? ((a as DriverData).balance || 0) : ((a as B2BWalletData).depositBalance || 0);
+    const balB = activeTab === "driver" ? ((b as DriverData).balance || 0) : ((b as B2BWalletData).depositBalance || 0);
     return balB - balA;
   }).slice(0, 5);
-  const maxChartValue = Math.max(...topEntities.map(e => activeTab === "driver" ? (e.balance || 0) : (e.depositBalance || 0)), 10000);
+  const maxChartValue = Math.max(...topEntities.map(e => activeTab === "driver" ? ((e as DriverData).balance || 0) : ((e as B2BWalletData).depositBalance || 0)), 10000);
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
 
@@ -316,7 +316,7 @@ export default function AdminWalletPage() {
             <div className="flex gap-3 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-none">
                 <ArrowUpDown className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <select value={sortOrder} onChange={e => setSortOrder(e.target.value as any)} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-slate-500 shadow-sm appearance-none font-semibold text-slate-700 min-w-[160px]">
+                <select value={sortOrder} onChange={e => setSortOrder(e.target.value as "highest" | "lowest" | "name_asc")} className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-slate-500 shadow-sm appearance-none font-semibold text-slate-700 min-w-[160px]">
                   <option value="highest">Saldo Tertinggi</option>
                   <option value="lowest">Saldo Terendah</option>
                   <option value="name_asc">Nama (A-Z)</option>

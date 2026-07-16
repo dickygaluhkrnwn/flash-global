@@ -1,5 +1,11 @@
 export type TrackingStatus = 'pending' | 'pickup' | 'in_transit' | 'delivered' | 'cancelled' | 'refunded';
 
+// ----------------------------------------------------------------------
+// EXPORT DARI PAGE TRACKING (New Tracking Data Types)
+// ----------------------------------------------------------------------
+// Dipindah ke atas agar bisa digunakan oleh Order dan Quote
+export type FirebaseTimestamp = { toDate?: () => Date; toMillis?: () => number; seconds?: number } | string | number | null | undefined;
+
 export interface Order {
   id: string;
   userId: string;
@@ -17,8 +23,8 @@ export interface Order {
   totalPrice: number;
   status: TrackingStatus;
   assignedDriverId?: string;
-  createdAt: Date | any;
-  updatedAt?: Date | any;
+  createdAt: Date | FirebaseTimestamp;
+  updatedAt?: Date | FirebaseTimestamp;
 }
 
 export interface Quote {
@@ -40,13 +46,8 @@ export interface Quote {
   status: string; // Diperlebar agar menampung 'Menunggu Persetujuan Klien', dll
   offeredPrice?: number; // BARU: Dari Admin Global Orders
   customsDocUrl?: string; // BARU: Dari Admin Global Orders
-  createdAt: Date | any;
+  createdAt: Date | FirebaseTimestamp;
 }
-
-// ----------------------------------------------------------------------
-// EXPORT DARI PAGE TRACKING (New Tracking Data Types)
-// ----------------------------------------------------------------------
-export type FirebaseTimestamp = { toDate?: () => Date; toMillis?: () => number; seconds?: number } | string | number | null | undefined;
 
 export interface LocationDetail {
   address?: string;

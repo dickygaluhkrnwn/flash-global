@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { 
-  Search, CheckCircle2, AlertCircle, Ban, Filter, Truck, 
+  Search, CheckCircle2, AlertCircle, Ban, Truck, 
   Plus, User, Camera, Upload, MapPin, X, MapPinned, 
-  CheckCircle, Clock, Building2, UserSquare2, 
+  CheckCircle, Building2, UserSquare2, 
   ShieldAlert, Activity
 } from "lucide-react";
 
@@ -374,8 +375,8 @@ export default function FleetManagementPage() {
                   <tr key={p.id} className={cn("transition-colors", p.isSuspended ? "bg-red-50/30" : "hover:bg-slate-50")}>
                     <td className="p-5 pl-6 align-top">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl border border-slate-200 shrink-0 overflow-hidden bg-slate-50 flex items-center justify-center">
-                           {p.fotoProfileUrl ? <img src={String(p.fotoProfileUrl)} alt="Foto" className="w-full h-full object-cover" /> : 
+                        <div className="relative w-10 h-10 rounded-xl border border-slate-200 shrink-0 overflow-hidden bg-slate-50 flex items-center justify-center">
+                           {p.fotoProfileUrl ? <Image src={String(p.fotoProfileUrl)} alt="Foto" fill className="object-cover" sizes="40px" /> : 
                             p.partnerType === "Vendor" ? <Building2 className="w-5 h-5 text-slate-400" /> :
                             p.partnerType === "FleetVehicle" ? <Truck className="w-5 h-5 text-slate-400" /> :
                             <User className="w-5 h-5 text-slate-400" />

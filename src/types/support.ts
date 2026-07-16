@@ -1,3 +1,5 @@
+import { FirebaseTimestamp } from './order';
+
 export interface SupportTicket {
   id: string;
   userId: string;
@@ -8,8 +10,8 @@ export interface SupportTicket {
   message: string;
   status: 'Open' | 'In Progress' | 'Resolved' | 'Closed';
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
-  createdAt: Date | any;
-  updatedAt?: Date | any;
+  createdAt: Date | FirebaseTimestamp;
+  updatedAt?: Date | FirebaseTimestamp;
 }
 
 export interface InsuranceClaim {
@@ -24,8 +26,8 @@ export interface InsuranceClaim {
   proofImages?: string[]; // Tetap dipertahankan untuk backward compatibility
   status: 'Pending Review' | 'Approved' | 'Rejected' | 'pending' | 'investigating' | 'approved' | 'rejected';
   resolvedBy?: string; // ID Admin Finance yang menyetujui
-  createdAt: Date | any;
-  updatedAt?: Date | any;
+  createdAt: Date | FirebaseTimestamp;
+  updatedAt?: Date | FirebaseTimestamp;
 }
 
 export interface AuditLog {
@@ -37,5 +39,5 @@ export interface AuditLog {
   targetId?: string; // ID entitas yang dimanipulasi
   details?: string;
   ipAddress?: string;
-  timestamp: Date | any;
+  timestamp: Date | FirebaseTimestamp;
 }

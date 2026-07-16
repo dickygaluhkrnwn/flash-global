@@ -7,7 +7,7 @@ import {
   Receipt, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, XCircle, Eye, Image as ImageIcon,
   ShieldAlert, Clock, FileText, User, MapPin, Package, 
-  Truck, X, Scale, TicketPercent, Wallet, CheckCircle, 
+  Truck, X, Scale, TicketPercent, Wallet, 
   PlusCircle, Building2, Undo2, Banknote, Upload
 } from "lucide-react";
 
@@ -16,7 +16,6 @@ import { collection, onSnapshot, doc, updateDoc, query, orderBy, serverTimestamp
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
 
 // MENGGUNAKAN GLOBAL TYPES
 import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
@@ -889,7 +888,7 @@ export default function FinanceVerificationPage() {
       </AnimatePresence>
 
       {/* ========================================================= */}
-      {/* MODAL VIEWER: DETAIL REFUND (NEW)                           */}
+      {/* MODAL VIEWER: DETAIL REFUND (NEW)                         */}
       {/* ========================================================= */}
       <AnimatePresence>
         {selectedRefund && (

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Building2, CreditCard, Receipt, 
   Upload, ShieldCheck, CheckCircle2, 
   AlertCircle, Activity, FileSpreadsheet, 
-  MapPin, Clock, ArrowRight, Wallet, 
+  MapPin, Clock, Wallet, 
   History, PlusCircle, ArrowDownCircle, ArrowUpCircle, XCircle
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-import { OrderDetail, LocationDetail } from "@/types/order";
+import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
 
 // Tipe Data untuk Ledger / Buku Besar
 interface LedgerItem {
@@ -37,7 +37,6 @@ export default function CorporateFinancePortal() {
   const { user, isHydrated } = useAuthStore();
   
   // Refs
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const topupFileInputRef = useRef<HTMLInputElement>(null);
 
   // General States
@@ -106,10 +105,15 @@ export default function CorporateFinancePortal() {
         }
       });
 
+      // Menghilangkan any menggunakan FirebaseTimestamp
       unpaidList.sort((a, b) => {
-        const tA = (a.createdAt as any)?.toMillis ? (a.createdAt as any).toMillis() : new Date(a.createdAt as any).getTime();
-        const tB = (b.createdAt as any)?.toMillis ? (b.createdAt as any).toMillis() : new Date(b.createdAt as any).getTime();
-        return tA - tB;
+        const getTs = (ts?: FirebaseTimestamp) => {
+          if (!ts) return 0;
+          if (typeof ts === 'object' && 'toMillis' in ts && typeof ts.toMillis === 'function') return ts.toMillis();
+          if (typeof ts === 'object' && 'seconds' in ts && typeof ts.seconds === 'number') return ts.seconds * 1000;
+          return new Date(ts as string | number).getTime();
+        };
+        return getTs(a.createdAt) - getTs(b.createdAt);
       });
 
       setTotalDebt(calculatedDebt);

@@ -20,6 +20,19 @@ import { Input } from "@/components/ui/Input";
 
 // --- IMPORT GLOBAL TYPES ---
 import { Promo } from "@/types/finance";
+import { FirebaseTimestamp } from "@/types/order";
+
+// --- HELPER FUNCTION: PARSING FIREBASE TIMESTAMP KE DATE ---
+const parsePromoDate = (ts: string | Date | FirebaseTimestamp): Date => {
+  if (!ts) return new Date();
+  if (typeof ts === 'object' && ts !== null) {
+    const objTs = ts as Record<string, unknown>;
+    if (typeof objTs.toDate === 'function') return objTs.toDate() as Date;
+    if (typeof objTs.seconds === 'number') return new Date(objTs.seconds * 1000);
+    if (ts instanceof Date) return ts;
+  }
+  return new Date(ts as string | number);
+};
 
 export default function AdminPromoPage() {
   const router = useRouter();
@@ -161,7 +174,7 @@ export default function AdminPromoPage() {
     return result;
   }, [promos, searchQuery, filterService]);
 
-  const activePromoCount = promos.filter(p => p.isActive && new Date(p.expiresAt) >= new Date() && p.usedCount < p.quota).length;
+  const activePromoCount = promos.filter(p => p.isActive && parsePromoDate(p.expiresAt) >= new Date() && p.usedCount < p.quota).length;
 
   // =========================================================================
   // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
@@ -274,7 +287,8 @@ export default function AdminPromoPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {processedPromos.map((promo) => {
-                  const isExpired = new Date(promo.expiresAt) < new Date();
+                  const promoDate = parsePromoDate(promo.expiresAt);
+                  const isExpired = promoDate < new Date();
                   const isExhausted = promo.usedCount >= promo.quota;
 
                   // Memberikan nilai default "all" jika field masih undefined dari db lama
@@ -316,7 +330,7 @@ export default function AdminPromoPage() {
                       <td className="p-5 align-top pt-6">
                         <span className={`flex items-center gap-1.5 text-xs font-bold ${isExpired ? 'text-red-500' : 'text-slate-600'}`}>
                           <CalendarClock className="w-4 h-4" /> 
-                          {new Date(promo.expiresAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {promoDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </span>
                       </td>
                       <td className="p-5 align-top pt-6">

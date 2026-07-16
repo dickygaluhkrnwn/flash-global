@@ -17,6 +17,19 @@ import { Button } from "@/components/ui/Button";
 
 // --- IMPORT GLOBAL TYPES ---
 import { Promo } from "@/types/finance";
+import { FirebaseTimestamp } from "@/types/order";
+
+// --- HELPER FUNCTION: PARSING FIREBASE TIMESTAMP KE DATE ---
+const parsePromoDate = (ts: string | Date | FirebaseTimestamp): Date => {
+  if (!ts) return new Date();
+  if (typeof ts === 'object' && ts !== null) {
+    const objTs = ts as Record<string, unknown>;
+    if (typeof objTs.toDate === 'function') return objTs.toDate() as Date;
+    if (typeof objTs.seconds === 'number') return new Date(objTs.seconds * 1000);
+    if (ts instanceof Date) return ts;
+  }
+  return new Date(ts as string | number);
+};
 
 export default function ClientPromoPage() {
   const router = useRouter();
@@ -52,7 +65,7 @@ export default function ClientPromoPage() {
         // 3. Hanya ambil yang untuk publik ("all") ATAU khusus email user yang login
         const now = new Date();
         promosList = promosList.filter(p => {
-          const isNotExpired = new Date(p.expiresAt) >= now;
+          const isNotExpired = parsePromoDate(p.expiresAt) >= now;
           const hasQuota = p.usedCount < p.quota;
           const isTargetedForUser = !p.targetUser || p.targetUser === "all" || p.targetUser === user?.email?.toLowerCase();
           
@@ -161,6 +174,9 @@ export default function ClientPromoPage() {
                 const isDomestik = (promo.targetService || "all") === "domestik";
                 const isGlobal = (promo.targetService || "all") === "forwarding";
                 const badgeColor = isVIP ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent" : "bg-slate-100 text-slate-600 border-slate-200";
+                
+                // Konversi tanggal menggunakan helper aman
+                const promoDate = parsePromoDate(promo.expiresAt);
 
                 return (
                   <motion.div 
@@ -201,7 +217,7 @@ export default function ClientPromoPage() {
                         </div>
                         <h4 className="font-black text-slate-900 text-lg tracking-wide uppercase font-mono bg-slate-50 w-fit px-2 py-1 rounded-lg border border-slate-100">{promo.id}</h4>
                         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-2">
-                          <Clock className="w-3.5 h-3.5" /> Berlaku s/d {new Date(promo.expiresAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          <Clock className="w-3.5 h-3.5" /> Berlaku s/d {promoDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                       </div>
                       
