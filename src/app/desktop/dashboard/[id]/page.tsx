@@ -6,12 +6,12 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, MapPin, Package, Truck, 
   ReceiptText, CalendarClock, User, Phone, 
-  CheckCircle2, Clock, MapPinned,
-  TicketPercent, Building, CreditCard, AlertCircle, Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, XCircle, Printer, FileText
+  CheckCircle2, Clock, MapPinned, Ban,
+  TicketPercent, Building, CreditCard, AlertCircle, Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, XCircle, Printer, FileText, Banknote
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, arrayUnion } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { Badge } from "@/components/ui/Badge";
@@ -46,6 +46,15 @@ export default function OrderDetailPage() {
     claimedAmount: "",
     reason: "",
     proofUrl: ""
+  });
+
+  // === STATE UNTUK CANCEL & REFUND ===
+  const [hasExistingRefund, setHasExistingRefund] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
+  const [refundData, setRefundData] = useState({
+    alasan: "",
+    rekeningTujuan: ""
   });
 
   // === SETUP REACT-TO-PRINT UNTUK RESI THERMAL ===
@@ -109,20 +118,18 @@ export default function OrderDetailPage() {
         return; 
       }
 
-      // BLOK 2: CEK KLAIM ASURANSI SECARA TERPISAH (KEBAL CRASH)
+      // BLOK 2: CEK KLAIM ASURANSI & REFUND SECARA PARALEL
       if (fetchedOrderDocId) {
         try {
-          const claimQ = query(
-            collection(db, "insurance_claims"), 
-            where("orderId", "==", fetchedOrderDocId),
-            where("userId", "==", user.uid)
-          );
-          const claimSnap = await getDocs(claimQ);
-          if (!claimSnap.empty) {
-            setHasExistingClaim(true);
-          }
-        } catch (claimError) {
-          console.warn("Peringatan: Gagal mengecek status klaim asuransi:", claimError);
+          const claimQ = query(collection(db, "insurance_claims"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
+          const refundQ = query(collection(db, "refund_requests"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
+          
+          const [claimSnap, refundSnap] = await Promise.all([getDocs(claimQ), getDocs(refundQ)]);
+          
+          if (!claimSnap.empty) setHasExistingClaim(true);
+          if (!refundSnap.empty) setHasExistingRefund(true);
+        } catch (err) {
+          console.warn("Peringatan: Gagal mengecek status klaim/refund:", err);
         }
       }
 
@@ -181,6 +188,88 @@ export default function OrderDetailPage() {
     }
   };
 
+  // === HANDLER PEMBATALAN & REFUND ===
+  const handleCancelClick = async () => {
+    if (!order) return;
+    
+    // Jika pesanan sudah lunas, arahkan ke form Refund
+    if (order.paymentStatus === "Lunas") {
+      setShowRefundModal(true);
+    } else {
+      // Jika belum bayar atau piutang, batalkan langsung
+      if (confirm("Apakah Anda yakin ingin membatalkan pesanan ini? Tindakan ini tidak dapat dikembalikan.")) {
+        setIsLoading(true);
+        try {
+          const logDate = new Date().toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+          await updateDoc(doc(db, "orders", order.id), {
+            status: "Dibatalkan",
+            paymentStatus: "Dibatalkan",
+            trackingHistory: arrayUnion({
+              id: Date.now().toString(),
+              status: "Dibatalkan",
+              date: logDate,
+              description: "Pesanan dibatalkan oleh Klien sebelum armada diberangkatkan.",
+              location: "Sistem Web"
+            })
+          });
+          setOrder({ ...order, status: "Dibatalkan", paymentStatus: "Dibatalkan" });
+          alert("Pesanan berhasil dibatalkan.");
+        } catch (error) {
+          console.error("Gagal membatalkan pesanan:", error);
+          alert("Terjadi kesalahan saat membatalkan pesanan.");
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    }
+  };
+
+  const handleSubmitRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.uid || !order) return;
+    setIsSubmittingRefund(true);
+
+    try {
+      const nominal = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
+      
+      // 1. Buat Dokumen Request Refund
+      await addDoc(collection(db, "refund_requests"), {
+        orderId: order.id,
+        userId: user.uid,
+        clientName: user.displayName || "Klien",
+        nominal: nominal,
+        alasan: refundData.alasan,
+        rekeningTujuan: refundData.rekeningTujuan,
+        status: "Pending",
+        createdAt: serverTimestamp()
+      });
+
+      // 2. Update Status Order menjadi Dibatalkan & Menunggu Refund
+      const logDate = new Date().toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      await updateDoc(doc(db, "orders", order.id), {
+        status: "Dibatalkan",
+        paymentStatus: "Menunggu Refund",
+        trackingHistory: arrayUnion({
+            id: Date.now().toString(),
+            status: "Dibatalkan & Proses Refund",
+            date: logDate,
+            description: "Pesanan dibatalkan. Pengembalian dana sedang diproses oleh Tim Finance.",
+            location: "Sistem Keuangan"
+        })
+      });
+
+      setOrder({ ...order, status: "Dibatalkan", paymentStatus: "Menunggu Refund" });
+      setHasExistingRefund(true);
+      setShowRefundModal(false);
+      alert("Pengajuan refund berhasil. Dana akan dikembalikan ke rekening Anda maksimal 3x24 Jam Kerja.");
+    } catch (error) {
+      console.error("Gagal mengajukan refund:", error);
+      alert("Terjadi kesalahan sistem saat mengajukan refund.");
+    } finally {
+      setIsSubmittingRefund(false);
+    }
+  };
+
   const renderTimeline = () => {
     if (!order) return [];
 
@@ -226,7 +315,7 @@ export default function OrderDetailPage() {
   }
 
   const timelineData = renderTimeline();
-  const isLunas = order.paymentStatus === "Lunas" || order.paymentStatus === "Piutang B2B"; // Piutang B2B juga dianggap lunas secara operasional (bisa diprint)
+  const isLunas = order.paymentStatus === "Lunas" || order.paymentStatus === "Piutang B2B"; 
   const resiNumber = order.resi || order.quoteId || order.id.slice(-12).toUpperCase();
 
   const originAddress = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).address : order.origin;
@@ -248,6 +337,9 @@ export default function OrderDetailPage() {
     return (order.breakdown.deliveryFee || 0) * 10;
   };
   const maxClaimAllowed = calculateMaxClaim();
+
+  // === CEK KELAYAKAN CANCEL ORDER ===
+  const canCancelOrder = (order.status === "Menunggu Pembayaran" || order.status === "Menunggu Kurir") && !order.status.includes("Batal");
 
   // === LOGIKA DATA INVOICE A4 ===
   const issueDateObj = order.createdAt ? (typeof order.createdAt === 'object' && (order.createdAt as any).toDate ? (order.createdAt as any).toDate() : new Date(order.createdAt as any)) : new Date();
@@ -324,10 +416,11 @@ export default function OrderDetailPage() {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status Pesanan</p>
             <div className={`px-4 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider border flex items-center gap-2 shadow-sm ${
               order.status.includes("Selesai") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+              order.status.includes("Batal") ? "bg-red-50 text-red-600 border-red-200" :
               order.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" :
               "bg-blue-50 text-blue-600 border-blue-200"
             }`}>
-              {order.status.includes("Selesai") ? <CheckCircle2 className="w-4 h-4"/> : order.status === "Dikirim" ? <Navigation className="w-4 h-4" /> : <Clock className="w-4 h-4"/>}
+              {order.status.includes("Selesai") ? <CheckCircle2 className="w-4 h-4"/> : order.status.includes("Batal") ? <Ban className="w-4 h-4" /> : order.status === "Dikirim" ? <Navigation className="w-4 h-4" /> : <Clock className="w-4 h-4"/>}
               {order.status}
             </div>
           </div>
@@ -371,10 +464,10 @@ export default function OrderDetailPage() {
                   {timelineData.map((item, idx) => (
                     <div key={idx} className="flex gap-4 md:gap-5 items-start group">
                       <div className={`w-3.5 h-3.5 rounded-full mt-1.5 shrink-0 z-10 border-2 transition-all ${
-                        item.isCurrent ? "bg-[#7A171D] border-white ring-4 ring-[#7A171D]/20 scale-125" : "bg-slate-300 border-white"
+                        item.isCurrent ? (order.status.includes("Batal") ? "bg-red-600 border-white ring-4 ring-red-600/20 scale-125" : "bg-[#7A171D] border-white ring-4 ring-[#7A171D]/20 scale-125") : "bg-slate-300 border-white"
                       }`} />
                       <div className={cn("flex-1", item.isCurrent ? "opacity-100" : "opacity-60 group-hover:opacity-100 transition-opacity")}>
-                        <h4 className={`text-sm font-black ${item.isCurrent ? "text-[#7A171D]" : "text-slate-700"}`}>{item.status}</h4>
+                        <h4 className={`text-sm font-black ${item.isCurrent ? (order.status.includes("Batal") ? "text-red-600" : "text-[#7A171D]") : "text-slate-700"}`}>{item.status}</h4>
                         <p className="text-[10px] font-bold text-slate-400 mt-0.5 mb-1.5">{item.date}</p>
                         <p className="text-xs text-slate-600 font-medium leading-relaxed max-w-md">{item.description}</p>
                         {item.location && (
@@ -559,14 +652,20 @@ export default function OrderDetailPage() {
                     <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
                   </Button>
                 ) : (
-                  <div className="flex items-center justify-center bg-slate-100 text-slate-500 rounded-xl h-12 font-bold text-sm border border-slate-200">
-                    <ShieldCheck className="w-4 h-4 mr-2" /> {isLunas ? "Pembayaran Lunas" : "Sedang Diproses"}
+                  <div className={`flex items-center justify-center rounded-xl h-12 font-bold text-sm border ${
+                    order.status.includes("Batal") ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-100 text-slate-500 border-slate-200"
+                  }`}>
+                    {order.status.includes("Batal") ? (
+                      <><Ban className="w-4 h-4 mr-2" /> Dibatalkan</>
+                    ) : (
+                      <><ShieldCheck className="w-4 h-4 mr-2" /> {isLunas ? "Pembayaran Lunas" : "Sedang Diproses"}</>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* TOMBOL KLAIM ASURANSI (MUNCUL JIKA MEMENUHI SYARAT) */}
-              {isEligibleForClaim && !hasExistingClaim && (
+              {isEligibleForClaim && !hasExistingClaim && !order.status.includes("Batal") && (
                 <Button 
                   onClick={() => setShowClaimModal(true)}
                   className="w-full bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-300 h-12 shadow-sm font-bold mt-2"
@@ -582,15 +681,35 @@ export default function OrderDetailPage() {
                 </div>
               )}
 
-              {/* === TOMBOL CETAK RESI THERMAL & INVOICE A4 (MUNCUL JIKA LUNAS/PIUTANG) === */}
-              {isLunas && (
+              {/* ======================================================= */}
+              {/* TOMBOL BATALKAN PESANAN (BARU)                          */}
+              {/* ======================================================= */}
+              {canCancelOrder && !hasExistingRefund && (
+                <Button 
+                  onClick={handleCancelClick}
+                  variant="outline"
+                  className="w-full h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 shadow-sm font-bold mt-2"
+                >
+                  <Ban className="w-4 h-4 mr-2" /> Batalkan Pesanan
+                </Button>
+              )}
+
+              {/* JIKA SUDAH PERNAH REFUND */}
+              {hasExistingRefund && (
+                <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl text-xs font-bold text-center mt-2 flex items-center justify-center gap-2">
+                   <Banknote className="w-4 h-4" /> Pengembalian dana (Refund) sedang diproses.
+                </div>
+              )}
+
+              {/* === TOMBOL CETAK RESI THERMAL & INVOICE A4 === */}
+              {isLunas && !order.status.includes("Batal") && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                   <Button 
                     onClick={handlePrintReceipt}
                     variant="outline"
                     className="w-full h-12 border-[#7A171D] text-[#7A171D] hover:bg-[#7A171D]/10 shadow-sm font-bold"
                   >
-                    <Printer className="w-4 h-4 mr-2" /> Cetak Resi (Thermal)
+                    <Printer className="w-4 h-4 mr-2" /> Cetak Resi (Thermal 80mm)
                   </Button>
                   <Button 
                     onClick={handlePrintInvoice}
@@ -621,7 +740,7 @@ export default function OrderDetailPage() {
             originAddress={(originAddress as string) || "-"}
             receiverName={(order.destinations?.[0]?.receiverName as string) || (order.receiverName as string) || "-"}
             receiverPhone={(order.destinations?.[0]?.receiverPhone as string) || (order.receiverPhone as string) || "-"}
-            destAddress={destAddress}
+            destAddress={order.destinations && order.destinations.length > 1 ? `${order.destinations.length} Titik Tujuan` : ((order.destinations?.[0]?.address as string) || (order.destination as string) || "-")}
             weight={order.totalWeight || order.weight || 0}
             serviceType={order.serviceType || "Kargo"}
             vehicleName={order.vehicleName || order.vehicle || "Armada"}
@@ -650,7 +769,7 @@ export default function OrderDetailPage() {
             items={invoiceItems}
             subTotal={invoiceSubTotal}
             discountAmount={invoiceDiscount}
-            taxAmount={0} // Diset 0 atau bisa diubah menjadi 11% dari subtotal jika diperlukan
+            taxAmount={0} 
             grandTotal={invoiceGrandTotal}
           />
         )}
@@ -715,6 +834,62 @@ export default function OrderDetailPage() {
                   <Button type="button" onClick={() => setShowClaimModal(false)} variant="outline" className="w-full text-xs border-slate-200">Batal</Button>
                   <Button type="submit" disabled={isSubmittingClaim} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 border-none">
                     {isSubmittingClaim ? "Mengirim..." : "Kirim Pengajuan"}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ================================================= */}
+      {/* MODAL PENGAJUAN REFUND PEMBATALAN                   */}
+      {/* ================================================= */}
+      <AnimatePresence>
+        {showRefundModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowRefundModal(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-lg bg-white rounded-[2rem] p-8 shadow-2xl border border-slate-100">
+              
+              <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-xl font-black text-red-600 flex items-center gap-2">
+                    <Ban className="w-6 h-6" /> Pembatalan & Refund
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">Dana yang akan dikembalikan: <strong className="text-slate-900">{formatIDR(order?.finalGrandTotal || order?.breakdown?.grandTotal || order?.totalCost || 0)}</strong></p>
+                </div>
+                <button onClick={() => setShowRefundModal(false)} className="text-slate-400 hover:text-red-500"><XCircle className="w-6 h-6"/></button>
+              </div>
+
+              <form onSubmit={handleSubmitRefund} className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Alasan Pembatalan</label>
+                  <textarea 
+                    value={refundData.alasan}
+                    onChange={(e) => setRefundData({...refundData, alasan: e.target.value})}
+                    placeholder="Mengapa Anda membatalkan pesanan ini? (Misal: Salah alamat, ganti armada)"
+                    required
+                    rows={3}
+                    className="flex w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:border-red-500 focus-visible:ring-red-500/10 resize-none"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Rekening Tujuan Refund</label>
+                  <Input 
+                    type="text" 
+                    value={refundData.rekeningTujuan}
+                    onChange={(e) => setRefundData({...refundData, rekeningTujuan: e.target.value})}
+                    placeholder="Cth: BCA - 123456789 - Budi Santoso"
+                    required
+                    className="font-bold border-slate-200 focus-visible:border-red-500 focus-visible:ring-red-500/10"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium mt-1">Pastikan nama bank, nomor, dan atas nama rekening sesuai.</p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex gap-3">
+                  <Button type="button" onClick={() => setShowRefundModal(false)} variant="outline" className="w-full text-xs border-slate-200">Batal</Button>
+                  <Button type="submit" disabled={isSubmittingRefund} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md shadow-red-600/20 border-none">
+                    {isSubmittingRefund ? "Memproses..." : "Ajukan Refund"}
                   </Button>
                 </div>
               </form>

@@ -103,3 +103,20 @@ export interface B2BClientDebt {
   totalDebt: number;
   orders: UnpaidOrder[];
 }
+
+// ----------------------------------------------------------------------
+// EXPORT DARI ALUR CANCEL & REFUND
+// ----------------------------------------------------------------------
+export interface RefundRequest {
+  id: string;
+  orderId: string;
+  userId: string;
+  clientName?: string; 
+  nominal: number;
+  alasan: string;
+  rekeningTujuan: string; // Format: "Nama Bank - No Rekening - Atas Nama"
+  status: 'Pending' | 'Approved' | 'Rejected';
+  proofUrl?: string; // Bukti transfer pengembalian dana dari Finance
+  createdAt: Date | any;
+  processedAt?: Date | any;
+}
