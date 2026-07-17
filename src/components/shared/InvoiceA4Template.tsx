@@ -65,20 +65,18 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
     };
 
     return (
-      // Kertas A4 Container
-      // Membuang minHeight agar panjangnya dinamis dan dipotong natural oleh printer
       <div
         ref={ref}
         className="bg-white text-slate-900 font-sans mx-auto box-border relative overflow-hidden"
         style={{
           width: '210mm',
-          padding: '20mm', // Margin kertas standar
+          padding: '20mm',
           color: '#0f172a'
         }}
       >
-        {/* Dekorasi Airmark (Watermark logo transparan di belakang) */}
-        {/* Posisi disesuaikan agar aman jika tagihan mencapai beberapa halaman */}
+        {/* Dekorasi Airmark */}
         <div className="absolute top-[150mm] left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none grayscale print:fixed print:top-1/2">
+           {/* eslint-disable-next-line @next/next/no-img-element */}
            <img 
              src="/logo.png" 
              alt="Watermark Flash Globals" 
@@ -86,9 +84,10 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
            />
         </div>
 
-        {/* HEADER: Kop Surat Flash Globals */}
+        {/* HEADER */}
         <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-8 relative z-10">
           <div className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logo.png" 
               alt="Flash Globals Logistik" 
@@ -105,7 +104,7 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
           </div>
         </div>
 
-        {/* META INVOICE & INFO KLIEN (BILLED TO) */}
+        {/* META INVOICE */}
         <div className="flex justify-between items-end mb-10 relative z-10 break-inside-avoid">
           <div>
             <h2 className="text-4xl font-black text-slate-200 uppercase tracking-widest mb-4">INVOICE</h2>
@@ -138,7 +137,7 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
           </div>
         </div>
 
-        {/* TABEL RINCIAN TAGIHAN */}
+        {/* TABEL */}
         <div className="mb-8 relative z-10">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
@@ -153,7 +152,6 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
             </thead>
             <tbody className="divide-y divide-slate-200">
               {items.map((item, index) => (
-                // Tambahkan break-inside-avoid agar baris tidak terpotong setengah saat pindah kertas
                 <tr key={item.id} className="text-slate-700 break-inside-avoid">
                   <td className="py-4 px-2 align-top">{index + 1}</td>
                   <td className="py-4 px-2 align-top font-mono font-bold text-slate-900">{item.id}</td>
@@ -170,11 +168,9 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
           </table>
         </div>
 
-        {/* CONTAINER BAWAH: Mencegah bagian total dan footer terpisah kertas jika memungkinkan */}
-        {/* SOLUSI CERDAS: print:pt-10 memastikan jika melompat ke halaman 2, ada margin atas yang aman */}
+        {/* FOOTER CERDAS: Tambahkan print:pt-10 untuk halaman 2 */}
         <div className="break-inside-avoid relative z-10 print:pt-10">
           
-          {/* RINGKASAN KALKULASI FINANSIAL */}
           <div className="flex justify-end mb-12">
             <div className="w-80 space-y-3 text-sm">
               <div className="flex justify-between items-center text-slate-600">
@@ -203,7 +199,6 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
             </div>
           </div>
 
-          {/* FOOTER: INSTRUKSI PEMBAYARAN & TANDA TANGAN */}
           <div className="flex justify-between items-end pt-4">
             <div className="max-w-[50%]">
               <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-2 border-b border-slate-200 pb-2">Instruksi Pembayaran</h4>
@@ -217,7 +212,6 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
 
             <div className="text-center w-48">
               <p className="text-xs font-bold text-slate-600 mb-16">Hormat Kami,</p>
-              {/* Tempat untuk menaruh stempel digital / ttd jika diperlukan */}
               <div className="w-full border-b border-slate-900 mb-2 relative">
                  <div className="absolute -bottom-8 -left-4 w-24 h-24 rounded-full border-2 border-red-600/30 flex items-center justify-center opacity-40 -rotate-12 pointer-events-none !print-exact-color">
                    <span className="text-red-600 text-[10px] font-black uppercase tracking-widest border-y border-red-600 py-0.5 px-2">VALIDATED</span>
@@ -227,9 +221,7 @@ export const InvoiceA4Template = forwardRef<HTMLDivElement, InvoiceA4Props>(
               <p className="text-[10px] text-slate-500 font-bold uppercase">PT Flash Globals Logistik</p>
             </div>
           </div>
-
         </div>
-
       </div>
     );
   }

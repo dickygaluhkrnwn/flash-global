@@ -753,7 +753,6 @@ export default function OrderDetailPage() {
             serviceType={order.serviceType || "Kargo"}
             vehicleName={order.vehicleName || order.vehicle || "Armada"}
             date={formatFirebaseDate(order.createdAt)}
-            totalCost={order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost}
             itemsDesc={((order.destinations?.[0]?.items as DeliveryItem[])?.[0]?.name) || "Paket Kargo"}
           />
         )}
@@ -784,7 +783,7 @@ export default function OrderDetailPage() {
       </div>
 
       {/* ================================================= */}
-      {/* MODAL PENGAJUAN KLAIM ASURANSI                    */}
+      {/* MODAL PENGAJUAN KLAIM ASURANSI                      */}
       {/* ================================================= */}
       <AnimatePresence>
         {showClaimModal && (

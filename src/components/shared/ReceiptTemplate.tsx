@@ -48,6 +48,7 @@ export const ReceiptTemplate = forwardRef<HTMLDivElement, ReceiptProps>(
         {/* HEADER RESI (MODERN) */}
         <div className="flex flex-col items-center border-b-[3px] border-black pb-4 mb-4">
           {/* Logo Perusahaan - Menggunakan img standar agar aman saat diprint (no lazy-load bug) */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
             src="/logo.png" 
             alt="Flash Globals" 
