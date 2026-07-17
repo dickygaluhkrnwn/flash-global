@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { 
   Truck, Coins, LogOut, Package, ShieldCheck, 
@@ -110,13 +111,19 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
         <div className="space-y-8">
           
           {/* Header Brand */}
-          <div className={cn("flex items-center px-2 transition-all duration-300", isExpanded ? "gap-4" : "justify-center")}>
-            <div className="w-12 h-12 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] rounded-xl flex items-center justify-center shadow-lg shadow-[#7A171D]/20 shrink-0 border border-red-500/10">
-              <Package className="text-[#C5A059] w-6 h-6" />
+          <div className={cn("flex flex-col px-2 transition-all duration-300", isExpanded ? "items-start" : "items-center")}>
+            <div className={cn("relative transition-all duration-300 ease-in-out", isExpanded ? "w-[180px] h-[40px] mb-2" : "w-[40px] h-[40px]")}>
+              <Image 
+                src="/logo.png" 
+                alt="Flash Globals Logistik" 
+                fill
+                priority
+                className={cn("object-contain transition-all duration-300", isExpanded ? "object-left" : "object-left overflow-hidden object-cover rounded-md")}
+              />
             </div>
-            <div className={cn("transition-all duration-300 overflow-hidden whitespace-nowrap", isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0")}>
-              <h3 className="font-black text-lg text-slate-900 tracking-tight leading-none">Central Engine</h3>
-              <span className="text-[11px] text-[#7A171D] font-bold flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-red-50 rounded-full w-max border border-red-100">
+            
+            <div className={cn("transition-all duration-300 overflow-hidden whitespace-nowrap", isExpanded ? "opacity-100 h-auto mt-1" : "opacity-0 h-0 hidden")}>
+              <span className="text-[10px] text-[#7A171D] font-bold flex items-center gap-1 px-2 py-0.5 bg-red-50 rounded-full w-max border border-red-100">
                 <ShieldCheck className="w-3 h-3" /> {getRoleBadgeLabel(currentRole)}
               </span>
             </div>

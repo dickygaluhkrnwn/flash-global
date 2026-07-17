@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Mail, Eye, EyeOff, ShieldAlert, Package, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, ShieldAlert, ArrowRight, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
 
 // --- IMPORT FIREBASE CORE ---
@@ -158,9 +158,15 @@ export default function AdminLoginPage() {
         <div className="absolute top-0 left-10 right-10 h-1.5 bg-gradient-to-r from-[#7A171D] to-[#C5A059] rounded-b-xl" />
 
         {/* Header Logo */}
-        <div className="text-center mb-8 mt-2">
-          <div className="w-16 h-16 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] rounded-2xl flex items-center justify-center shadow-lg shadow-[#7A171D]/20 mx-auto mb-5 border border-white/20">
-            <Package className="text-[#C5A059] w-8 h-8" />
+        <div className="text-center mb-8 mt-2 flex flex-col items-center">
+          <div className="relative w-[180px] h-[48px] mb-5">
+            <Image 
+              src="/logo.png" 
+              alt="Flash Globals Logistik" 
+              fill
+              priority
+              className="object-contain"
+            />
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Central Engine</h1>
           <p className="text-xs text-slate-500 mt-1.5 uppercase tracking-widest font-bold">Flash Global Admin Portal</p>

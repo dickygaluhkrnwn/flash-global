@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { 
-  Package, Search, User, Menu, Settings, 
+  Search, User, Menu, Settings, 
   LogOut, LayoutDashboard, ChevronDown, 
   X, TicketPercent, LifeBuoy, CreditCard 
 } from "lucide-react";
@@ -96,19 +97,20 @@ export default function Navbar() {
         transition={{ duration: 0.3, ease: "easeInOut" }}
         className={cn(
           "w-full fixed top-0 left-0 right-0 z-[100] transition-all duration-300",
-          isScrolled ? "bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm py-2" : "bg-transparent py-4"
+          isScrolled ? "bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm py-3" : "bg-transparent py-5"
         )}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           
-          {/* Logo Brand */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#7A171D] to-[#5A0E13] rounded-xl flex items-center justify-center shadow-lg shadow-[#7A171D]/20 group-hover:scale-105 transition-transform duration-300 border border-red-500/10">
-              <Package className="text-[#C5A059] w-5 h-5" />
-            </div>
-            <span className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              Flash<span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Global</span>
-            </span>
+          {/* Logo Brand Asli */}
+          <Link href="/" className="flex items-center group relative w-[180px] md:w-[220px] h-[40px] md:h-[48px]">
+            <Image 
+              src="/logo.png" 
+              alt="Flash Globals Logistik" 
+              fill
+              priority
+              className="object-contain object-left group-hover:opacity-90 transition-opacity duration-300"
+            />
           </Link>
 
           {/* Menu Navigasi Tengah (Desktop) */}

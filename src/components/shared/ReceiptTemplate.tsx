@@ -1,6 +1,5 @@
 import React, { forwardRef } from "react";
 import Barcode from "react-barcode";
-import { Package } from "lucide-react";
 
 export interface ReceiptProps {
   resi: string;
@@ -14,7 +13,6 @@ export interface ReceiptProps {
   serviceType: string;
   vehicleName: string;
   date: string;
-  totalCost?: number;
   itemsDesc?: string;
 }
 
@@ -33,7 +31,6 @@ export const ReceiptTemplate = forwardRef<HTMLDivElement, ReceiptProps>(
       serviceType,
       vehicleName,
       date,
-      totalCost,
       itemsDesc = "Paket Kargo",
     },
     ref
@@ -48,93 +45,98 @@ export const ReceiptTemplate = forwardRef<HTMLDivElement, ReceiptProps>(
           fontFamily: '"Inter", "Helvetica Neue", Helvetica, Arial, sans-serif'
         }}
       >
-        {/* HEADER RESI */}
-        <div className="flex flex-col items-center border-b-2 border-black pb-3 mb-3">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Package className="w-5 h-5 text-black" />
-            <h1 className="text-xl font-black tracking-tighter uppercase">FLASH GLOBAL</h1>
+        {/* HEADER RESI (MODERN) */}
+        <div className="flex flex-col items-center border-b-[3px] border-black pb-4 mb-4">
+          {/* Logo Perusahaan - Menggunakan img standar agar aman saat diprint (no lazy-load bug) */}
+          <img 
+            src="/logo.png" 
+            alt="Flash Globals" 
+            className="h-9 object-contain mb-3 grayscale contrast-200" 
+          />
+          <div className="bg-black text-white px-3 py-1 rounded-sm w-full text-center">
+            <p className="text-[11px] font-black uppercase tracking-widest">
+              Airway Bill / Resi
+            </p>
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-center">
-            Airway Bill (AWB) / Resi Pengiriman
-          </p>
         </div>
 
-        {/* BARCODE SECTION */}
-        <div className="flex flex-col items-center justify-center mb-4">
-          {/* react-barcode akan mengenerate SVG barcode */}
+        {/* BARCODE SECTION (Sleek) */}
+        <div className="flex flex-col items-center justify-center mb-5 p-3 border-2 border-black rounded-xl">
           <Barcode 
             value={resi} 
-            width={1.5} 
-            height={40} 
+            width={1.6} 
+            height={45} 
             fontSize={12} 
             margin={0} 
             displayValue={false} 
           />
-          <p className="font-mono font-black text-sm mt-1 tracking-widest uppercase">{resi}</p>
+          <p className="font-mono font-black text-base mt-2 tracking-[0.2em] uppercase">{resi}</p>
         </div>
 
-        {/* DETAIL LAYANAN */}
-        <div className="border border-black p-2 rounded mb-3">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-[10px] font-bold uppercase">Layanan:</span>
-            <span className="text-xs font-black uppercase">{serviceType}</span>
+        {/* DETAIL LAYANAN (Grid Modern) */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="border border-black rounded-lg p-2 flex flex-col justify-center">
+            <span className="text-[8px] font-bold uppercase mb-0.5">Layanan Kargo</span>
+            <span className="text-xs font-black uppercase leading-tight">{serviceType}</span>
           </div>
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-[10px] font-bold uppercase">Armada:</span>
-            <span className="text-[10px] font-bold uppercase">{vehicleName}</span>
+          <div className="border border-black rounded-lg p-2 flex flex-col justify-center">
+            <span className="text-[8px] font-bold uppercase mb-0.5">Tipe Armada</span>
+            <span className="text-[10px] font-black uppercase leading-tight">{vehicleName}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] font-bold uppercase">Berat/Isi:</span>
-            <span className="text-[10px] font-bold">{weight} Kg / {itemsDesc}</span>
+          <div className="border border-black rounded-lg p-2 col-span-2 flex justify-between items-center">
+            <span className="text-[9px] font-bold uppercase">Berat & Isi:</span>
+            <span className="text-[10px] font-black uppercase text-right">{weight} Kg - {itemsDesc}</span>
           </div>
         </div>
 
-        {/* RUTE PENGIRIMAN */}
-        <div className="space-y-3 border-b-2 border-dashed border-black pb-3 mb-3">
-          {/* Asal */}
-          <div className="flex items-start gap-2">
-            <div className="w-4 h-4 bg-black text-white rounded-full flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-[9px] font-bold">A</span>
-            </div>
-            <div className="leading-tight">
-              <p className="text-[10px] font-bold uppercase">Pengirim:</p>
-              <p className="text-xs font-black uppercase">{senderName}</p>
-              <p className="text-[10px] font-bold mb-1">{senderPhone}</p>
-              <p className="text-[9px] leading-snug">{originAddress}</p>
-            </div>
+        {/* RUTE PENGIRIMAN (Card Block) */}
+        <div className="flex flex-col border-2 border-black rounded-xl overflow-hidden mb-4">
+          <div className="bg-black text-white py-1.5 px-3">
+            <span className="text-[9px] font-bold uppercase tracking-widest">Detail Rute Logistik</span>
           </div>
-
-          {/* Tujuan */}
-          <div className="flex items-start gap-2">
-            <div className="w-4 h-4 border-2 border-black text-black rounded-full flex items-center justify-center shrink-0 mt-0.5">
-              <span className="text-[9px] font-bold">B</span>
+          
+          <div className="p-3 space-y-3">
+            {/* Asal */}
+            <div className="flex items-start gap-2 relative">
+              <div className="w-5 h-5 bg-black text-white rounded-full flex items-center justify-center shrink-0 z-10">
+                <span className="text-[10px] font-bold">A</span>
+              </div>
+              <div className="leading-tight pt-0.5">
+                <p className="text-[9px] font-bold uppercase mb-0.5">Pengirim:</p>
+                <p className="text-xs font-black uppercase">{senderName}</p>
+                <p className="text-[10px] font-bold mb-1">{senderPhone}</p>
+                <p className="text-[9px] leading-snug">{originAddress}</p>
+              </div>
             </div>
-            <div className="leading-tight">
-              <p className="text-[10px] font-bold uppercase">Penerima:</p>
-              <p className="text-xs font-black uppercase">{receiverName}</p>
-              <p className="text-[10px] font-bold mb-1">{receiverPhone}</p>
-              <p className="text-[9px] leading-snug">{destAddress}</p>
+
+            {/* Garis Penghubung (Visual Line) */}
+            <div className="h-0 border-t border-dashed border-black ml-3 mr-3 my-1"></div>
+
+            {/* Tujuan */}
+            <div className="flex items-start gap-2 relative">
+              <div className="w-5 h-5 border-2 border-black bg-white text-black rounded-full flex items-center justify-center shrink-0 z-10">
+                <span className="text-[10px] font-black">B</span>
+              </div>
+              <div className="leading-tight pt-0.5">
+                <p className="text-[9px] font-bold uppercase mb-0.5">Penerima:</p>
+                <p className="text-xs font-black uppercase">{receiverName}</p>
+                <p className="text-[10px] font-bold mb-1">{receiverPhone}</p>
+                <p className="text-[9px] leading-snug">{destAddress}</p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* FOOTER */}
-        <div className="text-[9px] space-y-1">
-          <div className="flex justify-between font-bold">
-            <span>TGL CETAK:</span>
-            <span>{date}</span>
-          </div>
-          {totalCost !== undefined && (
-            <div className="flex justify-between font-bold text-xs mt-1 border-t border-black pt-1">
-              <span>TOTAL BIAYA:</span>
-              <span>Rp {totalCost.toLocaleString('id-ID')}</span>
-            </div>
-          )}
+        <div className="text-[9px] font-bold flex justify-between border-b border-black pb-2 mb-3">
+          <span>TGL CETAK:</span>
+          <span>{date}</span>
         </div>
         
-        <div className="text-center mt-4">
-          <p className="text-[8px] font-bold italic">Simpan resi ini sebagai bukti pengiriman yang sah.</p>
-          <p className="text-[8px] font-bold mt-1">Lacak paket di: www.flashglobal.com</p>
+        <div className="text-center mt-2 space-y-1">
+          <p className="text-[8px] font-black uppercase">Simpan resi ini sebagai bukti yang sah.</p>
+          <p className="text-[8px] font-bold">Lacak kargo Anda secara Live di:</p>
+          <p className="text-[10px] font-black border border-black rounded p-1 mt-1">www.flashglobalslogistik.com</p>
         </div>
 
       </div>
