@@ -532,7 +532,8 @@ export default function DesktopLandingPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {availableVehicles.length > 0 ? (
-              availableVehicles.map((vehicle, i) => {
+              // BUG FIX: Hapus argumen 'i' karena tidak lagi digunakan dalam render block
+              availableVehicles.map((vehicle) => {
                 const isMotor = vehicle.category === "Motor" || vehicle.isMotor;
                 const isMobil = vehicle.category === "Mobil";
 
@@ -561,9 +562,9 @@ export default function DesktopLandingPage() {
                 );
               })
             ) : (
-              // SKELETON LOADING BILA DATA BELUM ADA
-              Array.from({length: 4}).map((_, i) => (
-                <div key={i} className="bg-slate-100 rounded-[2rem] h-48 border border-slate-200 animate-pulse"></div>
+              // SKELETON LOADING BILA DATA BELUM ADA (Di sini kita abaikan '_' dengan nama yang jelas 'index')
+              Array.from({length: 4}).map((_, index) => (
+                <div key={index} className="bg-slate-100 rounded-[2rem] h-48 border border-slate-200 animate-pulse"></div>
               ))
             )}
           </div>
