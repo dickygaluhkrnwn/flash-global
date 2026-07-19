@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { 
   MapPin, Box, Maximize, 
   Globe2, Calculator, Truck, Lock, X, ChevronRight, 
-  User, PackageSearch, Scale, Navigation, Zap, Car
+  User, PackageSearch, Scale, Navigation, Car
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -18,7 +18,6 @@ import { doc, getDoc } from "firebase/firestore";
 // --- IMPORT UI KIT ---
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
@@ -66,17 +65,14 @@ const getDynamicPricingSimulation = async (params: {
   let vehicleName = "Kargo Global";
 
   if (params.category === "domestik") {
-    // Cari kendaraan dari config (Sudah tidak ada error karena ExtendedPricingConfig)
     const vehiclesArray: DynamicVehicle[] = params.adminConfig?.customVehicles || [];
     let selectedMatrix: DynamicVehicle | undefined;
 
     if (params.vehicle === "auto") {
-      // Pilih otomatis yang maxWeight-nya menampung
       const sortedVehicles = [...vehiclesArray].sort((a, b) => a.maxWeight - b.maxWeight);
       selectedMatrix = sortedVehicles.find(v => v.maxWeight >= chargeableWeight) || sortedVehicles[sortedVehicles.length - 1];
       vehicleName = selectedMatrix ? `${selectedMatrix.name} (AI Auto)` : "Armada Default";
     } else {
-      // Pilih spesifik
       selectedMatrix = vehiclesArray.find(v => v.id === params.vehicle);
       vehicleName = selectedMatrix ? selectedMatrix.name : "Armada Khusus";
     }
@@ -86,7 +82,6 @@ const getDynamicPricingSimulation = async (params: {
       const extraKm = Math.max(0, realDistance - selectedMatrix.minKm);
       finalPrice = selectedMatrix.baseFare + (extraKm * selectedMatrix.perKm);
     } else {
-      // Fallback ekstrim
       finalPrice = 50000 + (params.distanceKm * 5000);
     }
   } else {
@@ -150,7 +145,6 @@ export default function DesktopLandingPage() {
         if (docSnap.exists()) {
           const data = docSnap.data() as ExtendedPricingConfig;
           setAdminPricing(data);
-          // BUG FIX: Sort fungsi A dan B didefinisikan dengan jelas tipenya
           if (data.customVehicles && Array.isArray(data.customVehicles)) {
             setAvailableVehicles(data.customVehicles.sort((a: DynamicVehicle, b: DynamicVehicle) => a.maxWeight - b.maxWeight));
           }
@@ -291,85 +285,42 @@ export default function DesktopLandingPage() {
       <div className="max-w-[1440px] mx-auto px-6 md:px-8 lg:px-12 relative z-10">
         
         {/* ============================================================== */}
-        {/* HERO SECTION - ENTERPRISE VISUAL */}
+        {/* DASHBOARD HEADER - FUNCTIONAL & TO THE POINT */}
         {/* ============================================================== */}
-        <div className="text-center max-w-4xl mx-auto mb-16">
-          <Badge variant="brand" className="mb-6 px-5 py-2 shadow-sm inline-flex items-center gap-2 text-sm uppercase tracking-widest rounded-full">
-            <Zap className="w-4 h-4 fill-current"/>
-            Infrastruktur Logistik Modern
-          </Badge>
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1] mb-6">
-            Solusi Pengiriman <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] via-[#A83232] to-[#C5A059]">Kargo Skala Besar.</span>
-          </h1>
-          <p className="text-lg md:text-xl text-slate-500 font-medium leading-relaxed max-w-2xl mx-auto">
-            Flash Global menyediakan berbagai armada tangguh untuk kebutuhan bisnis Anda. Pilih armada, kalkulasi tarif, dan jadwalkan penjemputan dalam hitungan detik.
-          </p>
-        </div>
-
-        {/* ============================================================== */}
-        {/* SHOWCASE ARMADA (3D CARDS DARI DATABASE) */}
-        {/* ============================================================== */}
-        <div className="mb-24">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-              <Truck className="w-6 h-6 text-[#7A171D]" /> Armada Kami
-            </h2>
-            <div className="h-[2px] flex-1 bg-slate-200/60 ml-6"></div>
+        <div className="mb-10 border-b border-slate-200/60 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <Calculator className="w-8 h-8 text-[#7A171D]" /> Simulasi & Pemesanan
+            </h1>
+            <p className="text-slate-500 font-medium mt-2 text-sm max-w-2xl">
+              Tentukan titik penjemputan, lokasi tujuan, dan spesifikasi kargo untuk melihat rute interaktif dan estimasi biaya secara otomatis.
+            </p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {availableVehicles.length > 0 ? (
-              availableVehicles.map((vehicle, i) => {
-                const isMotor = vehicle.category === "Motor" || vehicle.isMotor;
-                const isMobil = vehicle.category === "Mobil";
-
-                return (
-                  <motion.div 
-                    key={vehicle.id}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1, duration: 0.5 }}
-                    onClick={() => handleSelectVehicleCard(vehicle.id)}
-                    className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:-translate-y-2 hover:border-[#C5A059]/40 transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className={cn(
-                        "w-14 h-14 rounded-2xl flex items-center justify-center mb-5",
-                        isMotor ? "bg-[#C5A059]/10 text-[#C5A059]" : isMobil ? "bg-blue-50 text-blue-600" : "bg-[#7A171D]/10 text-[#7A171D]"
-                      )}>
-                        {isMobil ? <Car className="w-7 h-7" /> : <Truck className="w-7 h-7" />}
-                      </div>
-                      <h3 className="text-xl font-black text-slate-900 mb-2 group-hover:text-[#7A171D] transition-colors">{vehicle.name}</h3>
-                      <p className="text-slate-500 text-sm font-medium mb-6">Maksimal muatan <span className="font-bold text-slate-700">{vehicle.maxWeight} Kg</span>.</p>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Fare</span>
-                      <span className="font-black text-slate-900">{formatRupiah(vehicle.baseFare)}</span>
-                    </div>
-                  </motion.div>
-                );
-              })
-            ) : (
-              // SKELETON LOADING BILA DATA BELUM ADA
-              Array.from({length: 4}).map((_, i) => (
-                <div key={i} className="bg-slate-100 rounded-[2rem] h-64 border border-slate-200 animate-pulse"></div>
-              ))
-            )}
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto shrink-0">
+            <Button onClick={() => {
+               if(!user) setShowAuthModal(true); else router.push("/delivery/booking");
+            }} variant="primary" className="shadow-md h-11 text-xs px-5 w-full sm:w-auto flex-1">
+              <Truck className="w-4 h-4 mr-1.5"/> Booking Langsung
+            </Button>
+            
+            {/* TOMBOL FORWARDING DIKEMBALIKAN */}
+            <Button onClick={() => {
+               if(!user) setShowAuthModal(true); else router.push("/forwarding/quote");
+            }} variant="outline" className="border-slate-200 shadow-sm h-11 text-xs px-5 w-full sm:w-auto flex-1">
+              <Globe2 className="w-4 h-4 mr-1.5 text-slate-500"/> Kargo Global
+            </Button>
           </div>
         </div>
 
         {/* ============================================================== */}
-        {/* CALCULATOR & MAPBOX SECTION */}
+        {/* CALCULATOR & MAPBOX SECTION (NAIK KE ATAS) */}
         {/* ============================================================== */}
-        <div ref={calculatorRef} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch scroll-mt-24">
+        <div ref={calculatorRef} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch scroll-mt-24 mb-16">
           
           {/* KOLOM KIRI: KALKULATOR */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }} 
-            whileInView={{ opacity: 1, x: 0 }} 
-            viewport={{ once: true }}
+            animate={{ opacity: 1, x: 0 }} 
             transition={{ duration: 0.6, ease: "easeOut" }} 
             className="lg:col-span-5 flex flex-col"
           >
@@ -513,9 +464,8 @@ export default function DesktopLandingPage() {
           {/* KOLOM KANAN: LIVE MAPBOX RADAR */}
           <motion.div 
             initial={{ opacity: 0, x: 30 }} 
-            whileInView={{ opacity: 1, x: 0 }} 
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+            animate={{ opacity: 1, x: 0 }} 
+            transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
             className="lg:col-span-7 h-[500px] lg:h-auto relative"
           >
             <div className="w-full h-full bg-white rounded-[2.5rem] p-2 shadow-2xl shadow-slate-200/50 border border-slate-200 relative overflow-hidden group">
@@ -554,7 +504,7 @@ export default function DesktopLandingPage() {
               </div>
 
               <div className="absolute bottom-6 right-6 z-20">
-                <button onClick={() => router.push("/tracking")} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
+                <button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/tracking"); }} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
                   <div className="bg-[#7A171D]/10 p-2 rounded-xl text-[#7A171D] group-hover:scale-110 transition-transform"><PackageSearch className="w-4 h-4"/></div>
                   <span className="text-slate-800 text-xs font-bold tracking-wide">Cek Pengiriman</span>
                 </button>
@@ -563,6 +513,62 @@ export default function DesktopLandingPage() {
           </motion.div>
 
         </div>
+
+        {/* ============================================================== */}
+        {/* SHOWCASE ARMADA (3D CARDS DARI DATABASE) - PINDAH KE BAWAH */}
+        {/* ============================================================== */}
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }} 
+          whileInView={{ opacity: 1, y: 0 }} 
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
+              <Truck className="w-5 h-5 text-[#7A171D]" /> Katalog Kapasitas Armada
+            </h2>
+            <div className="h-[1px] flex-1 bg-slate-200/60 ml-6"></div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {availableVehicles.length > 0 ? (
+              availableVehicles.map((vehicle, i) => {
+                const isMotor = vehicle.category === "Motor" || vehicle.isMotor;
+                const isMobil = vehicle.category === "Mobil";
+
+                return (
+                  <div 
+                    key={vehicle.id}
+                    onClick={() => handleSelectVehicleCard(vehicle.id)}
+                    className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-[#C5A059]/40 transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className={cn(
+                        "w-12 h-12 rounded-xl flex items-center justify-center mb-4",
+                        isMotor ? "bg-[#C5A059]/10 text-[#C5A059]" : isMobil ? "bg-blue-50 text-blue-600" : "bg-[#7A171D]/10 text-[#7A171D]"
+                      )}>
+                        {isMobil ? <Car className="w-6 h-6" /> : <Truck className="w-6 h-6" />}
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-[#7A171D] transition-colors">{vehicle.name}</h3>
+                      <p className="text-slate-500 text-xs font-medium mb-6 leading-relaxed">Maksimal dimensi {vehicle.dimM?.p ?? 0}x{vehicle.dimM?.l ?? 0}x{vehicle.dimM?.t ?? 0} cm dengan berat <span className="font-bold text-slate-700">{vehicle.maxWeight} Kg</span>.</p>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Base Fare</span>
+                      <span className="font-black text-slate-900 text-sm">{formatRupiah(vehicle.baseFare)}</span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              // SKELETON LOADING BILA DATA BELUM ADA
+              Array.from({length: 4}).map((_, i) => (
+                <div key={i} className="bg-slate-100 rounded-[2rem] h-48 border border-slate-200 animate-pulse"></div>
+              ))
+            )}
+          </div>
+        </motion.div>
+
       </div>
 
       {/* AUTH MODAL */}
