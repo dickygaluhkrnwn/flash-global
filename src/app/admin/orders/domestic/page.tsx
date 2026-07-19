@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Package, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, Weight, UserPlus, X, Clock, ShieldAlert, 
-  Calendar, MapPin, Truck, Building2, User
+  Calendar, MapPin, Truck, Building2, User, Lock
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -25,7 +25,11 @@ export default function DomesticOrdersPage() {
   const { user: currentUser } = useAuthStore();
 
   const [orders, setOrders] = useState<OrderDetail[]>([]);
+  // rawAllPartners menyimpan SEMUA data mitra (termasuk kendaraan) untuk referensi relasi
+  const [rawAllPartners, setRawAllPartners] = useState<DriverData[]>([]);
+  // drivers hanya menyimpan ORANG FISIK (Individual & FleetDriver)
   const [drivers, setDrivers] = useState<DriverData[]>([]);
+  
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -44,15 +48,18 @@ export default function DomesticOrdersPage() {
   });
 
   useEffect(() => {
-    // 1. Tarik Data Sopir (Terintegrasi dengan FMS Baru)
+    // 1. Tarik Data Sopir & Mitra
     const fetchDrivers = async () => {
       try {
         const snap = await getDocs(collection(db, "driver_wallets"));
-        const rawDrivers = snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData));
+        const rawPartners = snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData));
+        setRawAllPartners(rawPartners);
         
-        // Filter: Jangan tampilkan "Vendor" (karena itu akun Manager PT, bukan fisik armada)
-        // Hanya tampilkan Individu, FleetDriver, dan FleetVehicle yang tidak disuspend
-        const assignableDrivers = rawDrivers.filter(d => d.partnerType !== "Vendor" && !d.isSuspended);
+        // BUG FIX TAHAP 2: HANYA TAMPILKAN ORANG FISIK UNTUK PENUGASAN
+        // Jangan tampilkan Vendor (Perusahaan) atau FleetVehicle (Benda Mati/Truk)
+        const assignableDrivers = rawPartners.filter(d => 
+          (d.partnerType === "Individual" || d.partnerType === "FleetDriver") && !d.isSuspended
+        );
         setDrivers(assignableDrivers);
       } catch (error) {
         console.error("Gagal menarik data sopir:", error);
@@ -169,18 +176,33 @@ export default function DomesticOrdersPage() {
       const logDate = new Date().toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
       const uniqueId = Date.now().toString();
       
-      const safeDriverName = String(driver.companyName || driver.name || "Mitra Kurir");
+      const safeDriverName = String(driver.name || "Mitra Kurir");
+      let vehicleText = driver.vehicleType || "Armada Pribadi";
+      let logDesc = `Sopir ${safeDriverName} ditugaskan untuk menjemput barang.`;
+
+      // LOGIKA CERDAS: Jika yang ditugaskan adalah Sopir Vendor (FleetDriver),
+      // Sistem mencari apakah dia sedang mengemudikan Truk (FleetVehicle)
+      if (driver.partnerType === "FleetDriver") {
+        // Cari FleetVehicle yang mencantumkan driverId orang ini
+        const tiedVehicle = rawAllPartners.find(p => p.partnerType === "FleetVehicle" && p.driverId === driver.id);
+        if (tiedVehicle) {
+          vehicleText = tiedVehicle.name || tiedVehicle.vehicleType || "Truk Vendor";
+          logDesc = `Sopir ${safeDriverName} ditugaskan menjemput barang dengan armada ${vehicleText}.`;
+        } else {
+          logDesc = `Sopir ${safeDriverName} dari PT ${driver.vendorName || "Vendor"} ditugaskan untuk menjemput barang.`;
+        }
+      }
 
       await updateDoc(doc(db, "orders", selectedOrderId), {
         driverId: driver.id, 
         driverName: safeDriverName, 
-        vehicleName: driver.vehicleType || "Armada Mitra",
+        vehicleName: vehicleText,
         status: "Menuju Lokasi Jemput",
         trackingHistory: arrayUnion({ 
           id: uniqueId,
           status: "Menuju Lokasi Jemput", 
           date: logDate, 
-          description: `Sopir ${safeDriverName} ditugaskan untuk menjemput barang.`, 
+          description: logDesc, 
           location: "Pusat Distribusi Flash" 
         })
       });
@@ -332,6 +354,7 @@ export default function DomesticOrdersPage() {
                   const originName = originObj?.senderName || o.senderName || "Klien";
                   const destAddr = o.destinations?.[0]?.address || o.destination || "";
                   const destName = o.destinations?.[0]?.receiverName || "Penerima";
+                  const isPaymentVerified = o.paymentStatus === "Lunas";
 
                   return (
                     <tr key={o.id} className="hover:bg-slate-50 transition-colors">
@@ -380,9 +403,25 @@ export default function DomesticOrdersPage() {
                       <td className="p-5 pr-6 align-top text-right">
                         <div className="flex flex-col items-end gap-2">
                           <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200 bg-white hover:bg-slate-50 text-slate-600" variant="outline">Update Log</Button>
+                          
+                          {/* LOGIKA BUG FIX: Hanya munculkan/aktifkan tombol jika pembayaran sudah lunas */}
                           {!o.driverId && (
-                            <Button size="sm" onClick={() => { setSelectedOrderId(o.id); setShowDriverModal(true); }} className="h-8 text-[10px] w-32 shadow-sm bg-[#7A171D] hover:bg-[#5A0E13]">Tunjuk Sopir</Button>
+                            <Button 
+                              size="sm" 
+                              disabled={!isPaymentVerified}
+                              onClick={() => { setSelectedOrderId(o.id); setShowDriverModal(true); }} 
+                              className={`h-8 text-[10px] w-32 shadow-sm flex items-center justify-center gap-1 transition-all ${
+                                isPaymentVerified 
+                                  ? "bg-[#7A171D] hover:bg-[#5A0E13] text-white" 
+                                  : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                              }`}
+                              title={!isPaymentVerified ? "Selesaikan Verifikasi Pembayaran di Menu Finance terlebih dahulu" : "Tugaskan Kurir"}
+                            >
+                              {!isPaymentVerified && <Lock className="w-3 h-3" />}
+                              {isPaymentVerified ? "Tunjuk Sopir" : "Menunggu Finance"}
+                            </Button>
                           )}
+
                         </div>
                       </td>
                     </tr>
@@ -453,7 +492,7 @@ export default function DomesticOrdersPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowDriverModal(false)} />
             <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-lg relative z-10 shadow-2xl">
               <h2 className="text-xl font-black text-slate-900 mb-2">Penugasan Kurir Operasional</h2>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Pilih mitra kurir atau armada vendor yang siap (idle) untuk mengeksekusi manifes pengiriman ini secara manual.</p>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Pilih mitra kurir (Sopir Fisik) yang siap (idle) untuk mengeksekusi manifes pengiriman ini secara manual.</p>
               
               <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar border-y border-slate-100 py-4">
                 {drivers.length === 0 ? (
@@ -463,15 +502,15 @@ export default function DomesticOrdersPage() {
                     <button key={driver.id} type="button" onClick={() => handleAssignDriver(driver)} className="w-full text-left p-4 bg-slate-50 border border-slate-200 rounded-2xl hover:border-[#7A171D] hover:bg-[#7A171D]/5 transition-all flex justify-between items-center group shadow-sm">
                       <div>
                         <p className="text-sm font-black text-slate-900 group-hover:text-[#7A171D] transition-colors flex items-center gap-2">
-                          {String(driver.companyName || driver.name || "Mitra Kurir")}
+                          {String(driver.name || "Mitra Kurir")}
                         </p>
                         <div className="flex items-center gap-2 mt-1.5">
-                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1"><Truck className="w-3 h-3"/> {String(driver.vehicleType || "Armada")}</span>
+                           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest bg-white border border-slate-200 px-2 py-0.5 rounded-md flex items-center gap-1"><Truck className="w-3 h-3"/> {String(driver.vehicleType || "Personal")}</span>
                            <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-                             driver.partnerType === 'FleetDriver' || driver.partnerType === 'FleetVehicle' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                             driver.partnerType === 'FleetDriver' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                            }`}>
-                             {driver.partnerType === 'FleetDriver' || driver.partnerType === 'FleetVehicle' ? <Building2 className="w-3 h-3"/> : <User className="w-3 h-3"/>}
-                             {driver.partnerType === 'Individual' ? 'Individu' : 'Vendor PT'}
+                             {driver.partnerType === 'FleetDriver' ? <Building2 className="w-3 h-3"/> : <User className="w-3 h-3"/>}
+                             {driver.partnerType === 'Individual' ? 'Individu' : 'Sopir Vendor'}
                            </span>
                         </div>
                       </div>

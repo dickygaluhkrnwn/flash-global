@@ -194,6 +194,8 @@ export interface DashboardOrder {
   promoCode?: string; 
   discountAmount?: number; 
   breakdown?: OrderBreakdown; 
+  paymentStatus?: string; // BUG FIX: Ditambahkan untuk menghilangkan error TypeScript
+  paymentMethod?: string; // BUG FIX: Ditambahkan untuk kompatibilitas data
   
   // --- OPERASIONAL & LOG PENGIRIMAN ---
   vehicle?: string;

@@ -99,7 +99,7 @@ export default function DesktopDashboardPage() {
         }
 
         return {
-          id: doc.id, // KUNCI: ID asli utuh untuk routing ke halaman detail
+          id: doc.id, 
           category: "domestik" as const,
           origin: data.origin?.address || data.origin || "-",
           destination: primaryDest,
@@ -111,21 +111,18 @@ export default function DesktopDashboardPage() {
           date: formatFirebaseDate(data.createdAt),
           timestamp: rawDate.getTime(),
           
-          // --- KEUANGAN & PROMO (BARU) ---
           price: Number(data.breakdown?.grandTotal || data.totalCost) || 0,
           finalPrice: Number(data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost) || 0,
           promoCode: data.appliedPromoCode || "",
           discountAmount: Number(data.discountPromoAmount) || 0,
           breakdown: data.breakdown,
           
-          // --- OPERASIONAL & LOG PENGIRIMAN (BARU) ---
           vehicle: data.vehicleName || data.selectedVehicle || "Kurir Reguler",
           driverName: data.driverName || "",
           driverPhone: data.driverPhone || "",
           resi: data.destinations?.[0]?.resi || data.resi || doc.id.slice(-12).toUpperCase(),
           trackingHistory: data.trackingHistory || [],
 
-          // --- DATA KLIEN ---
           senderName: data.origin?.senderName || data.senderName || "",
           receiverName: data.destinations?.[0]?.receiverName || data.receiverName || "",
           senderPhone: data.origin?.senderPhone || data.senderPhone || "",
@@ -145,7 +142,7 @@ export default function DesktopDashboardPage() {
         const rawDate = (typeof data.createdAt === 'object' && data.createdAt?.toDate) ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
 
         return {
-          id: doc.id, // KUNCI
+          id: doc.id, 
           category: "internasional" as const,
           origin: data.origin || "-",
           destination: data.destination || "-",
@@ -157,7 +154,6 @@ export default function DesktopDashboardPage() {
           date: formatFirebaseDate(data.createdAt),
           timestamp: rawDate.getTime(),
           
-          // Quotes tidak ada finalPrice sampai admin merespon
           price: Number(data.offeredPrice) || 0, 
           finalPrice: Number(data.offeredPrice) || 0,
           
@@ -188,6 +184,12 @@ export default function DesktopDashboardPage() {
     if (activeTab !== "Semua") {
       if (activeTab === "Sedang Diproses") {
         if (!["Sedang Diproses", "Menunggu Pembayaran", "Menunggu Verifikasi Finance", "Menunggu Follow Up", "Menunggu Kurir", "Menuju Lokasi Jemput"].includes(order.status)) return false;
+      } else if (activeTab === "Dibatalkan") {
+        // Hanya tampilkan yang batal murni (tanpa embel-embel refund)
+        if (!order.status.includes("Batal") || order.statusSub?.includes("Refund") || order.paymentStatus?.includes("Refund")) return false;
+      } else if (activeTab === "Pengembalian") {
+        // Tampilkan semua yang berkaitan dengan Refund
+        if (!order.paymentStatus?.includes("Refund") && !order.statusSub?.includes("Refund")) return false;
       } else {
         if (order.status !== activeTab) return false;
       }
@@ -224,7 +226,7 @@ export default function DesktopDashboardPage() {
     return true;
   });
 
-  // PENGURUTAN (SORTING) - Update sort berdasarkan finalPrice
+  // PENGURUTAN (SORTING)
   filteredOrders.sort((a, b) => {
     switch (sortBy) {
       case "date_asc": return a.timestamp - b.timestamp;
@@ -256,7 +258,8 @@ export default function DesktopDashboardPage() {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
   };
 
-  const tabs = ["Semua", "Sedang Diproses", "Dikirim", "Selesai"];
+  // TAMBAHAN TAB DIBATALKAN DAN PENGEMBALIAN
+  const tabs = ["Semua", "Sedang Diproses", "Dikirim", "Selesai", "Dibatalkan", "Pengembalian"];
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-8 lg:p-10 relative overflow-hidden font-sans pb-20">
@@ -266,9 +269,7 @@ export default function DesktopDashboardPage() {
 
       <div className="max-w-[1000px] mx-auto relative z-10 space-y-6">
         
-        {/* ========================================================= */}
-        {/* BANNER TAGIHAN PROAKTIF (HANYA MUNCUL JIKA B2B & ADA HUTANG) */}
-        {/* ========================================================= */}
+        {/* BANNER TAGIHAN PROAKTIF */}
         <AnimatePresence>
           {user?.role === 'b2b' && b2bOutstanding > 0 && (
             <motion.div 

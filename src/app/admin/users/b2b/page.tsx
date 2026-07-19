@@ -9,7 +9,7 @@ import {
   Building2, FileText, CreditCard, ShieldAlert, Edit3, ShieldX
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 
@@ -32,11 +32,12 @@ export default function B2BManagementPage() {
       setIsLoading(true);
       try {
         const snap = await getDocs(collection(db, "users"));
-        // Mapping id Firestore menjadi uid sesuai Global Types
-        const allUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() })) as User[];
+        
+        // BUG FIX: Spread d.data() TERLEBIH DAHULU, lalu timpa dengan uid: d.id.
+        // Ini memastikan uid selalu berisi Document ID yang sah, tidak tertimpa oleh field kosong dari database.
+        const allUsers = snap.docs.map(d => ({ ...d.data(), uid: d.id })) as User[];
         
         // Filter users dengan role b2b, legacy role 'business', atau yang memiliki npwp
-        // Casting (u.role as string) diperlukan agar lolos union check TypeScript
         setUsers(allUsers.filter(u => u.role === "b2b" || (u.role as string) === "business" || u.npwp));
       } catch (error) {
         console.error(error);
@@ -55,13 +56,21 @@ export default function B2BManagementPage() {
 
   // FUNGSI KRUSIAL: Mengubah contractStatus, b2bLimit, dan secara krusial mengubah ROLE menjadi B2B
   const handleUpdateContract = async (userId: string, status: "Approved" | "Rejected" | "Pending", limitVal: number) => {
+    // BUG FIX GUARD: Pastikan userId tidak kosong/undefined sebelum memanggil Firebase
+    if (!userId) {
+      showToast("error", "ID User tidak valid. Gagal memproses data.");
+      return;
+    }
+
     try {
       await updateDoc(doc(db, "users", userId), {
         contractStatus: status,
         b2bLimit: limitVal,
         // Standarisasi role baru: Jika Approved maka b2b, selain itu turunkan ke b2c
-        role: status === "Approved" ? "b2b" : "b2c"
+        role: status === "Approved" ? "b2b" : "b2c",
+        updatedAt: serverTimestamp() // BUG FIX: Tambahkan timestamp log perubahan
       });
+      
       showToast("success", `Berkas kontrak dan limit berhasil diperbarui.`);
       
       // Update state lokal tanpa harus refetch ulang seluruh database (Optimization)
@@ -69,7 +78,7 @@ export default function B2BManagementPage() {
         u.uid === userId ? { ...u, contractStatus: status, b2bLimit: limitVal, role: status === "Approved" ? "b2b" : "b2c" } : u
       ));
     } catch (error) {
-      console.error(error);
+      console.error("Error updating B2B Contract:", error);
       showToast("error", "Gagal memproses validasi berkas B2B.");
     }
   };

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { 
   MapPin, Box, Maximize, 
   Globe2, Calculator, Truck, Lock, X, ChevronRight, 
-  User, PackageSearch, Scale, Navigation, Zap
+  User, PackageSearch, Scale, Navigation, Zap, Car
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -22,7 +22,12 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
-import { AdminPricingConfig, EstimateData } from "@/types/order";
+import { AdminPricingConfig, EstimateData, DynamicVehicle } from "@/types/order";
+
+// BUG FIX: Perluasan (Extending) tipe AdminPricingConfig agar TypeScript tidak protes
+interface ExtendedPricingConfig extends AdminPricingConfig {
+  customVehicles?: DynamicVehicle[];
+}
 
 // ======================================================================
 // PENGGUNAAN DYNAMIC IMPORT SSR: FALSE (UNTUK MAPBOX INDEPENDEN)
@@ -50,7 +55,7 @@ const getDynamicPricingSimulation = async (params: {
   height: number;
   distanceKm: number; 
   vehicle: string;
-  adminConfig: AdminPricingConfig | null;
+  adminConfig: ExtendedPricingConfig | null;
 }): Promise<EstimateData> => {
   await new Promise(resolve => setTimeout(resolve, 800));
 
@@ -61,31 +66,29 @@ const getDynamicPricingSimulation = async (params: {
   let vehicleName = "Kargo Global";
 
   if (params.category === "domestik") {
-    const defaultMotor = { baseFare: 15000, minKm: 3, perKm: 3000, maxWeight: 20 };
-    const defaultMobil = { baseFare: 50000, minKm: 5, perKm: 5000, maxWeight: 500 };
-    
-    const motorRate = params.adminConfig?.domestik?.motor || defaultMotor;
-    const mobilRate = params.adminConfig?.domestik?.mobil || defaultMobil;
-    
-    let currentMatrix;
-    
-    // Logika Pemilihan Armada Paksa vs Otomatis
-    if (params.vehicle === "motor") {
-      currentMatrix = motorRate;
-      vehicleName = "Armada Motor";
-    } else if (params.vehicle === "mobil") {
-      currentMatrix = mobilRate;
-      vehicleName = "Armada Mobil (Pickup/Van)";
-    } else {
-      currentMatrix = chargeableWeight <= motorRate.maxWeight ? motorRate : mobilRate;
-      vehicleName = chargeableWeight <= motorRate.maxWeight ? "Armada Motor (AI Auto)" : "Armada Mobil (AI Auto)";
-    }
-    
-    const realDistance = params.distanceKm > 0 ? params.distanceKm : 10; 
-    const extraKm = Math.max(0, realDistance - currentMatrix.minKm);
-    
-    finalPrice = currentMatrix.baseFare + (extraKm * currentMatrix.perKm);
+    // Cari kendaraan dari config (Sudah tidak ada error karena ExtendedPricingConfig)
+    const vehiclesArray: DynamicVehicle[] = params.adminConfig?.customVehicles || [];
+    let selectedMatrix: DynamicVehicle | undefined;
 
+    if (params.vehicle === "auto") {
+      // Pilih otomatis yang maxWeight-nya menampung
+      const sortedVehicles = [...vehiclesArray].sort((a, b) => a.maxWeight - b.maxWeight);
+      selectedMatrix = sortedVehicles.find(v => v.maxWeight >= chargeableWeight) || sortedVehicles[sortedVehicles.length - 1];
+      vehicleName = selectedMatrix ? `${selectedMatrix.name} (AI Auto)` : "Armada Default";
+    } else {
+      // Pilih spesifik
+      selectedMatrix = vehiclesArray.find(v => v.id === params.vehicle);
+      vehicleName = selectedMatrix ? selectedMatrix.name : "Armada Khusus";
+    }
+
+    if (selectedMatrix) {
+      const realDistance = params.distanceKm > 0 ? params.distanceKm : 10; 
+      const extraKm = Math.max(0, realDistance - selectedMatrix.minKm);
+      finalPrice = selectedMatrix.baseFare + (extraKm * selectedMatrix.perKm);
+    } else {
+      // Fallback ekstrim
+      finalPrice = 50000 + (params.distanceKm * 5000);
+    }
   } else {
     const baseInternationalPerKg = params.adminConfig?.internasional?.basePerKg || 250000;
     finalPrice = chargeableWeight * baseInternationalPerKg;
@@ -114,13 +117,15 @@ const getDynamicPricingSimulation = async (params: {
 export default function DesktopLandingPage() {
   const router = useRouter();
   const { user, isHydrated } = useAuthStore();
+  const calculatorRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [estimateData, setEstimateData] = useState<EstimateData | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   
   const [activeTab, setActiveTab] = useState<"domestik" | "internasional">("domestik");
-  const [adminPricing, setAdminPricing] = useState<AdminPricingConfig | null>(null);
+  const [adminPricing, setAdminPricing] = useState<ExtendedPricingConfig | null>(null);
+  const [availableVehicles, setAvailableVehicles] = useState<DynamicVehicle[]>([]);
 
   const [formData, setFormData] = useState({ 
     origin: "", destination: "", weight: "", length: "", width: "", height: "", vehicle: "auto" 
@@ -128,7 +133,7 @@ export default function DesktopLandingPage() {
   
   const [originCoords, setOriginCoords] = useState<{lng: number, lat: number} | null>(null);
   const [destCoords, setDestCoords] = useState<{lng: number, lat: number} | null>(null);
-  const [routeData, setRouteData] = useState<unknown>(null); // unknown is safer than any for Mapbox geometry
+  const [routeData, setRouteData] = useState<unknown>(null); 
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
   
   const [mapViewState, setMapViewState] = useState({
@@ -142,7 +147,14 @@ export default function DesktopLandingPage() {
       try {
         const docRef = doc(db, "settings", "pricing");
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) setAdminPricing(docSnap.data() as AdminPricingConfig);
+        if (docSnap.exists()) {
+          const data = docSnap.data() as ExtendedPricingConfig;
+          setAdminPricing(data);
+          // BUG FIX: Sort fungsi A dan B didefinisikan dengan jelas tipenya
+          if (data.customVehicles && Array.isArray(data.customVehicles)) {
+            setAvailableVehicles(data.customVehicles.sort((a: DynamicVehicle, b: DynamicVehicle) => a.maxWeight - b.maxWeight));
+          }
+        }
       } catch (error) { 
         console.error("Gagal sinkronisasi master data tarif:", error); 
       }
@@ -205,7 +217,6 @@ export default function DesktopLandingPage() {
     setEstimateData(null); 
   };
 
-  // Helper function to update state securely from Mapbox SearchBox without mocking "any" event
   const handleSmartMapChange = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
     setEstimateData(null);
@@ -243,7 +254,6 @@ export default function DesktopLandingPage() {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
   };
 
-  // PERBAIKAN: Routing Canonical (Tanpa /desktop)
   const getNextRouteWithData = () => {
     const params = new URLSearchParams({
       origin: formData.origin, destination: formData.destination, weight: formData.weight.toString(),
@@ -252,16 +262,18 @@ export default function DesktopLandingPage() {
     return activeTab === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`;
   };
 
-  const handleDirectRoute = (route: string) => {
-    if (!isHydrated) return;
-    if (!user) { setShowAuthModal(true); return; }
-    router.push(route); 
-  };
-
   const handleProceed = () => {
     if (!isHydrated) return;
     if (!user) { setShowAuthModal(true); return; }
     router.push(getNextRouteWithData());
+  };
+
+  const handleSelectVehicleCard = (vehicleId: string) => {
+    setFormData(prev => ({ ...prev, vehicle: vehicleId }));
+    setActiveTab("domestik");
+    if (calculatorRef.current) {
+      calculatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   const dropsArrayForMap = destCoords ? [{
@@ -278,64 +290,103 @@ export default function DesktopLandingPage() {
 
       <div className="max-w-[1440px] mx-auto px-6 md:px-8 lg:px-12 relative z-10">
         
-        {/* HERO SECTION (PRO SAAS LAYOUT: Split Header) */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-10 mt-4">
-          <div className="max-w-2xl text-left">
-            <Badge variant="brand" className="mb-6 px-4 py-1.5 shadow-sm inline-flex items-center gap-2">
-              <Zap className="w-4 h-4 fill-current"/>
-              Sistem Logistik Cerdas
-            </Badge>
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.15] mb-4">
-              Akselerasi Pengiriman <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] to-[#C5A059]">Tanpa Batas Wilayah.</span>
-            </h1>
-            <p className="text-lg text-slate-500 font-medium leading-relaxed max-w-xl">
-              Dapatkan kalkulasi biaya pengiriman *real-time* yang terintegrasi penuh dengan satelit Mapbox.
-            </p>
+        {/* ============================================================== */}
+        {/* HERO SECTION - ENTERPRISE VISUAL */}
+        {/* ============================================================== */}
+        <div className="text-center max-w-4xl mx-auto mb-16">
+          <Badge variant="brand" className="mb-6 px-5 py-2 shadow-sm inline-flex items-center gap-2 text-sm uppercase tracking-widest rounded-full">
+            <Zap className="w-4 h-4 fill-current"/>
+            Infrastruktur Logistik Modern
+          </Badge>
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 leading-[1.1] mb-6">
+            Solusi Pengiriman <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7A171D] via-[#A83232] to-[#C5A059]">Kargo Skala Besar.</span>
+          </h1>
+          <p className="text-lg md:text-xl text-slate-500 font-medium leading-relaxed max-w-2xl mx-auto">
+            Flash Global menyediakan berbagai armada tangguh untuk kebutuhan bisnis Anda. Pilih armada, kalkulasi tarif, dan jadwalkan penjemputan dalam hitungan detik.
+          </p>
+        </div>
+
+        {/* ============================================================== */}
+        {/* SHOWCASE ARMADA (3D CARDS DARI DATABASE) */}
+        {/* ============================================================== */}
+        <div className="mb-24">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+              <Truck className="w-6 h-6 text-[#7A171D]" /> Armada Kami
+            </h2>
+            <div className="h-[2px] flex-1 bg-slate-200/60 ml-6"></div>
           </div>
           
-          {/* QUICK ACCESS BUTTONS: Pindah ke kanan atas agar rapi */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto shrink-0 pb-1">
-            <Button 
-              // PERBAIKAN: Canonical Route
-              onClick={() => handleDirectRoute("/delivery/booking")}
-              variant="primary" 
-              className="w-full sm:w-auto h-12 px-6 text-sm font-bold shadow-lg shadow-[#7A171D]/20 rounded-xl flex items-center justify-center gap-2"
-            >
-              <Truck className="w-4 h-4" /> Pesan Domestik Langsung
-            </Button>
-            <Button 
-              // PERBAIKAN: Canonical Route
-              onClick={() => handleDirectRoute("/forwarding/quote")}
-              variant="outline" 
-              className="w-full sm:w-auto h-12 px-6 text-sm font-bold bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm rounded-xl flex items-center justify-center gap-2"
-            >
-              <Globe2 className="w-4 h-4 text-[#C5A059]" /> Global Forwarding
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {availableVehicles.length > 0 ? (
+              availableVehicles.map((vehicle, i) => {
+                const isMotor = vehicle.category === "Motor" || vehicle.isMotor;
+                const isMobil = vehicle.category === "Mobil";
+
+                return (
+                  <motion.div 
+                    key={vehicle.id}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1, duration: 0.5 }}
+                    onClick={() => handleSelectVehicleCard(vehicle.id)}
+                    className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:-translate-y-2 hover:border-[#C5A059]/40 transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className={cn(
+                        "w-14 h-14 rounded-2xl flex items-center justify-center mb-5",
+                        isMotor ? "bg-[#C5A059]/10 text-[#C5A059]" : isMobil ? "bg-blue-50 text-blue-600" : "bg-[#7A171D]/10 text-[#7A171D]"
+                      )}>
+                        {isMobil ? <Car className="w-7 h-7" /> : <Truck className="w-7 h-7" />}
+                      </div>
+                      <h3 className="text-xl font-black text-slate-900 mb-2 group-hover:text-[#7A171D] transition-colors">{vehicle.name}</h3>
+                      <p className="text-slate-500 text-sm font-medium mb-6">Maksimal muatan <span className="font-bold text-slate-700">{vehicle.maxWeight} Kg</span>.</p>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Fare</span>
+                      <span className="font-black text-slate-900">{formatRupiah(vehicle.baseFare)}</span>
+                    </div>
+                  </motion.div>
+                );
+              })
+            ) : (
+              // SKELETON LOADING BILA DATA BELUM ADA
+              Array.from({length: 4}).map((_, i) => (
+                <div key={i} className="bg-slate-100 rounded-[2rem] h-64 border border-slate-200 animate-pulse"></div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* MAIN LAYOUT: GRID 12 KOLOM */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
+        {/* ============================================================== */}
+        {/* CALCULATOR & MAPBOX SECTION */}
+        {/* ============================================================== */}
+        <div ref={calculatorRef} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch scroll-mt-24">
           
-          {/* KOLOM KIRI: KALKULATOR (Lebar Proporsional 5 Kolom) */}
+          {/* KOLOM KIRI: KALKULATOR */}
           <motion.div 
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut" }} 
+            initial={{ opacity: 0, x: -30 }} 
+            whileInView={{ opacity: 1, x: 0 }} 
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, ease: "easeOut" }} 
             className="lg:col-span-5 flex flex-col"
           >
-            <div className="bg-white border border-slate-200 rounded-[2rem] p-6 lg:p-8 shadow-xl shadow-slate-200/50 w-full h-full flex flex-col">
-              
-              <div className="flex bg-slate-100 p-1.5 rounded-xl mb-8 relative border border-slate-200">
-                <button type="button" onClick={() => { setActiveTab("domestik"); setEstimateData(null); }} className={cn("flex-1 py-3 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "domestik" ? "text-[#7A171D]" : "text-slate-500 hover:text-slate-700")}>
+            <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl shadow-slate-200/50 w-full h-full flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-full pointer-events-none"></div>
+
+              <div className="flex bg-slate-100 p-1.5 rounded-xl mb-8 relative border border-slate-200 shrink-0">
+                <button type="button" onClick={() => { setActiveTab("domestik"); setEstimateData(null); }} className={cn("flex-1 py-3.5 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "domestik" ? "text-[#7A171D]" : "text-slate-500 hover:text-slate-700")}>
                   <Truck className="w-4 h-4"/> Domestik
                 </button>
-                <button type="button" onClick={() => { setActiveTab("internasional"); setEstimateData(null); }} className={cn("flex-1 py-3 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "internasional" ? "text-[#C5A059]" : "text-slate-500 hover:text-slate-700")}>
+                <button type="button" onClick={() => { setActiveTab("internasional"); setEstimateData(null); }} className={cn("flex-1 py-3.5 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "internasional" ? "text-[#C5A059]" : "text-slate-500 hover:text-slate-700")}>
                   <Globe2 className="w-4 h-4"/> Internasional
                 </button>
                 <div className={cn("absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-out", activeTab === "domestik" ? "left-1.5" : "left-[calc(50%+4px)]")}></div>
               </div>
 
-              <form onSubmit={handleCalculate} className="space-y-6 flex-grow flex flex-col justify-between">
+              <form onSubmit={handleCalculate} className="space-y-6 flex-grow flex flex-col justify-between z-10">
                 
                 <div className="space-y-5">
                   <div className="space-y-3 relative">
@@ -377,97 +428,97 @@ export default function DesktopLandingPage() {
                       </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Box className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Berat (Kg)</label>
-                    <Input type="number" name="weight" min="1" value={formData.weight} onChange={handleInputChange} placeholder="Cth: 5" className={cn("h-[52px] font-bold border-slate-200 bg-slate-50", activeTab === "domestik" ? "focus-visible:border-[#7A171D]" : "focus-visible:border-[#C5A059]")} required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Maximize className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Dimensi (cm)</label>
-                    <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden h-[52px] focus-within:ring-4 transition-all">
-                      <input type="number" name="length" placeholder="P" value={formData.length} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
-                      <input type="number" name="width" placeholder="L" value={formData.width} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
-                      <input type="number" name="height" placeholder="T" value={formData.height} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
-                    </div>
-                  </div>
                   
-                  {/* PENAMBAHAN INPUT PILIH ARMADA KHUSUS DOMESTIK */}
-                  {activeTab === "domestik" && (
-                    <div className="col-span-2 space-y-2 mt-1">
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                        <Truck className="w-3.5 h-3.5 text-[#7A171D]"/> Pilihan Armada
-                      </label>
-                      <div className="relative">
-                        <select 
-                          name="vehicle" 
-                          value={formData.vehicle} 
-                          onChange={handleInputChange}
-                          className="w-full h-[52px] px-4 text-sm font-bold border border-slate-200 bg-slate-50 rounded-xl focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none appearance-none transition-all cursor-pointer"
-                        >
-                          <option value="auto">Otomatis (Rekomendasi AI berdasarkan berat)</option>
-                          <option value="motor">Armada Motor (Maks 20 Kg)</option>
-                          <option value="mobil">Armada Mobil Kargo (Pickup/Van)</option>
-                        </select>
-                        <ChevronRight className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Box className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Berat (Kg)</label>
+                      <Input type="number" name="weight" min="1" value={formData.weight} onChange={handleInputChange} placeholder="Cth: 5" className={cn("h-[52px] font-bold border-slate-200 bg-slate-50 text-base", activeTab === "domestik" ? "focus-visible:border-[#7A171D]" : "focus-visible:border-[#C5A059]")} required />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Maximize className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Dimensi (cm)</label>
+                      <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden h-[52px] focus-within:ring-4 transition-all">
+                        <input type="number" name="length" placeholder="P" value={formData.length} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                        <input type="number" name="width" placeholder="L" value={formData.width} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                        <input type="number" name="height" placeholder="T" value={formData.height} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
                       </div>
                     </div>
-                  )}
-
-                </div>
-
-                <div className="pt-4">
-                  {!estimateData ? (
-                    <Button type="submit" isLoading={isLoading} variant={activeTab === "domestik" ? "primary" : "gold"} className="w-full h-14 text-base font-black shadow-lg">
-                      Kalkulasi AI Logistics <Calculator className="w-5 h-5 ml-2 opacity-70"/>
-                    </Button>
-                  ) : (
-                    <div className="bg-slate-900 rounded-[1.5rem] p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-xl shadow-slate-900/20">
-                      
-                      <div className="flex justify-between items-start border-b border-slate-700/50 pb-4">
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{activeTab === "domestik" ? "Tarif Live Ekspedisi" : "Estimasi Kargo Global"}</p>
-                          <h3 className={cn("text-3xl font-black tracking-tight", activeTab === "domestik" ? "text-white" : "text-[#C5A059]")}>{formatRupiah(estimateData.finalEstimate)}</h3>
-                        </div>
-                        <div className={cn("text-sm font-black px-2 py-1 rounded-lg", activeTab === "domestik" ? "bg-[#7A171D] text-white" : "bg-[#C5A059] text-slate-900")}>
-                          {estimateData.chargeableWeight} Kg
+                    
+                    {/* DROPDOWN ARMADA */}
+                    {activeTab === "domestik" && (
+                      <div className="col-span-2 space-y-2 mt-2">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-[#7A171D]"/> Pilihan Armada
+                        </label>
+                        <div className="relative">
+                          <select 
+                            name="vehicle" 
+                            value={formData.vehicle} 
+                            onChange={handleInputChange}
+                            className="w-full h-[52px] px-4 text-sm font-bold border border-slate-200 bg-slate-50 rounded-xl focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none appearance-none transition-all cursor-pointer"
+                          >
+                            <option value="auto">Otomatis (AI Rekomendasi)</option>
+                            {availableVehicles.map(v => (
+                              <option key={v.id} value={v.id}>{v.name} (Maks {v.maxWeight} Kg)</option>
+                            ))}
+                          </select>
+                          <ChevronRight className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
                         </div>
                       </div>
-                      
-                      <div className="flex flex-wrap items-center justify-between text-sm text-slate-400 gap-y-3">
-                        <div className="flex items-center gap-1.5"><Scale className="w-4 h-4 opacity-70"/> <span className="font-medium">Berat: <b className="text-white">{estimateData.parameters.actualWeight} Kg</b></span></div>
-                        <div className="flex items-center gap-1.5"><Navigation className="w-4 h-4 opacity-70"/> <span className="font-medium">Jarak: <b className="text-white">{routeDistanceKm > 0 ? `${routeDistanceKm} Km` : "Global"}</b></span></div>
+                    )}
+                  </div>
+
+                  <div className="pt-4">
+                    {!estimateData ? (
+                      <Button type="submit" isLoading={isLoading} variant={activeTab === "domestik" ? "primary" : "gold"} className="w-full h-14 text-base font-black shadow-lg shadow-black/10">
+                        Kalkulasi AI Logistics <Calculator className="w-5 h-5 ml-2 opacity-70"/>
+                      </Button>
+                    ) : (
+                      <div className="bg-slate-900 rounded-[1.5rem] p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-2xl shadow-slate-900/20">
                         
-                        {/* Menampilkan Armada yang Dipilih Sistem/User */}
-                        {activeTab === "domestik" && (
-                          <div className="flex items-center gap-1.5 w-full mt-1 pt-3 border-t border-slate-700/50">
-                            <Truck className="w-4 h-4 opacity-70 text-[#C5A059]"/> 
-                            <span className="font-medium">Armada Terpilih: <b className="text-[#C5A059]">{estimateData.parameters.vehicleName}</b></span>
+                        <div className="flex justify-between items-start border-b border-slate-700/50 pb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{activeTab === "domestik" ? "Tarif Live Ekspedisi" : "Estimasi Kargo Global"}</p>
+                            <h3 className={cn("text-3xl font-black tracking-tight", activeTab === "domestik" ? "text-white" : "text-[#C5A059]")}>{formatRupiah(estimateData.finalEstimate)}</h3>
                           </div>
-                        )}
-                      </div>
+                          <div className={cn("text-sm font-black px-2 py-1 rounded-lg", activeTab === "domestik" ? "bg-[#7A171D] text-white" : "bg-[#C5A059] text-slate-900")}>
+                            {estimateData.chargeableWeight} Kg
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center justify-between text-sm text-slate-400 gap-y-3">
+                          <div className="flex items-center gap-1.5"><Scale className="w-4 h-4 opacity-70"/> <span className="font-medium">Berat: <b className="text-white">{estimateData.parameters.actualWeight} Kg</b></span></div>
+                          <div className="flex items-center gap-1.5"><Navigation className="w-4 h-4 opacity-70"/> <span className="font-medium">Jarak: <b className="text-white">{routeDistanceKm > 0 ? `${routeDistanceKm} Km` : "Global"}</b></span></div>
+                          
+                          {activeTab === "domestik" && (
+                            <div className="flex items-center gap-1.5 w-full mt-1 pt-3 border-t border-slate-700/50">
+                              <Truck className="w-4 h-4 opacity-70 text-[#C5A059]"/> 
+                              <span className="font-medium">Armada Terpilih: <b className="text-[#C5A059]">{estimateData.parameters.vehicleName}</b></span>
+                            </div>
+                          )}
+                        </div>
 
-                      <button type="button" onClick={handleProceed} className="w-full mt-2 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
-                        Lanjutkan Pemesanan <ChevronRight className="w-4 h-4"/>
-                      </button>
-                    </div>
-                  )}
+                        <button type="button" onClick={handleProceed} className="w-full mt-2 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
+                          Lanjutkan Pemesanan <ChevronRight className="w-4 h-4"/>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
               </form>
             </div>
           </motion.div>
 
-          {/* ========================================================= */}
-          {/* KOLOM KANAN: LIVE MAPBOX RADAR (Lebar Proporsional 7 Kolom) */}
-          {/* ========================================================= */}
+          {/* KOLOM KANAN: LIVE MAPBOX RADAR */}
           <motion.div 
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+            initial={{ opacity: 0, x: 30 }} 
+            whileInView={{ opacity: 1, x: 0 }} 
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
             className="lg:col-span-7 h-[500px] lg:h-auto relative"
           >
-            <div className="w-full h-full bg-white rounded-[2rem] p-2 shadow-xl shadow-slate-200/50 border border-slate-200 relative overflow-hidden group">
+            <div className="w-full h-full bg-white rounded-[2.5rem] p-2 shadow-2xl shadow-slate-200/50 border border-slate-200 relative overflow-hidden group">
               
               <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-3 rounded-2xl border border-slate-200 z-20 flex items-center gap-3 shadow-sm pointer-events-none">
                 <div className="relative flex items-center justify-center">
@@ -480,7 +531,7 @@ export default function DesktopLandingPage() {
                 </div>
               </div>
 
-              <div className="w-full h-full rounded-[1.5rem] relative overflow-hidden bg-slate-100 border border-slate-200/50">
+              <div className="w-full h-full rounded-[2rem] relative overflow-hidden bg-slate-100 border border-slate-200/50">
                 <MapBase
                   longitude={mapViewState.longitude} 
                   latitude={mapViewState.latitude}
@@ -494,7 +545,7 @@ export default function DesktopLandingPage() {
 
                 {!originCoords && !destCoords && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-sm z-10 pointer-events-none">
-                    <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center">
+                    <div className="bg-white p-4 rounded-3xl shadow-xl border border-slate-100 flex flex-col items-center">
                       <MapPin className="w-8 h-8 text-[#7A171D] mb-3 animate-bounce" />
                       <p className="text-slate-700 text-sm font-bold tracking-wide">Pilih lokasi pada form kalkulator</p>
                     </div>
@@ -534,7 +585,7 @@ export default function DesktopLandingPage() {
               </p>
               
               <div className="flex gap-4">
-                <Button onClick={() => setShowAuthModal(false)} variant="outline" className="flex-1 h-12 text-sm font-bold rounded-xl">
+                <Button onClick={() => setShowAuthModal(false)} variant="outline" className="flex-1 h-12 text-sm font-bold rounded-xl border-slate-300">
                   Batal
                 </Button>
                 <Button onClick={() => router.push("/login")} variant="primary" className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2">

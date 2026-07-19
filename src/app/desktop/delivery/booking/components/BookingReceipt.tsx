@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import { Building, Scale, ArrowRight, MapPinned } from "lucide-react";
-// IMPORT DARI GLOBAL TYPES (Tambahkan MapDropItem)
+// IMPORT DARI GLOBAL TYPES
 import { DropDestination, DynamicVehicle, Coordinates, MapViewState, MapDropItem } from "@/types/order";
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
@@ -26,17 +26,19 @@ interface Props {
   isFetchingData: boolean;
   routeDistanceKm: number;
   mapViewState: MapViewState;
-  originCoords: Coordinates | null; // Menggunakan Coordinates dari Global Types
+  originCoords: Coordinates | null; 
   routeData: unknown; 
   activeDraggable: string | null;
   handleMarkerDragEnd: (lng: number, lat: number, type: string) => void;
   formatRupiah: (val: number) => string;
+  children?: React.ReactNode; // BUG FIX: Tambahkan izin untuk menyisipkan komponen anak
 }
 
 export default function BookingReceipt({
   selectedVehicle, drops, totalWeight, isOverweight, baseDeliveryCost, finalInsuranceCost, porterCount,
   porterCost, tollFee, isB2BClient, b2bDiscountPercent, b2bDiscountAmount, grandTotal, isLoading,
-  isFetchingData, routeDistanceKm, mapViewState, originCoords, routeData, activeDraggable, handleMarkerDragEnd, formatRupiah
+  isFetchingData, routeDistanceKm, mapViewState, originCoords, routeData, activeDraggable, handleMarkerDragEnd, formatRupiah,
+  children // Tangkap children
 }: Props) {
 
   // Lakukan mapping agar sesuai persis dengan kebutuhan MapBase (Type-Safe 100%)
@@ -67,7 +69,7 @@ export default function BookingReceipt({
             interactive={true}
             className="w-full h-full"
             originCoords={originCoords}
-            drops={dropsForMap} // Gunakan hasil mapping di atas
+            drops={dropsForMap} 
             routeData={routeData}
             activeDraggable={activeDraggable}
             onMarkerDragEnd={handleMarkerDragEnd}
@@ -81,6 +83,9 @@ export default function BookingReceipt({
           )}
         </div>
       </div>
+
+      {/* RENDER CHILDREN DI SINI (PANEL B2B AKAN MUNCUL DI ANTARA PETA DAN RECEIPT) */}
+      {children}
 
       {/* RINGKASAN BIAYA (RECEIPT) */}
       <div className="bg-slate-900 text-white rounded-[2rem] p-7 md:p-8 shadow-xl border border-slate-800 relative overflow-hidden">

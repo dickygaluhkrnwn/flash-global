@@ -6,7 +6,8 @@ import {
   Crown, ArrowRight, Building, 
   MapPin, User, Briefcase, TrendingUp, 
   FileCheck, ShieldAlert, MessageCircle, 
-  CheckCircle2, AlertCircle, Clock, CreditCard
+  Clock, CreditCard, Mail, Phone,
+  CheckCircle2
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -40,6 +41,9 @@ export default function BusinessTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
+  // LOGIKA BARU: Status kelengkapan profil (syarat daftar B2B)
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
+
   // Status Kemitraan dari Database
   const [contractStatus, setContractStatus] = useState<"Pending" | "Approved" | "Rejected" | null>(null);
   const [b2bLimit, setB2bLimit] = useState<number>(0);
@@ -50,11 +54,13 @@ export default function BusinessTab() {
     defaultAddress: "" 
   });
 
-  // State untuk Pengajuan B2B / Corporate
+  // State untuk Pengajuan B2B / Corporate (DITAMBAH EMAIL & PHONE)
   const [b2bData, setB2bData] = useState({
     picName: "",
     legalCompanyName: "",
     npwp: "",
+    companyPhone: "",
+    companyEmail: "",
     industry: "",
     volume: ""
   });
@@ -68,6 +74,11 @@ export default function BusinessTab() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
+            
+            // CEK PREREQUISITE: Apakah Nama dan No HP sudah diisi di tab Profile?
+            const profileComplete = Boolean(data.displayName && data.phone);
+            setIsProfileComplete(profileComplete);
+
             setFormData({
               companyName: data.companyName || "",
               defaultAddress: data.defaultAddress || ""
@@ -76,6 +87,8 @@ export default function BusinessTab() {
               picName: data.picName || user.displayName || "",
               legalCompanyName: data.companyName || "",
               npwp: data.npwp || "",
+              companyPhone: data.companyPhone || "", // Load data jika sudah ada
+              companyEmail: data.companyEmail || "", // Load data jika sudah ada
               industry: data.industry || "",
               volume: data.monthlyVolume || ""
             });
@@ -124,8 +137,10 @@ export default function BusinessTab() {
       // 1. Simpan langsung ke profil user agar terbaca oleh Admin B2B
       await setDoc(doc(db, "users", user.uid), {
         picName: b2bData.picName,
-        companyName: b2bData.legalCompanyName, // Samakan nama entitas
+        companyName: b2bData.legalCompanyName, 
         npwp: b2bData.npwp,
+        companyPhone: b2bData.companyPhone,
+        companyEmail: b2bData.companyEmail,
         industry: b2bData.industry,
         monthlyVolume: b2bData.volume,
         contractStatus: "Pending", // Status awal wajib Pending
@@ -135,9 +150,9 @@ export default function BusinessTab() {
       setContractStatus("Pending");
       setShowB2BForm(false);
 
-      // 2. Generate Pesan WA ke Tim Sales/Kemitraan
+      // 2. Generate Pesan WA ke Tim Sales/Kemitraan (Format Diperbarui)
       const adminWhatsApp = "6281234567890"; 
-      const message = `Halo Tim Kemitraan Flash Global,\n\nSaya tertarik untuk *Upgrade Akun Corporate (B2B)*. Berikut profil bisnis saya:\n\n👤 *Nama PIC:* ${b2bData.picName}\n🏢 *Nama PT/Entitas:* ${b2bData.legalCompanyName}\n📄 *NPWP:* ${b2bData.npwp || "-"}\n🏭 *Industri:* ${b2bData.industry}\n📦 *Estimasi Volume:* ${b2bData.volume}\n✉️ *Email Terdaftar:* ${user.email}\n\nMohon informasi terkait dokumen legalitas lanjutan dan penawaran harga grosirnya. Terima kasih.`;
+      const message = `Halo Tim Kemitraan Flash Global,\n\nSaya tertarik untuk *Upgrade Akun Corporate (B2B)*. Berikut profil bisnis saya:\n\n👤 *Nama PIC:* ${b2bData.picName}\n🏢 *Nama PT/Entitas:* ${b2bData.legalCompanyName}\n📞 *No. Telp Perusahaan:* ${b2bData.companyPhone}\n✉️ *Email Perusahaan:* ${b2bData.companyEmail}\n📄 *NPWP:* ${b2bData.npwp || "-"}\n🏭 *Industri:* ${b2bData.industry}\n📦 *Estimasi Volume:* ${b2bData.volume}\n\nMohon informasi terkait dokumen legalitas lanjutan dan penawaran harga grosirnya. Terima kasih.`;
       
       const encodedMessage = encodeURIComponent(message);
       window.open(`https://wa.me/${adminWhatsApp}?text=${encodedMessage}`, "_blank");
@@ -276,16 +291,28 @@ export default function BusinessTab() {
                   <p className="text-slate-400 text-xs md:text-sm font-medium">Daftarkan entitas bisnis Anda untuk mendapatkan fitur pembayaran tempo (Net 30).</p>
                 </div>
               </div>
-              {!showB2BForm && (
-                <Button onClick={() => setShowB2BForm(true)} variant="gold" className="w-full md:w-auto h-12 shadow-lg whitespace-nowrap px-6">
-                  Apply for Partnership <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
+              
+              {/* BUG FIX LOGIKA PREREQUISITE: Kunci tombol apply jika profil belum lengkap */}
+              {!isProfileComplete ? (
+                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3 w-full md:w-auto">
+                  <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-400">Profil Belum Lengkap</p>
+                    <p className="text-xs text-amber-200 mt-1">Lengkapi Nama & No. HP di tab Profil sebelum mengajukan B2B.</p>
+                  </div>
+                </div>
+              ) : (
+                !showB2BForm && (
+                  <Button onClick={() => setShowB2BForm(true)} variant="gold" className="w-full md:w-auto h-12 shadow-lg whitespace-nowrap px-6">
+                    Apply for Partnership <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                )
               )}
             </div>
 
             {contractStatus === "Rejected" && !showB2BForm && (
               <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3 mb-6 relative z-10">
-                 <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                 <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                  <div>
                    <p className="text-sm font-bold text-red-400">Pengajuan Sebelumnya Ditolak</p>
                    <p className="text-xs text-red-200 mt-1">Dokumen atau legalitas perusahaan Anda mungkin tidak sesuai. Silakan ajukan ulang dengan data yang benar.</p>
@@ -320,6 +347,24 @@ export default function BusinessTab() {
                           <div className="relative">
                             <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                             <Input type="text" value={b2bData.legalCompanyName} onChange={(e) => setB2bData({...b2bData, legalCompanyName: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="PT. Logistik Super Nusantara" required />
+                          </div>
+                        </div>
+                        
+                        {/* BUG FIX: Field No HP Perusahaan */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Phone / No Telp</label>
+                          <div className="relative">
+                            <Phone className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="tel" value={b2bData.companyPhone} onChange={(e) => setB2bData({...b2bData, companyPhone: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="+6281234567890" required />
+                          </div>
+                        </div>
+
+                        {/* BUG FIX: Field Email Perusahaan */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Email</label>
+                          <div className="relative">
+                            <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="email" value={b2bData.companyEmail} onChange={(e) => setB2bData({...b2bData, companyEmail: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="finance@perusahaan.com" required />
                           </div>
                         </div>
 

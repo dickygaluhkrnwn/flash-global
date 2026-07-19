@@ -41,7 +41,7 @@ function BookingForm() {
   // --- STATE CREDIT CONTROL & DEPOSIT B2B ---
   const [b2bLimit, setB2bLimit] = useState(0);
   const [b2bOutstanding, setB2bOutstanding] = useState(0);
-  const [b2bDeposit, setB2bDeposit] = useState(0); // <-- BARU: Saldo Deposit
+  const [b2bDeposit, setB2bDeposit] = useState(0); 
 
   const [tarifPerPorter, setTarifPerPorter] = useState<number>(50000);
   const [motorSettings, setMotorSettings] = useState({ weightSmall: 5, weightMedium: 20, warrantyPercent: 1.5, dimS: {p:20, l:20, t:20}, dimM: {p:40, l:40, t:40}, dimL: {p:50, l:50, t:50} });
@@ -121,7 +121,7 @@ function BookingForm() {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setB2bLimit(userData.b2bLimit || 0);
-            setB2bDeposit(userData.depositBalance || 0); // SET SALDO DEPOSIT
+            setB2bDeposit(userData.depositBalance || 0); 
           }
 
           // 2. Kalkulasi Piutang Berjalan (Outstanding Debt)
@@ -144,7 +144,10 @@ function BookingForm() {
 
         const [vSnap, pSnap] = await Promise.all([ getDoc(doc(db, "settings", "vehicles")), getDoc(doc(db, "settings", "pricing")) ]);
 
-        if (vSnap.exists() && vSnap.data().motor) setMotorSettings(vSnap.data().motor);
+        if (vSnap.exists() && vSnap.data().motor) {
+          // BUG FIX ESLINT: Menggunakan Functional Update Setter
+          setMotorSettings(prev => ({ ...prev, ...vSnap.data().motor }));
+        }
 
         if (pSnap.exists()) {
           const pData = pSnap.data();
@@ -168,14 +171,14 @@ function BookingForm() {
 
   let totalWeight = 0; 
   let totalItemValue = 0; 
-  let motorWarrantyTotal = 0;
   
   drops.forEach(drop => { 
     drop.items.forEach(item => { 
       if (selectedVehicle?.isMotor) { 
+        // Motor menggunakan taksiran berat dari motorSettings
         totalWeight += item.weightType === "Kecil" ? motorSettings.weightSmall : motorSettings.weightMedium; 
-        motorWarrantyTotal += (Number(item.value) || 0) * (motorSettings.warrantyPercent / 100); 
       } else { 
+        // Mobil/Truk menggunakan chargeable weight
         const volumeWeight = ((Number(item.length) || 0) * (Number(item.width) || 0) * (Number(item.height) || 0)) / 6000;
         const chargeableWeight = Math.max(Number(item.weightVal) || 0, volumeWeight);
         totalWeight += chargeableWeight; 
@@ -270,19 +273,20 @@ function BookingForm() {
     const extraKm = Math.max(0, routeDistanceKm - selectedVehicle.minKm); 
     baseDeliveryCost = selectedVehicle.baseFare + (extraKm * selectedVehicle.perKm); 
   }
+
   let finalInsuranceCost = 0;
-  if (selectedVehicle?.isMotor) finalInsuranceCost = motorWarrantyTotal; 
-  else if (addInsurance) finalInsuranceCost = totalItemValue * ((selectedVehicle?.insurancePercent || 0) / 100); 
+  if (selectedVehicle?.isMotor) {
+    finalInsuranceCost = totalItemValue * ((selectedVehicle.insurancePercent || 0) / 100); 
+  } else if (addInsurance) {
+    finalInsuranceCost = totalItemValue * ((selectedVehicle?.insurancePercent || 0) / 100); 
+  }
 
   const porterCost = porterCount * tarifPerPorter;
   const subTotal = baseDeliveryCost + finalInsuranceCost + porterCost + Number(tollFee);
   const b2bDiscountAmount = isB2BClient ? subTotal * (b2bDiscountPercent / 100) : 0;
   const grandTotal = subTotal - b2bDiscountAmount;
 
-  // Cek apakah saldo deposit cukup, kalau cukup -> pakai deposit, kalau kurang -> pakai limit kredit
   const isDepositSufficient = isB2BClient && b2bDeposit >= grandTotal;
-  
-  // Hanya peringatkan "Limit Exceeded" jika saldo deposit juga tidak cukup (mengandalkan kredit)
   const isLimitExceeded = isB2BClient && !isDepositSufficient && b2bLimit > 0 && (b2bOutstanding + grandTotal > b2bLimit);
 
   const formatRupiah = (val: number) => isNaN(val) ? "Rp 0" : new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
@@ -301,36 +305,29 @@ function BookingForm() {
     setIsLoading(true); setErrorMsg("");
     
     try {
-      // 1. Siapkan Resi (AWB)
       const resiInduk = `FLG-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
       const dropsWithResi = drops.map((drop, idx) => ({
         ...drop,
         resi: `${resiInduk}-${idx+1}`
       }));
 
-      // 2. Tentukan Status & Metode Pembayaran B2B
       let finalStatus = "Menunggu Pembayaran";
       let finalPaymentStatus = "Belum Bayar";
       let finalPaymentMethod = "Belum Dipilih";
 
       if (isB2BClient) {
         if (isDepositSufficient) {
-          // SKENARIO 1: SALDO DEPOSIT MENCUKUPI (OTOMATIS POTONG DEPOSIT)
-          finalStatus = "Menunggu Kurir"; // Langsung bypass ke kurir
+          finalStatus = "Menunggu Kurir"; 
           finalPaymentStatus = "Lunas";
           finalPaymentMethod = "Potong Saldo Deposit";
         } else {
-          // SKENARIO 2: SALDO KURANG, MASUK KE PIUTANG KREDIT
-          finalStatus = "Menunggu Kurir"; // Langsung bypass ke kurir
+          finalStatus = "Menunggu Kurir"; 
           finalPaymentStatus = "Piutang B2B";
           finalPaymentMethod = "Invoice / Net 30";
         }
       }
 
-      // 3. Gunakan BATCH WRITE (Atomic Transaction) agar uang dan order aman
       const batch = writeBatch(db);
-
-      // A. Simpan Order ke koleksi 'orders'
       const newOrderRef = doc(collection(db, "orders"));
       batch.set(newOrderRef, {
         userId: user.uid,
@@ -351,34 +348,27 @@ function BookingForm() {
         porterCount 
       });
 
-      // B. Jika potong deposit, kurangi saldo user & catat di Ledger
       if (isB2BClient && isDepositSufficient) {
-        // Kurangi saldo di tabel User
         const userRef = doc(db, "users", user.uid);
         batch.update(userRef, { depositBalance: increment(-grandTotal) });
 
-        // Catat ke Buku Besar (Wallet Logs)
         const logRef = doc(collection(db, "wallet_logs"));
         batch.set(logRef, {
           entityId: user.uid,
           entityName: user.companyName || user.displayName || "Klien B2B",
           entityType: "B2B",
-          type: "payment", // Jenis mutasi
+          type: "payment", 
           amount: grandTotal,
           timestamp: serverTimestamp(),
           adminNote: `Pembayaran otomatis AWB #${resiInduk}`
         });
       }
 
-      // 4. Eksekusi semua transaksi sekaligus (Commit)
       await batch.commit();
       
-      // Routing Dinamis
       if (isB2BClient) {
-        // Jika B2B langsung ke dashboard untuk nge-track resi
         router.push("/dashboard");
       } else {
-        // Jika personal, tetap lempar ke halaman pembayaran
         router.push("/pembayaran");
       }
 
@@ -460,61 +450,6 @@ function BookingForm() {
           {/* KOLOM KANAN: LIVE MAPBOX & RINGKASAN BIAYA */}
           <div className="w-full lg:w-[40%] xl:w-[35%] flex flex-col gap-6 lg:sticky lg:top-28">
             
-            {/* ======================================================== */}
-            {/* PANEL KONTROL KREDIT B2B DEPOSIT                         */}
-            {/* ======================================================== */}
-            {isB2BClient && (
-              <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-xl relative overflow-hidden text-white">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
-                <h3 className="text-sm font-black flex items-center gap-2 mb-4 text-[#C5A059]">
-                  <ShieldAlert className="w-4 h-4"/> Corporate Credit Line
-                </h3>
-                
-                <div className="space-y-3 text-sm font-medium">
-                  {/* Tampilkan Info Deposit */}
-                  <div className="flex justify-between items-center text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
-                    <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5"/> Saldo Prabayar (Deposit)</span>
-                    <span className="font-bold">{formatRupiah(b2bDeposit)}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-slate-400 mt-2">
-                    <span>Plafon Piutang B2B</span>
-                    <span className="text-white font-bold">{formatRupiah(b2bLimit)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-slate-400">
-                    <span>Piutang Berjalan</span>
-                    <span className="text-red-400 font-bold">{formatRupiah(b2bOutstanding)}</span>
-                  </div>
-
-                  {/* LOGIKA INDIKATOR STATUS PEMBAYARAN CERDAS */}
-                  <div className="border-t border-slate-700/50 pt-3 mt-3">
-                    {isDepositSufficient ? (
-                      <div className="flex items-center gap-2 text-emerald-400 text-xs">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Tagihan ini akan memotong Saldo Deposit Anda.
-                      </div>
-                    ) : (
-                      <div className="flex justify-between items-center text-amber-400">
-                        <span>Sisa Plafon Kredit</span>
-                        <span className={`font-black ${b2bLimit - b2bOutstanding - grandTotal < 0 ? 'text-red-500' : 'text-amber-400'}`}>
-                          {formatRupiah(b2bLimit - b2bOutstanding - grandTotal)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Peringatan Limit Habis (Hanya jika deposit tak cukup & limit habis) */}
-                {isLimitExceeded && (
-                  <div className="mt-5 bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-200 leading-relaxed font-semibold">
-                      Tagihan order ini melebihi sisa plafon kredit Anda. Harap isi Saldo Deposit atau lunasi tagihan bulan sebelumnya.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
             <BookingReceipt 
               selectedVehicle={selectedVehicle} drops={drops} totalWeight={totalWeight} isOverweight={isOverweight || isLimitExceeded}
               baseDeliveryCost={baseDeliveryCost} finalInsuranceCost={finalInsuranceCost} porterCount={porterCount}
@@ -522,7 +457,57 @@ function BookingForm() {
               b2bDiscountAmount={b2bDiscountAmount} grandTotal={grandTotal} isLoading={isLoading} isFetchingData={isFetchingData}
               routeDistanceKm={routeDistanceKm} mapViewState={mapViewState} originCoords={originCoords} routeData={routeData}
               activeDraggable={activeDraggable} handleMarkerDragEnd={handleMarkerDragEnd} formatRupiah={formatRupiah}
-            />
+            >
+              {/* PANEL KONTROL KREDIT B2B DEPOSIT DIOPER SEBAGAI CHILD */}
+              {isB2BClient && (
+                <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-xl relative overflow-hidden text-white mt-6 mb-2">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
+                  <h3 className="text-sm font-black flex items-center gap-2 mb-4 text-[#C5A059]">
+                    <ShieldAlert className="w-4 h-4"/> Corporate Credit Line
+                  </h3>
+                  
+                  <div className="space-y-3 text-sm font-medium">
+                    <div className="flex justify-between items-center text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                      <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5"/> Saldo Prabayar (Deposit)</span>
+                      <span className="font-bold">{formatRupiah(b2bDeposit)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center text-slate-400 mt-2">
+                      <span>Plafon Piutang B2B</span>
+                      <span className="text-white font-bold">{formatRupiah(b2bLimit)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span>Piutang Berjalan</span>
+                      <span className="text-red-400 font-bold">{formatRupiah(b2bOutstanding)}</span>
+                    </div>
+
+                    <div className="border-t border-slate-700/50 pt-3 mt-3">
+                      {isDepositSufficient ? (
+                        <div className="flex items-center gap-2 text-emerald-400 text-xs">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Tagihan ini akan memotong Saldo Deposit Anda.
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center text-amber-400">
+                          <span>Sisa Plafon Kredit</span>
+                          <span className={`font-black ${b2bLimit - b2bOutstanding - grandTotal < 0 ? 'text-red-500' : 'text-amber-400'}`}>
+                            {formatRupiah(b2bLimit - b2bOutstanding - grandTotal)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isLimitExceeded && (
+                    <div className="mt-5 bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-200 leading-relaxed font-semibold">
+                        Tagihan order ini melebihi sisa plafon kredit Anda. Harap isi Saldo Deposit atau lunasi tagihan bulan sebelumnya.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </BookingReceipt>
           </div>
         </div>
       </div>

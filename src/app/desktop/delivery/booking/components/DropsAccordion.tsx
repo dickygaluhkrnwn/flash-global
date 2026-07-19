@@ -5,10 +5,10 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FieldLabel } from "./FieldLabel";
-// IMPORT DARI GLOBAL TYPES (Menghapus import lokal "./types")
 import { DropDestination, DynamicVehicle, DeliveryItem } from "@/types/order";
 import { cn } from "@/lib/utils";
-import { User, Phone, MapPin, PackageOpen, Plus, Trash2, MapPinned, ChevronDown, Download, Upload, Info } from "lucide-react";
+// DITAMBAHKAN: RefreshCw untuk icon Generate ID
+import { User, Phone, MapPin, PackageOpen, Plus, Trash2, MapPinned, ChevronDown, Download, Upload, Info, RefreshCw } from "lucide-react";
 
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
@@ -18,7 +18,6 @@ const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 const inputGold = "focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/10";
 
-// Tipe spesifik untuk pengaturan motor
 interface MotorSettings {
   weightSmall?: number;
   weightMedium?: number;
@@ -52,7 +51,8 @@ export default function DropsAccordion({
       return;
     }
     const newId = `DROP-${Math.floor(1000 + Math.random() * 9000)}`;
-    setDrops(prev => [...prev, { id: newId, address: "", detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [{ id: `ITM-1`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }] }]);
+    const newItemId = `ITM-${Math.floor(10000 + Math.random() * 90000)}`; // Buat random sejak awal
+    setDrops(prev => [...prev, { id: newId, address: "", detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [{ id: newItemId, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }] }]);
     setExpandedDrop(newId);
   };
 
@@ -61,7 +61,7 @@ export default function DropsAccordion({
   const updateDropField = (dIndex: number, field: keyof DropDestination, val: string) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], [field]: val }; return newDrops; });
   
   const updateDropFieldsMulti = (dIndex: number, updates: Partial<DropDestination>) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], ...updates }; return newDrops; });
-  const addItemToDrop = (dIndex: number) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex].items.push({ id: `ITM-${Math.floor(1000 + Math.random() * 9000)}`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }); return newDrops; });
+  const addItemToDrop = (dIndex: number) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex].items.push({ id: `ITM-${Math.floor(10000 + Math.random() * 90000)}`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }); return newDrops; });
   const removeItemFromDrop = (dIndex: number, iIndex: number) => setDrops(prev => { const newDrops = [...prev]; if (newDrops[dIndex].items.length > 1) { newDrops[dIndex].items = newDrops[dIndex].items.filter((_, i) => i !== iIndex); } return newDrops; });
   const updateItemField = (dIndex: number, iIndex: number, field: keyof DeliveryItem, val: string | number) => setDrops(prev => { const newDrops = [...prev]; const newItems = [...newDrops[dIndex].items]; newItems[iIndex] = { ...newItems[iIndex], [field]: val }; newDrops[dIndex] = { ...newDrops[dIndex], items: newItems }; return newDrops; });
 
@@ -88,7 +88,7 @@ export default function DropsAccordion({
             detail: cols[3]?.trim() || "",
             receiverEmail: "",
             items: [{ 
-              id: `ITM-${Date.now()}`, 
+              id: `ITM-${Math.floor(10000 + Math.random() * 90000)}`, 
               name: cols[4]?.trim() || "Paket CSV", 
               weightType: "Sedang" as const, dimType: "M" as const, 
               weightVal: Number(cols[5]) || 1, length: Number(cols[6]) || 10, width: Number(cols[7]) || 10, height: Number(cols[8]) || 10, value: Number(cols[9]) || 0 
@@ -288,14 +288,40 @@ export default function DropsAccordion({
 
                                 <div className="space-y-4">
                                   {drop.items.map((item, iIndex) => (
-                                    <div key={item.id} className="relative bg-white p-4 rounded-xl border border-slate-200 space-y-4 shadow-sm">
+                                    // BUG FIX: Menggunakan index sebagai key agar kursor input tidak hilang fokus saat state item.id berubah
+                                    <div key={`item-${dIndex}-${iIndex}`} className="relative bg-white p-4 rounded-xl border border-slate-200 space-y-4 shadow-sm">
                                       {drop.items.length > 1 && (
                                         <button type="button" onClick={() => removeItemFromDrop(dIndex, iIndex)} className="absolute right-3 top-3 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                                       )}
                                       
-                                      <div>
-                                        <FieldLabel label="Isi Paket" infoTitle="Deskripsi Barang" infoText="Sebutkan isi paket agar kurir bisa berhati-hati. Contoh: 'Dokumen', 'Pecah Belah'." onInfoClick={handleInfoClick}/>
-                                        <Input value={item.name} onChange={(e) => updateItemField(dIndex, iIndex, "name", e.target.value)} placeholder="Cth: Baju / Dokumen" className={cn("h-10 text-sm", inputGold)} required />
+                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* BAGIAN BARU: IDENTITAS KOLI / BARANG */}
+                                        <div className="md:col-span-1">
+                                          <FieldLabel label="ID / Kode Koli" infoTitle="Identifikasi Barang" infoText="Kode unik untuk pelacakan spesifik per koli/kardus. Sangat penting jika mengajukan klaim asuransi sebagian. Anda bisa mengubahnya manual atau klik tombol generate." onInfoClick={handleInfoClick}/>
+                                          <div className="flex gap-2">
+                                            <Input 
+                                              value={item.id} 
+                                              onChange={(e) => updateItemField(dIndex, iIndex, "id", e.target.value.toUpperCase())} 
+                                              placeholder="ITM-XXXX" 
+                                              className={cn("h-10 text-sm font-mono font-bold uppercase", inputGold)} 
+                                              required 
+                                            />
+                                            <Button 
+                                              type="button" 
+                                              variant="outline" 
+                                              className="h-10 px-3 text-slate-400 hover:text-[#C5A059] hover:bg-[#C5A059]/10 border-slate-200 shrink-0 shadow-sm" 
+                                              onClick={() => updateItemField(dIndex, iIndex, "id", `ITM-${Math.floor(10000 + Math.random() * 90000)}`)}
+                                              title="Generate ID Baru"
+                                            >
+                                              <RefreshCw className="w-4 h-4" />
+                                            </Button>
+                                          </div>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                          <FieldLabel label="Isi Paket" infoTitle="Deskripsi Barang" infoText="Sebutkan isi paket agar kurir bisa berhati-hati. Contoh: 'Dokumen', 'Pecah Belah'." onInfoClick={handleInfoClick}/>
+                                          <Input value={item.name} onChange={(e) => updateItemField(dIndex, iIndex, "name", e.target.value)} placeholder="Cth: Baju / Dokumen" className={cn("h-10 text-sm", inputGold)} required />
+                                        </div>
                                       </div>
 
                                       <div>

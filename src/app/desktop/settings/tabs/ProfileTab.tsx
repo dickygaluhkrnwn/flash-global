@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Camera, CheckCircle2, Lock, KeyRound, Trash2, Save, MailCheck, Shield, Building2 } from "lucide-react";
+import { User, Camera, CheckCircle2, Lock, KeyRound, Trash2, Save, MailCheck, Shield, Building2, Phone } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { updateProfile, sendPasswordResetEmail } from "firebase/auth";
@@ -31,7 +31,6 @@ export default function ProfileTab() {
 
   useEffect(() => {
     if (user) {
-      // PERBAIKAN: Menggunakan displayName dari Global Type
       const nameParts = (user.displayName || "").split(" ");
       const fName = nameParts[0] || "";
       const lName = nameParts.slice(1).join(" ") || "";
@@ -69,7 +68,6 @@ export default function ProfileTab() {
     try {
       let finalPhotoURL = user.photoURL || "";
       
-      // Upload ke Cloudinary jika ada file baru
       if (selectedFile) {
         const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
         const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -91,12 +89,10 @@ export default function ProfileTab() {
 
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
-      // Update Firebase Auth Profile
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { displayName: fullName, photoURL: finalPhotoURL });
       }
 
-      // Update Firestore Database (Pastikan 'displayName' digunakan bukan 'name' jika mengikuti standar, tapi kita update dua-duanya untuk backward compatibility DB)
       await setDoc(doc(db, "users", user.uid), {
         displayName: fullName,
         name: fullName, 
@@ -105,7 +101,6 @@ export default function ProfileTab() {
         updatedAt: serverTimestamp()
       }, { merge: true });
 
-      // Update Zustand Store (Pastikan role terbawa & menggunakan displayName)
       login({ ...user, displayName: fullName, photoURL: finalPhotoURL });
 
       setIsSuccess(true);
@@ -143,7 +138,6 @@ export default function ProfileTab() {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
-      {/* Header Sticky */}
       <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white/80 backdrop-blur-xl sticky top-0 z-20">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Profile Settings</h2>
@@ -163,7 +157,6 @@ export default function ProfileTab() {
       </div>
 
       <div className="p-6 md:p-8 space-y-10">
-        {/* Notifikasi Alerts */}
         <AnimatePresence>
           {isSuccess && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
@@ -188,7 +181,6 @@ export default function ProfileTab() {
           )}
         </AnimatePresence>
 
-        {/* Section 1: Photo & Role */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-2">
           <div className="relative group shrink-0">
             <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-slate-50 flex items-center justify-center">
@@ -214,7 +206,6 @@ export default function ProfileTab() {
               <h4 className="font-bold text-slate-900 text-lg">Profile Photo</h4>
               <p className="text-sm text-slate-500">Recommended format: JPG, PNG. Max size 2MB.</p>
             </div>
-            {/* Role Badge (PERBAIKAN: Check 'b2b' role) */}
             {user?.role && (
               <div className="flex items-center gap-1.5 w-max px-3 py-1 bg-slate-100 border border-slate-200 rounded-full">
                 {user.role === 'b2b' ? (
@@ -230,7 +221,6 @@ export default function ProfileTab() {
           </div>
         </div>
 
-        {/* Section 2: Personal Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700">First Name</label>
@@ -254,20 +244,20 @@ export default function ProfileTab() {
           </div>
         </div>
 
-        {/* Section 3: Contact Info */}
         <div className="grid grid-cols-1 gap-6 pt-6 border-t border-slate-100">
+          {/* BUG FIX: Membuka kunci (disabled dihilangkan) agar user bisa mengisi nomor HP */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Phone Number</label>
+            <label className="text-sm font-semibold text-slate-700">Phone Number <span className="text-red-500">*</span></label>
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <input 
                 type="tel" 
                 value={formData.phone} 
-                disabled 
-                className="w-full sm:w-1/2 px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 font-medium cursor-not-allowed" 
-                placeholder="+62..." 
+                onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                className="w-full sm:w-1/2 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none font-medium text-slate-900 bg-slate-50/50 transition-all" 
+                placeholder="Cth: 081234567890" 
               />
-              <span className="text-xs text-amber-600 font-medium flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-                <Lock className="w-3.5 h-3.5"/> Number is locked for security.
+              <span className="text-xs text-slate-500 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                <Phone className="w-3.5 h-3.5"/> Nomor HP wajib diisi untuk operasional & validasi B2B.
               </span>
             </div>
           </div>
@@ -287,7 +277,6 @@ export default function ProfileTab() {
           </div>
         </div>
 
-        {/* Section 4: Security */}
         <div className="border-t border-slate-100 pt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h4 className="font-bold text-slate-900">Account Password</h4>
@@ -303,7 +292,6 @@ export default function ProfileTab() {
           </button>
         </div>
 
-        {/* Section 5: Danger Zone */}
         <div className="border-t border-slate-100 pt-8 mt-4">
           <div className="bg-red-50/50 p-6 md:p-8 rounded-2xl border border-red-100 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
