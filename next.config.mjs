@@ -17,6 +17,15 @@ const nextConfig = {
       }
     ],
   },
+  // Tambahkan blok rewrites ini untuk mengatasi 404 Firebase Auth di Custom Domain
+  async rewrites() {
+    return [
+      {
+        source: '/__/auth/:path*',
+        destination: 'https://flash-global.firebaseapp.com/__/auth/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
