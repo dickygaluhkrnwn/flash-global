@@ -6,9 +6,8 @@ import { getFirestore } from "firebase/firestore";
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   
-  // PENTING: Kita ganti authDomain langsung ke subdomain milikmu 
-  // agar layar Login Google 100% menggunakan brand Flash Global Logistik
-  authDomain: "web.flashglobalslogistik.com", 
+  // KITA KEMBALIKAN KE BAWAAN FIREBASE (Ini wajib untuk aplikasi Next.js di Vercel)
+  authDomain: "flash-global.firebaseapp.com", 
   
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
