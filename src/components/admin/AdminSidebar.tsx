@@ -8,7 +8,10 @@ import {
   LayoutDashboard, WalletCards, Users, Send, 
   Banknote, Ticket, LifeBuoy, ChevronDown, 
   User, Building2, UserCog, CreditCard, Globe, Map,
-  Receipt, FileSpreadsheet, MessageSquare, FileWarning, History
+  MessageSquare, FileWarning, History, Users2,
+  Receipt,
+  FileSpreadsheet,
+  UserSquare2
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
@@ -31,36 +34,35 @@ interface SidebarButtonProps {
   isExpanded: boolean;
 }
 
-// MENGGUNAKAN ROLE YANG SUDAH DISTANDARISASI DI GLOBAL TYPES
 const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
 
 export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProps) {
   const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // State khusus untuk membuka/menutup sub-menu Manajemen Pengguna
-  const isUsersRouteActive = pathname.startsWith("/admin/users");
+  const isUsersRouteActive = pathname.startsWith("/admin/users/b2"); // Hanya aktif untuk b2c dan b2b
   const [isUsersMenuOpen, setIsUsersMenuOpen] = useState(isUsersRouteActive);
 
-  // State khusus untuk membuka/menutup sub-menu Dispatch & Orders
+  // STATE BARU: Khusus untuk menu Fleet Management (Sopir & Vendor)
+  const isFleetRouteActive = pathname.startsWith("/admin/users/drivers");
+  const [isFleetMenuOpen, setIsFleetMenuOpen] = useState(isFleetRouteActive);
+
   const isOrdersRouteActive = pathname.startsWith("/admin/orders");
   const [isOrdersMenuOpen, setIsOrdersMenuOpen] = useState(isOrdersRouteActive);
 
-  // State khusus untuk membuka/menutup sub-menu Keuangan & Finance
   const isFinanceRouteActive = pathname.startsWith("/admin/finance");
   const [isFinanceMenuOpen, setIsFinanceMenuOpen] = useState(isFinanceRouteActive);
 
-  // State khusus untuk membuka/menutup sub-menu Pusat Bantuan (BARU)
   const isSupportRouteActive = pathname.startsWith("/admin/support");
   const [isSupportMenuOpen, setIsSupportMenuOpen] = useState(isSupportRouteActive);
 
-  // Otomatis buka sub-menu jika sedang berada di dalam route tersebut
   useEffect(() => {
     if (isUsersRouteActive && isExpanded) setIsUsersMenuOpen(true);
+    if (isFleetRouteActive && isExpanded) setIsFleetMenuOpen(true);
     if (isOrdersRouteActive && isExpanded) setIsOrdersMenuOpen(true);
     if (isFinanceRouteActive && isExpanded) setIsFinanceMenuOpen(true);
     if (isSupportRouteActive && isExpanded) setIsSupportMenuOpen(true);
-  }, [isUsersRouteActive, isOrdersRouteActive, isFinanceRouteActive, isSupportRouteActive, isExpanded]);
+  }, [isUsersRouteActive, isFleetRouteActive, isOrdersRouteActive, isFinanceRouteActive, isSupportRouteActive, isExpanded]);
 
   const handleAdminLogout = async () => {
     try {
@@ -79,12 +81,10 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
     return "Secure Node";
   };
 
-  // Validasi Role
   if (!allowedRoles.includes(currentRole as Role)) return null;
 
   return (
     <>
-      {/* MOBILE OVERLAY */}
       {isExpanded && (
         <div 
           className="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" 
@@ -92,13 +92,12 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
         />
       )}
 
-      {/* SIDEBAR CONTAINER (Light Mode Premium) */}
       <aside 
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={() => {
           setIsExpanded(false);
-          // Tutup sub-menu jika tidak sedang di halaman itu saat mouse keluar
           if (!isUsersRouteActive) setIsUsersMenuOpen(false); 
+          if (!isFleetRouteActive) setIsFleetMenuOpen(false);
           if (!isOrdersRouteActive) setIsOrdersMenuOpen(false);
           if (!isFinanceRouteActive) setIsFinanceMenuOpen(false);
           if (!isSupportRouteActive) setIsSupportMenuOpen(false);
@@ -129,15 +128,15 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             </div>
           </div>
 
-          {/* Menu Navigasi Modul Dinamis */}
           <div className="space-y-1.5 w-full">
             
             {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-4 transition-opacity">Main Dashboard</p>}
             <SidebarButton icon={LayoutDashboard} label="Dashboard" href="/admin" isActive={pathname === "/admin"} isExpanded={isExpanded} />
 
-            {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">User & Security</p>}
-            
-            {/* MENU MANAJEMEN PENGGUNA (ACCORDION DENGAN SUB-MENU) */}
+            {/* ==================================================== */}
+            {/* KATEGORI 1: MANAJEMEN PENGGUNA (HANYA CLIENT B2C & B2B) */}
+            {/* ==================================================== */}
+            {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Customer & Security</p>}
             {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
               <div className="flex flex-col">
                 <button 
@@ -152,75 +151,63 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                       ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" 
                       : "text-slate-600 hover:bg-slate-50 hover:text-[#7A171D]"
                   )}
-                  title="Manajemen Pengguna"
                 >
                   <Users className={cn("w-5 h-5 shrink-0 transition-colors", isUsersRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
-                  <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Manajemen Pengguna</span>
-                  {isExpanded && (
-                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isUsersMenuOpen ? "rotate-180" : "", isUsersRouteActive ? "text-white/70" : "text-slate-400")} />
-                  )}
+                  <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Data Pelanggan</span>
+                  {isExpanded && <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isUsersMenuOpen ? "rotate-180" : "", isUsersRouteActive ? "text-white/70" : "text-slate-400")} />}
                 </button>
 
-                {/* Sub-Menu Items */}
-                <div 
-                  className={cn(
-                    "overflow-hidden transition-all duration-300 flex flex-col gap-1",
-                    isExpanded && isUsersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0"
-                  )}
-                >
+                <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isUsersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
                   <SubMenuButton href="/admin/users/b2c" label="Klien Personal (B2C)" icon={User} isActive={pathname.includes("/users/b2c")} />
                   <SubMenuButton href="/admin/users/b2b" label="Klien Korporat (B2B)" icon={Building2} isActive={pathname.includes("/users/b2b")} />
-                  <SubMenuButton href="/admin/users/drivers" label="Mitra Sopir" icon={Truck} isActive={pathname.includes("/users/drivers")} />
                   {currentRole === "superadmin" && (
                     <SubMenuButton href="/admin/users/staff" label="Manajemen Staf" icon={UserCog} isActive={pathname.includes("/users/staff")} />
                   )}
                 </div>
               </div>
             )}
-            
-            {/* MENU PUSAT BANTUAN & AUDIT (ACCORDION BARU) */}
-            {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
+
+            {/* ==================================================== */}
+            {/* KATEGORI BARU 2: FLEET & DRIVER MANAGEMENT */}
+            {/* ==================================================== */}
+            {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Mitra & Fleet</p>}
+            {(currentRole === "superadmin" || currentRole === "admin_operational") && (
               <div className="flex flex-col">
                 <button 
                   onClick={() => {
                     if (!isExpanded) setIsExpanded(true);
-                    setIsSupportMenuOpen(!isSupportMenuOpen);
+                    setIsFleetMenuOpen(!isFleetMenuOpen);
                   }}
                   className={cn(
                     "flex items-center py-3 rounded-xl text-sm font-bold transition-all w-full text-left overflow-hidden group outline-none",
                     isExpanded ? "px-4" : "justify-center px-0",
-                    isSupportRouteActive 
+                    isFleetRouteActive 
                       ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" 
                       : "text-slate-600 hover:bg-slate-50 hover:text-[#7A171D]"
                   )}
-                  title="Pusat Bantuan & Audit"
                 >
-                  <LifeBuoy className={cn("w-5 h-5 shrink-0 transition-colors", isSupportRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
-                  <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Pusat Bantuan</span>
-                  {isExpanded && (
-                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isSupportMenuOpen ? "rotate-180" : "", isSupportRouteActive ? "text-white/70" : "text-slate-400")} />
-                  )}
+                  <Users2 className={cn("w-5 h-5 shrink-0 transition-colors", isFleetRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
+                  <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Mitra Pengemudi</span>
+                  {isExpanded && <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isFleetMenuOpen ? "rotate-180" : "", isFleetRouteActive ? "text-white/70" : "text-slate-400")} />}
                 </button>
 
-                {/* Sub-Menu Items */}
-                <div 
-                  className={cn(
-                    "overflow-hidden transition-all duration-300 flex flex-col gap-1",
-                    isExpanded && isSupportMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0"
-                  )}
-                >
-                  <SubMenuButton href="/admin/support/tickets" label="Tiket Bantuan CS" icon={MessageSquare} isActive={pathname.includes("/support/tickets")} />
-                  <SubMenuButton href="/admin/support/claims" label="Klaim Asuransi" icon={FileWarning} isActive={pathname.includes("/support/claims")} />
-                  {currentRole === "superadmin" && (
-                    <SubMenuButton href="/admin/support/audit" label="Audit Trail" icon={History} isActive={pathname.includes("/support/audit")} />
-                  )}
+                <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isFleetMenuOpen ? "max-h-96 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
+                  {/* Menu Utama FMS / Pusat Verifikasi */}
+                  <SubMenuButton href="/admin/users/drivers" label="Pusat Verifikasi (Dashboard)" icon={ShieldCheck} isActive={pathname === "/admin/users/drivers"} />
+                  {/* Pemisahan Entitas Sesuai Refactoring */}
+                  <SubMenuButton href="/admin/users/drivers/individual" label="Mitra Individu" icon={User} isActive={pathname.includes("/users/drivers/individual")} />
+                  <SubMenuButton href="/admin/users/drivers/vendor" label="Vendor (PT/CV)" icon={Building2} isActive={pathname.includes("/users/drivers/vendor")} />
+                  <SubMenuButton href="/admin/users/drivers/fleet-drivers" label="Sopir Vendor" icon={UserSquare2} isActive={pathname.includes("/users/drivers/fleet-drivers")} />
+                  <SubMenuButton href="/admin/users/drivers/fleet-vehicles" label="Armada Truk" icon={Truck} isActive={pathname.includes("/users/drivers/fleet-vehicles")} />
                 </div>
               </div>
             )}
 
+            {/* ==================================================== */}
+            {/* SISA MENU (DISPATCH, FINANCE, MASTER DATA, SUPPORT) */}
+            {/* ==================================================== */}
             {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Dispatch & Finance</p>}
             
-            {/* MENU DISPATCH & ORDER (ACCORDION DENGAN SUB-MENU) */}
             {(currentRole === "superadmin" || currentRole === "admin_operational") && (
               <div className="flex flex-col">
                 <button 
@@ -235,22 +222,12 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                       ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" 
                       : "text-slate-600 hover:bg-slate-50 hover:text-[#7A171D]"
                   )}
-                  title="Dispatch & Order"
                 >
                   <Send className={cn("w-5 h-5 shrink-0 transition-colors", isOrdersRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
                   <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Dispatch & Orders</span>
-                  {isExpanded && (
-                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isOrdersMenuOpen ? "rotate-180" : "", isOrdersRouteActive ? "text-white/70" : "text-slate-400")} />
-                  )}
+                  {isExpanded && <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isOrdersMenuOpen ? "rotate-180" : "", isOrdersRouteActive ? "text-white/70" : "text-slate-400")} />}
                 </button>
-
-                {/* Sub-Menu Items */}
-                <div 
-                  className={cn(
-                    "overflow-hidden transition-all duration-300 flex flex-col gap-1",
-                    isExpanded && isOrdersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0"
-                  )}
-                >
+                <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isOrdersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
                   <SubMenuButton href="/admin/orders/domestic" label="Order Domestik" icon={Package} isActive={pathname.includes("/orders/domestic")} />
                   <SubMenuButton href="/admin/orders/global" label="Global Forwarding" icon={Globe} isActive={pathname.includes("/orders/global")} />
                   <SubMenuButton href="/admin/orders/radar" label="Radar Satelit" icon={Map} isActive={pathname.includes("/orders/radar")} />
@@ -258,7 +235,6 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
               </div>
             )}
 
-            {/* MENU KEUANGAN & TAGIHAN (FINANCE) */}
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
               <div className="flex flex-col">
                 <button 
@@ -273,22 +249,12 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                       ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" 
                       : "text-slate-600 hover:bg-slate-50 hover:text-[#7A171D]"
                   )}
-                  title="Keuangan & Tagihan"
                 >
                   <Banknote className={cn("w-5 h-5 shrink-0 transition-colors", isFinanceRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
                   <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Keuangan & Tagihan</span>
-                  {isExpanded && (
-                    <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isFinanceMenuOpen ? "rotate-180" : "", isFinanceRouteActive ? "text-white/70" : "text-slate-400")} />
-                  )}
+                  {isExpanded && <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isFinanceMenuOpen ? "rotate-180" : "", isFinanceRouteActive ? "text-white/70" : "text-slate-400")} />}
                 </button>
-
-                {/* Sub-Menu Items */}
-                <div 
-                  className={cn(
-                    "overflow-hidden transition-all duration-300 flex flex-col gap-1",
-                    isExpanded && isFinanceMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0"
-                  )}
-                >
+                <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isFinanceMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
                   <SubMenuButton href="/admin/finance/verification" label="Verifikasi Manual" icon={Receipt} isActive={pathname.includes("/finance/verification")} />
                   <SubMenuButton href="/admin/finance/receivables" label="Piutang B2B (Net)" icon={Building2} isActive={pathname.includes("/finance/receivables")} />
                   <SubMenuButton href="/admin/finance/reports" label="Laporan Pembukuan" icon={FileSpreadsheet} isActive={pathname.includes("/finance/reports")} />
@@ -313,10 +279,39 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
               <SidebarButton icon={Ticket} label="Promo & Voucher" href="/admin/promo" isActive={pathname === "/admin/promo"} isExpanded={isExpanded} />
             )}
+
+            {isExpanded && <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 mb-2 mt-6 transition-opacity">Support</p>}
+            {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
+              <div className="flex flex-col">
+                <button 
+                  onClick={() => {
+                    if (!isExpanded) setIsExpanded(true);
+                    setIsSupportMenuOpen(!isSupportMenuOpen);
+                  }}
+                  className={cn(
+                    "flex items-center py-3 rounded-xl text-sm font-bold transition-all w-full text-left overflow-hidden group outline-none",
+                    isExpanded ? "px-4" : "justify-center px-0",
+                    isSupportRouteActive 
+                      ? "bg-[#7A171D] text-white shadow-md shadow-[#7A171D]/20" 
+                      : "text-slate-600 hover:bg-slate-50 hover:text-[#7A171D]"
+                  )}
+                >
+                  <LifeBuoy className={cn("w-5 h-5 shrink-0 transition-colors", isSupportRouteActive ? "text-white" : "text-slate-400 group-hover:text-[#7A171D]")} /> 
+                  <span className={cn("transition-all duration-300 whitespace-nowrap flex-1", isExpanded ? "ml-3 opacity-100" : "opacity-0 w-0 hidden")}>Pusat Bantuan</span>
+                  {isExpanded && <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isSupportMenuOpen ? "rotate-180" : "", isSupportRouteActive ? "text-white/70" : "text-slate-400")} />}
+                </button>
+                <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isSupportMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
+                  <SubMenuButton href="/admin/support/tickets" label="Tiket Bantuan CS" icon={MessageSquare} isActive={pathname.includes("/support/tickets")} />
+                  <SubMenuButton href="/admin/support/claims" label="Klaim Asuransi" icon={FileWarning} isActive={pathname.includes("/support/claims")} />
+                  {currentRole === "superadmin" && (
+                    <SubMenuButton href="/admin/support/audit" label="Audit Trail" icon={History} isActive={pathname.includes("/support/audit")} />
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Tombol Logout Panel */}
         <div className="pt-4 border-t border-slate-100 mt-8 w-full px-2">
           <button 
             onClick={handleAdminLogout}
@@ -329,7 +324,6 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
         </div>
       </aside>
 
-      {/* MOBILE TRIGGER BUTTON */}
       <button 
         onClick={() => setIsExpanded(!isExpanded)}
         className="md:hidden fixed bottom-6 right-6 z-50 bg-[#7A171D] text-white p-4 rounded-full shadow-xl shadow-[#7A171D]/40 active:scale-95 transition-transform"
@@ -340,7 +334,6 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
   );
 }
 
-// Sub-Komponen Sidebar Menu Utama
 function SidebarButton({ icon: Icon, label, isActive, href, isExpanded }: SidebarButtonProps) {
   return (
     <Link 
@@ -360,7 +353,6 @@ function SidebarButton({ icon: Icon, label, isActive, href, isExpanded }: Sideba
   );
 }
 
-// Sub-Komponen Anak Menu (Sub-Menu)
 function SubMenuButton({ href, label, isActive, icon: Icon }: { href: string; label: string; isActive: boolean; icon: React.ElementType }) {
   return (
     <Link 

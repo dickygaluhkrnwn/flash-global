@@ -9,19 +9,27 @@ import { useAuthStore, StoreUser } from "@/store/useAuthStore";
 import { ShieldAlert } from "lucide-react";
 import { Role } from "@/types/user";
 
-// Daftar rute client yang butuh login
+// Daftar rute PUBLIC client yang butuh login (TANPA /desktop atau /mobile)
 const CLIENT_PROTECTED_ROUTES = [
-  "/desktop/dashboard",
-  "/desktop/settings",
-  "/desktop/pembayaran",
-  "/desktop/delivery/booking",
-  "/desktop/forwarding/quote",
-  "/mobile/dashboard", // antisipasi route mobile
+  "/dashboard",
+  "/settings",
+  "/pembayaran",
+  "/delivery/booking",
+  "/forwarding/quote",
 ];
 
-// Grouping Roles (Menggunakan tipe Global Role yang baru)
+// Daftar rute PUBLIC driver yang butuh login
+const DRIVER_PROTECTED_ROUTES = [
+  "/driver/dashboard",
+  // HAPUS BARIS INI: "/driver/pending",
+  "/driver/wallet",
+  "/driver/profile",
+];
+
+// Grouping Roles (Memisahkan driver ke ekosistemnya sendiri)
 const ADMIN_ROLES: Role[] = ['superadmin', 'admin_finance', 'admin_operational', 'staff'];
-const CLIENT_ROLES: Role[] = ['b2c', 'b2b', 'driver'];
+const CLIENT_ROLES: Role[] = ['b2c', 'b2b'];
+const DRIVER_ROLES: Role[] = ['driver'];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, login, logout, isHydrated } = useAuthStore();
@@ -30,10 +38,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const router = useRouter();
 
+  // Deteksi Rute Saat Ini
   const isClientProtectedRoute = CLIENT_PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const isClientLoginRoute = pathname === "/login"; 
+  
   const isAdminRoute = pathname.startsWith("/admin");
   const isAdminLoginRoute = pathname === "/admin/login";
-  const isClientLoginRoute = pathname.startsWith("/desktop/login") || pathname.startsWith("/mobile/login");
+  
+  const isDriverRoute = pathname.startsWith("/driver");
+  const isDriverProtectedRoute = DRIVER_PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const isDriverAuthRoute = pathname === "/driver/login" || pathname === "/driver/register";
 
   // 1. Firebase Listener: Mengecek Sesi Auth & Ambil Role dari Firestore
   useEffect(() => {
@@ -54,7 +68,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             login({
               uid: firebaseUser.uid,
               email: firebaseUser.email || "",
-              // Mapping 'name' (lama) menjadi 'displayName' (Global Types)
               displayName: userData.displayName || userData.name || firebaseUser.displayName || "Pengguna",
               photoURL: firebaseUser.photoURL || undefined,
               role: mappedRole as Role,
@@ -63,13 +76,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               updatedAt: userData.updatedAt || new Date(),
             } as StoreUser);
           } else {
-            // Jika document user belum ada, set default role sebagai 'b2c'
+            // ANTI-RACE CONDITION: Cek apakah user sedang berada di jalur driver
+            const isRegisteringDriver = window.location.pathname.startsWith("/driver");
+
+            // Jika document user belum ada, set role sementara sesuai jalur pendaftarannya
             login({
               uid: firebaseUser.uid,
               email: firebaseUser.email || "",
               displayName: firebaseUser.displayName || "Pengguna",
               photoURL: firebaseUser.photoURL || undefined,
-              role: "b2c",
+              role: isRegisteringDriver ? "driver" : "b2c",
               createdAt: new Date(),
             } as StoreUser);
           }
@@ -90,42 +106,41 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (initializing || !isHydrated) return;
 
-    // Jika Belum Login
+    // JIKA BELUM LOGIN
     if (!user) {
       if (isAdminRoute && !isAdminLoginRoute) {
         router.push("/admin/login");
+      } else if (isDriverRoute && !isDriverAuthRoute) {
+        router.push("/driver/login");
       } else if (isClientProtectedRoute && !isClientLoginRoute) {
-        // Asumsi default lempar ke desktop login
-        router.push("/desktop/login"); 
+        router.push("/login"); 
       }
       return;
     }
 
-    // Jika Sudah Login (Cek Role)
+    // JIKA SUDAH LOGIN (Cek Role)
     const isUserAdmin = ADMIN_ROLES.includes(user.role);
     const isUserClient = CLIENT_ROLES.includes(user.role);
+    const isUserDriver = DRIVER_ROLES.includes(user.role);
 
     if (isUserAdmin) {
-      // Admin nyasar ke halaman client (termasuk login client)
-      if (!isAdminRoute || isClientLoginRoute) {
+      // Admin nyasar ke halaman selain admin atau mencoba login ulang
+      if (!isAdminRoute || isAdminLoginRoute) {
          router.push("/admin"); 
       }
-      // Admin nyasar ke halaman login admin padahal sudah login
-      if (isAdminLoginRoute) {
-         router.push("/admin");
+    } else if (isUserDriver) {
+      // Driver nyasar ke halaman admin/client atau mencoba login/register ulang
+      if (!isDriverRoute || isDriverAuthRoute) {
+         router.push("/driver/dashboard");
       }
     } else if (isUserClient) {
-      // Client nyasar ke halaman admin (termasuk login admin)
-      if (isAdminRoute) {
-        router.push("/desktop/dashboard");
-      }
-      // Client nyasar ke halaman login client padahal sudah login
-      if (isClientLoginRoute) {
-        router.push("/desktop/dashboard");
+      // Client nyasar ke halaman admin/driver atau mencoba login ulang
+      if (isAdminRoute || isDriverRoute || isClientLoginRoute) {
+        router.push("/dashboard"); 
       }
     }
 
-  }, [initializing, isHydrated, user, pathname, router, isClientProtectedRoute, isAdminRoute, isAdminLoginRoute, isClientLoginRoute]);
+  }, [initializing, isHydrated, user, pathname, router, isClientProtectedRoute, isAdminRoute, isAdminLoginRoute, isClientLoginRoute, isDriverRoute, isDriverAuthRoute]);
 
   // Tampilkan loading saat initial load
   if (initializing || !isHydrated) {
@@ -138,13 +153,23 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }
 
   // Tampilkan blokir UI sementara sebelum router.push dieksekusi oleh useEffect 
-  // (Mencegah "kebocoran" UI)
+  // (Mencegah "kebocoran" UI dari komponen halaman yang diproteksi)
   const isUnauthorizedAdmin = !user && isAdminRoute && !isAdminLoginRoute;
   const isUnauthorizedClient = !user && isClientProtectedRoute && !isClientLoginRoute;
-  const isClientInAdminArea = user && CLIENT_ROLES.includes(user.role) && isAdminRoute;
-  const isAdminInClientArea = user && ADMIN_ROLES.includes(user.role) && !isAdminRoute;
+  const isUnauthorizedDriver = !user && isDriverProtectedRoute && !isDriverAuthRoute;
 
-  if (isUnauthorizedAdmin || isUnauthorizedClient || isClientInAdminArea || isAdminInClientArea) {
+  const isClientInWrongArea = user && CLIENT_ROLES.includes(user.role) && (isAdminRoute || isDriverRoute || isClientLoginRoute);
+  const isAdminInWrongArea = user && ADMIN_ROLES.includes(user.role) && (!isAdminRoute || isAdminLoginRoute);
+  const isDriverInWrongArea = user && DRIVER_ROLES.includes(user.role) && (!isDriverRoute || isDriverAuthRoute);
+
+  if (
+    isUnauthorizedAdmin || 
+    isUnauthorizedClient || 
+    isUnauthorizedDriver || 
+    isClientInWrongArea || 
+    isAdminInWrongArea || 
+    isDriverInWrongArea
+  ) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <ShieldAlert className="w-12 h-12 text-red-500 mb-4 animate-bounce" />

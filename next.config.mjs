@@ -13,6 +13,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "firebasestorage.googleapis.com", 
+      },
+      {
+        protocol: "https",
+        hostname: "ui-avatars.com", // <-- TAMBAHAN BARU UNTUK AVATAR INITIAL
       }
     ],
   },

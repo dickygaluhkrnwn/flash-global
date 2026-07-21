@@ -2,7 +2,8 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "success" | "warning" | "danger" | "gold" | "brand";
+  // DITAMBAHKAN: "outline" agar mendukung varian transparan dengan border tegas
+  variant?: "default" | "success" | "warning" | "danger" | "gold" | "brand" | "outline";
 }
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {
@@ -13,6 +14,8 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
     danger: "bg-red-50 text-red-700 border-red-200",
     gold: "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20",
     brand: "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20",
+    // DITAMBAHKAN: styling untuk varian "outline"
+    outline: "bg-transparent text-slate-500 border-slate-300", 
   };
 
   return (
