@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
+import { DynamicVehicle } from "@/types/order";
 
 // ==========================================
 // DYNAMIC IMPORTS MAPBOX (AGAR TIDAK ERROR SSR)
@@ -35,8 +36,9 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
 // ==========================================
 // FUNGSI UPLOAD CLOUDINARY GLOBAL
+// (Dihapus export-nya agar mematuhi aturan Next.js page.tsx)
 // ==========================================
-export const uploadToCloudinary = async (file: File): Promise<string> => {
+const uploadToCloudinary = async (file: File): Promise<string> => {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -72,7 +74,7 @@ export default function DriverProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   
-  const [vehicleConfigs, setVehicleConfigs] = useState<Record<string, unknown>[]>([]);
+  const [vehicleConfigs, setVehicleConfigs] = useState<DynamicVehicle[]>([]);
 
   // MAPBOX STATES
   const [mapViewState, setMapViewState] = useState({ longitude: 118.0149, latitude: -2.5489, zoom: 4 });
@@ -146,8 +148,7 @@ export default function DriverProfilePage() {
         if (pricingSnap.exists()) {
           const pData = pricingSnap.data();
           if (pData.customVehicles) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setVehicleConfigs(pData.customVehicles.filter((v: any) => v.category !== "Truk"));
+            setVehicleConfigs(pData.customVehicles.filter((v: DynamicVehicle) => v.category !== "Truk"));
             if (!formData.vehicleType && pData.customVehicles.length > 0) {
               setFormData(prev => ({ ...prev, vehicleType: pData.customVehicles[0].name }));
             }
@@ -380,8 +381,8 @@ export default function DriverProfilePage() {
                     <label className="text-xs font-bold text-slate-500 uppercase">Tipe Kendaraan</label>
                     <select name="vehicleType" value={formData.vehicleType} onChange={handleChange} className="w-full mt-1 px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-[#7A171D] font-bold appearance-none">
                       <option value="" disabled>-- Pilih Klasifikasi --</option>
-                      {vehicleConfigs.map((v: any, i) => (
-                        <option key={i} value={v.name as string}>{v.name as string} (Maks {v.maxWeight as string}Kg)</option>
+                      {vehicleConfigs.map((v: DynamicVehicle, i) => (
+                        <option key={i} value={v.name}>{v.name} (Maks {v.maxWeight}Kg)</option>
                       ))}
                       {vehicleConfigs.length === 0 && <option value="Motor">Motor Pribadi</option>}
                     </select>
