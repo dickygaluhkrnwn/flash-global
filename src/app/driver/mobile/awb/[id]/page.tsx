@@ -14,7 +14,7 @@ import { db } from "@/lib/firebase";
 import { doc, updateDoc, arrayUnion, onSnapshot, increment, getDoc } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { OrderDetail, LocationDetail, DeliveryItem } from "@/types/order"; 
-import { uploadToCloudinary } from "@/lib/cloudinary"; // 🚀 Tambahkan import ini untuk upload foto
+import { uploadToCloudinary } from "@/lib/cloudinary"; 
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
@@ -263,6 +263,7 @@ export default function DriverAWBExecutionPage() {
         uploadedUrl // Kirim URL foto
       );
     } catch (error) {
+      console.error("Gagal PoD:", error); // 🚀 PERBAIKAN: error digunakan disini
       showToast("Gagal mengunggah foto bukti.", "error");
       setIsUpdating(false);
     }
@@ -349,6 +350,7 @@ export default function DriverAWBExecutionPage() {
 
             <div className="w-full h-[300px] rounded-2xl overflow-hidden relative border border-slate-100 bg-slate-50">
               <MapBase 
+                key={`map-${mapCenterTick}`} // 🚀 PERBAIKAN: Gunakan tick untuk trigger remount peta jika di-recenter
                 longitude={currentMapLng}
                 latitude={currentMapLat}
                 zoom={14}

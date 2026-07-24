@@ -48,18 +48,21 @@ interface TopupRequest {
   userType?: "Driver" | "B2B";
 }
 
-// 🚀 FUNGSI HELPER PENJINAK UNKNOWN TIMESTAMP
+// 🚀 FUNGSI HELPER PENJINAK UNKNOWN TIMESTAMP (TANPA ANY)
 function parseUnknownDate(val: unknown): Date {
   if (!val) return new Date();
   
   // Jika val adalah objek Firestore Timestamp (memiliki fungsi toDate)
-  if (typeof val === 'object' && val !== null && 'toDate' in val && typeof (val as any).toDate === 'function') {
-    return (val as any).toDate();
+  if (typeof val === 'object' && val !== null && 'toDate' in val) {
+    const obj = val as { toDate?: unknown };
+    if (typeof obj.toDate === 'function') {
+      return (val as { toDate: () => Date }).toDate();
+    }
   }
   
   // Jika val adalah Date, Number, atau String
   if (val instanceof Date) return val;
-  if (typeof val === 'number' || typeof val === 'string') return new Date(val);
+  if (typeof val === 'number' || typeof val === 'string') return new Date(val as string | number);
   
   return new Date();
 }
@@ -377,8 +380,17 @@ export default function AdminWalletPage() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
+        <Activity className="w-10 h-10 text-[#C5A059] animate-pulse mb-4" />
+        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Memuat Modul Pembayaran...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 pb-10 font-sans">
+    <div className="space-y-8 pb-10 font-sans">
       
       <AnimatePresence>
         {toast && (

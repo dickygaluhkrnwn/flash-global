@@ -20,6 +20,16 @@ import { Input } from "@/components/ui/Input";
 import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
 import { DriverData } from "@/types/admin";
 
+// 🚀 TYPE AMAN UNTUK LOG PELACAKAN
+interface TrackingLog {
+  id?: string;
+  status?: string;
+  date?: string;
+  description?: string;
+  location?: string;
+  proofUrl?: string;
+}
+
 export default function DomesticOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -413,10 +423,12 @@ export default function DomesticOrdersPage() {
                       </td>
                       <td className="p-5 pr-6 align-top text-right">
                         <div className="flex flex-col items-end gap-2">
-                          {/* 🚀 TOMBOL BARU: RIWAYAT & POD */}
+                          
+                          {/* 🚀 TOMBOL RIWAYAT & POD DIMASUKKAN KEMBALI */}
                           <Button size="sm" onClick={() => openHistoryModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700" variant="outline">
                             <Eye className="w-3 h-3 mr-1"/> Lacak & PoD
                           </Button>
+
                           <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200 bg-white hover:bg-slate-50 text-slate-600" variant="outline">Update Log</Button>
                           
                           {!o.driverId && (
@@ -466,33 +478,36 @@ export default function DomesticOrdersPage() {
                 ) : (
                   <div className="space-y-6">
                     {/* Reverse array agar yang terbaru di atas */}
-                    {[...selectedOrder.trackingHistory].reverse().map((log: Record<string, any>, idx: number) => (
-                      <div key={log.id || idx} className="relative pl-6 border-l-2 border-slate-100 last:border-transparent pb-2">
-                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white ${idx === 0 ? 'bg-[#7A171D]' : 'bg-slate-300'}`}></div>
-                        
-                        <div className="-mt-1.5">
-                          <p className="text-[10px] font-bold text-slate-400 mb-0.5">{log.date}</p>
-                          <h4 className="text-sm font-black text-slate-800">{log.status}</h4>
-                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{log.description}</p>
+                    {[...selectedOrder.trackingHistory].reverse().map((item, idx: number) => {
+                      const log = item as TrackingLog;
+                      return (
+                        <div key={log.id || String(idx)} className="relative pl-6 border-l-2 border-slate-100 last:border-transparent pb-2">
+                          <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white ${idx === 0 ? 'bg-[#7A171D]' : 'bg-slate-300'}`}></div>
                           
-                          {log.location && (
-                            <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400"/> {log.location}</p>
-                          )}
+                          <div className="-mt-1.5">
+                            <p className="text-[10px] font-bold text-slate-400 mb-0.5">{log.date}</p>
+                            <h4 className="text-sm font-black text-slate-800">{log.status}</h4>
+                            <p className="text-xs text-slate-600 mt-1 leading-relaxed">{log.description}</p>
+                            
+                            {log.location && (
+                              <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400"/> {log.location}</p>
+                            )}
 
-                          {/* Tampilkan Tombol Bukti Foto (PoD) Jika Ada */}
-                          {log.proofUrl && (
-                            <div className="mt-3">
-                              <button 
-                                onClick={() => setProofModalUrl(log.proofUrl)}
-                                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors px-3 py-2 rounded-xl border border-emerald-200"
-                              >
-                                <Camera className="w-4 h-4" /> Lihat Foto Bukti
-                              </button>
-                            </div>
-                          )}
+                            {/* Tampilkan Tombol Bukti Foto (PoD) Jika Ada */}
+                            {log.proofUrl && (
+                              <div className="mt-3">
+                                <button 
+                                  onClick={() => setProofModalUrl(log.proofUrl as string)}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors px-3 py-2 rounded-xl border border-emerald-200"
+                                >
+                                  <Camera className="w-4 h-4" /> Lihat Foto Bukti
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
