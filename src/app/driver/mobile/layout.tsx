@@ -1,7 +1,14 @@
+"use client"; // Wajib ditambahkan karena kita memanggil Hook yang mengakses GPS/Client Browser
+
 import { ReactNode } from "react";
 import BottomNav from "@/components/driver/BottomNav";
+import { useDriverLocation } from "@/hooks/useDriverLocation"; // Import Global GPS Tracker
 
 export default function DriverMobileLayout({ children }: { children: ReactNode }) {
+  
+  // 🚀 Aktifkan Mesin Pelacak Global di sini!
+  useDriverLocation();
+
   return (
     // Background luar menggunakan warna background-alt (light gray) dari globals.css
     <div className="min-h-screen bg-[#F8F9FA] flex justify-center selection:bg-[#7A171D]/20 selection:text-[#7A171D]">

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Package, Search, CheckCircle2, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, Weight, UserPlus, X, Clock, ShieldAlert, 
-  Calendar, MapPin, Truck, Building2, User, Lock
+  Calendar, MapPin, Truck, Building2, User, Lock, Eye, Camera
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -25,9 +25,7 @@ export default function DomesticOrdersPage() {
   const { user: currentUser } = useAuthStore();
 
   const [orders, setOrders] = useState<OrderDetail[]>([]);
-  // rawAllPartners menyimpan SEMUA data mitra (termasuk kendaraan) untuk referensi relasi
   const [rawAllPartners, setRawAllPartners] = useState<DriverData[]>([]);
-  // drivers hanya menyimpan ORANG FISIK (Individual & FleetDriver)
   const [drivers, setDrivers] = useState<DriverData[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
@@ -38,10 +36,15 @@ export default function DomesticOrdersPage() {
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortOrder, setSortOrder] = useState("newest");
 
-  // Modals
+  // Modals Penugasan & Update Status
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  
+  // 🚀 MODALS RIWAYAT (TRACKING & PoD)
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
+  const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   
   const [statusForm, setStatusForm] = useState({
     status: "", location: "Pusat Logistik Flash Global", description: "", timeMode: "auto", customDate: ""
@@ -55,8 +58,6 @@ export default function DomesticOrdersPage() {
         const rawPartners = snap.docs.map(d => ({ id: d.id, ...d.data() } as DriverData));
         setRawAllPartners(rawPartners);
         
-        // BUG FIX TAHAP 2: HANYA TAMPILKAN ORANG FISIK UNTUK PENUGASAN
-        // Jangan tampilkan Vendor (Perusahaan) atau FleetVehicle (Benda Mati/Truk)
         const assignableDrivers = rawPartners.filter(d => 
           (d.partnerType === "Individual" || d.partnerType === "FleetDriver") && !d.isSuspended
         );
@@ -84,7 +85,6 @@ export default function DomesticOrdersPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   
-  // Safe Date Formatting
   const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
     let d: Date;
@@ -113,7 +113,6 @@ export default function DomesticOrdersPage() {
 
   const openStatusModal = (order: OrderDetail) => {
     setSelectedOrderId(order.id);
-    // Set default status di form berdasarkan status order saat ini
     const nextStatus = order.status === "Menunggu Kurir" ? "Menuju Lokasi Jemput" : 
                        order.status === "Menuju Lokasi Jemput" ? "Sedang Diproses" : 
                        order.status === "Sedang Diproses" ? "Dikirim" : "Selesai";
@@ -122,9 +121,11 @@ export default function DomesticOrdersPage() {
     setShowStatusModal(true);
   };
 
-  // =======================================================================
-  // LOGIKA CERDAS: UPDATE STATUS BAKU (SINKRON DENGAN RADAR)
-  // =======================================================================
+  const openHistoryModal = (order: OrderDetail) => {
+    setSelectedOrder(order);
+    setShowHistoryModal(true);
+  };
+
   const handleConfirmStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrderId) return;
@@ -167,9 +168,6 @@ export default function DomesticOrdersPage() {
     }
   };
 
-  // =======================================================================
-  // LOGIKA CERDAS: AUTO-ASSIGN DRIVER (SINKRON DENGAN RADAR & FMS)
-  // =======================================================================
   const handleAssignDriver = async (driver: DriverData) => {
     if (!selectedOrderId) return;
     try {
@@ -180,10 +178,7 @@ export default function DomesticOrdersPage() {
       let vehicleText = driver.vehicleType || "Armada Pribadi";
       let logDesc = `Sopir ${safeDriverName} ditugaskan untuk menjemput barang.`;
 
-      // LOGIKA CERDAS: Jika yang ditugaskan adalah Sopir Vendor (FleetDriver),
-      // Sistem mencari apakah dia sedang mengemudikan Truk (FleetVehicle)
       if (driver.partnerType === "FleetDriver") {
-        // Cari FleetVehicle yang mencantumkan driverId orang ini
         const tiedVehicle = rawAllPartners.find(p => p.partnerType === "FleetVehicle" && p.driverId === driver.id);
         if (tiedVehicle) {
           vehicleText = tiedVehicle.name || tiedVehicle.vehicleType || "Truk Vendor";
@@ -278,12 +273,28 @@ export default function DomesticOrdersPage() {
         )}
       </AnimatePresence>
 
+      {/* 🚀 MODAL PREVIEW BUKTI TRANSFER / PoD (FULLSCREEN) */}
+      <AnimatePresence>
+        {proofModalUrl && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={() => setProofModalUrl(null)}></motion.div>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative z-10 max-w-2xl w-full flex flex-col items-center">
+              <button onClick={() => setProofModalUrl(null)} className="absolute -top-12 right-0 bg-white/20 text-white rounded-full p-2 hover:bg-white/40 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={proofModalUrl} alt="Bukti Foto" className="rounded-2xl max-h-[85vh] w-auto shadow-2xl border border-white/20" />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
             <Package className="w-7 h-7 text-[#7A171D]" /> Dispatch Domestik
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5">Pantau pesanan masuk, tugaskan armada, dan perbarui status resi (AWB).</p>
+          <p className="text-slate-500 text-sm mt-1.5">Pantau pesanan masuk, tugaskan armada, dan lacak riwayat beserta foto bukti pengiriman (PoD).</p>
         </div>
       </div>
 
@@ -402,9 +413,12 @@ export default function DomesticOrdersPage() {
                       </td>
                       <td className="p-5 pr-6 align-top text-right">
                         <div className="flex flex-col items-end gap-2">
+                          {/* 🚀 TOMBOL BARU: RIWAYAT & POD */}
+                          <Button size="sm" onClick={() => openHistoryModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700" variant="outline">
+                            <Eye className="w-3 h-3 mr-1"/> Lacak & PoD
+                          </Button>
                           <Button size="sm" onClick={() => openStatusModal(o)} className="h-8 text-[10px] w-32 shadow-sm border-slate-200 bg-white hover:bg-slate-50 text-slate-600" variant="outline">Update Log</Button>
                           
-                          {/* LOGIKA BUG FIX: Hanya munculkan/aktifkan tombol jika pembayaran sudah lunas */}
                           {!o.driverId && (
                             <Button 
                               size="sm" 
@@ -421,7 +435,6 @@ export default function DomesticOrdersPage() {
                               {isPaymentVerified ? "Tunjuk Sopir" : "Menunggu Finance"}
                             </Button>
                           )}
-
                         </div>
                       </td>
                     </tr>
@@ -432,6 +445,61 @@ export default function DomesticOrdersPage() {
           )}
         </div>
       </div>
+
+      {/* 🚀 MODAL RIWAYAT PELACAKAN & POD */}
+      <AnimatePresence>
+        {showHistoryModal && selectedOrder && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowHistoryModal(false)} />
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white border border-slate-200 rounded-[2rem] p-6 md:p-8 w-full max-w-lg relative z-10 shadow-2xl flex flex-col">
+              <div className="flex justify-between items-center mb-6 border-b pb-4 border-slate-100 shrink-0">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2"><Eye className="w-5 h-5 text-[#7A171D]"/> Riwayat Pelacakan</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Resi: #{selectedOrder.id}</p>
+                </div>
+                <button type="button" onClick={() => setShowHistoryModal(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-red-50 text-slate-400 hover:text-red-500"><X className="w-4 h-4"/></button>
+              </div>
+              
+              <div className="overflow-y-auto max-h-[50vh] pr-2 custom-scrollbar">
+                {(!selectedOrder.trackingHistory || selectedOrder.trackingHistory.length === 0) ? (
+                   <p className="text-center text-sm text-slate-400 py-10 font-medium">Belum ada riwayat pelacakan.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Reverse array agar yang terbaru di atas */}
+                    {[...selectedOrder.trackingHistory].reverse().map((log: Record<string, any>, idx: number) => (
+                      <div key={log.id || idx} className="relative pl-6 border-l-2 border-slate-100 last:border-transparent pb-2">
+                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white ${idx === 0 ? 'bg-[#7A171D]' : 'bg-slate-300'}`}></div>
+                        
+                        <div className="-mt-1.5">
+                          <p className="text-[10px] font-bold text-slate-400 mb-0.5">{log.date}</p>
+                          <h4 className="text-sm font-black text-slate-800">{log.status}</h4>
+                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{log.description}</p>
+                          
+                          {log.location && (
+                            <p className="text-[10px] text-slate-500 mt-1.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400"/> {log.location}</p>
+                          )}
+
+                          {/* Tampilkan Tombol Bukti Foto (PoD) Jika Ada */}
+                          {log.proofUrl && (
+                            <div className="mt-3">
+                              <button 
+                                onClick={() => setProofModalUrl(log.proofUrl)}
+                                className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors px-3 py-2 rounded-xl border border-emerald-200"
+                              >
+                                <Camera className="w-4 h-4" /> Lihat Foto Bukti
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showStatusModal && (

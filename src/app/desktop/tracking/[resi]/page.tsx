@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, Clock, MapPin, Plane, 
-  Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, User, Banknote
+  Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, User, Banknote, Camera, X
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -13,18 +13,15 @@ import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, getDoc, getDocs, collection } from "firebase/firestore";
 
-// --- IMPORT UI KIT KITA ---
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-// --- IMPORT GLOBAL TYPES ---
 import { 
-  FirebaseTimestamp, Coordinates, LocationDetail, 
+  Coordinates, LocationDetail, 
   MapDropItem, TrackingData, MapViewState 
 } from "@/types/order";
 
-// --- DYNAMIC IMPORT MAPBASE ---
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
   loading: () => <div className="w-full h-full bg-slate-100 animate-pulse flex flex-col items-center justify-center text-slate-500 text-xs font-semibold rounded-[2rem]"><div className="w-8 h-8 border-4 border-slate-300 border-t-[#7A171D] rounded-full animate-spin mb-3"></div>Mengambil koordinat satelit...</div> 
@@ -32,8 +29,22 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
+const getSafeMillis = (ts: unknown): number => {
+  if (!ts) return 0;
+  if (typeof ts === 'string' || typeof ts === 'number') return new Date(ts).getTime();
+  if (typeof ts === 'object' && ts !== null) {
+    const obj = ts as Record<string, unknown>;
+    if (typeof obj.toMillis === 'function') return obj.toMillis();
+    if (typeof obj.seconds === 'number') return obj.seconds * 1000;
+    if (typeof obj.toDate === 'function') {
+      const dateObj = obj.toDate() as Date;
+      return dateObj.getTime();
+    }
+  }
+  return new Date(String(ts)).getTime();
+};
+
 export default function TrackingResultPage({ params }: { params: { resi: string } }) {
-  // Decode URI dari URL
   const awbNumber = decodeURIComponent(params.resi);
 
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
@@ -44,10 +55,11 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
   const [mapViewState, setMapViewState] = useState<MapViewState>({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
   
-  // State untuk animasi simulasi pergerakan truk
-  const [simulatedDriverCoords, setSimulatedDriverCoords] = useState<Coordinates | null>(null);
+  const [liveDriverCoords, setLiveDriverCoords] = useState<Coordinates | null>(null);
 
-  // Type-Safe getCoords
+  // 🚀 STATE UNTUK MODAL FOTO BUKTI (PoD)
+  const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+
   const getCoords = (locationData: unknown): Coordinates | null => {
     if (locationData && typeof locationData === "object" && "lng" in locationData && "lat" in locationData) {
       const loc = locationData as Record<string, unknown>;
@@ -60,7 +72,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
   const originLatLng = trackingData ? getCoords(trackingData.origin) : null;
   
-  // Format array destinations untuk MapBase secara Type-Safe
   const dropsForMap: MapDropItem[] = trackingData?.destinations ? trackingData.destinations.map((d, idx) => ({
     id: `dest-${idx}`, 
     lng: d.lng || 0, 
@@ -73,9 +84,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     if (dCoord) dropsForMap.push({ id: "dest-single", lng: dCoord.lng, lat: dCoord.lat, address: trackingData.destination.address || "" });
   }
 
-  // ====================================================================
-  // SUPER SMART FALLBACK TRACKING LOGIC
-  // ====================================================================
   useEffect(() => {
     let unsub = () => {};
     setIsLoading(true);
@@ -163,7 +171,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     return () => unsub();
   }, [awbNumber]);
 
-  // Kalkulasi Garis Rute Mapbox & AUTO ZOOM
   useEffect(() => {
     const fetchRealRoute = async () => {
       const validDrops = dropsForMap.filter((d) => d.lng !== 0 && d.lat !== 0);
@@ -213,7 +220,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   }, [trackingData]);
 
   // ====================================================================
-  // ALGORITMA SIMULASI TRUK BERJALAN (LIVE ROUTE ANIMATION)
+  // ALGORITMA LOKASI TRUK (LIVE DARI DATABASE ATAU SIMULASI)
   // ====================================================================
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -222,8 +229,17 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     const isActiveStatus = status === "Dikirim" || status.includes("Transit") || status.includes("Jemput");
     const isCompletedStatus = status.includes("Selesai") || status.includes("Tiba");
 
-    if (isActiveStatus && routeData && typeof routeData === "object" && "coordinates" in routeData) {
-      // 1. Jika barang sedang dalam perjalanan, animasikan truk di atas garis rute
+    const actualDriverCoords = getCoords(trackingData?.driverCoords);
+    
+    if (isCompletedStatus) {
+      if (dropsForMap.length > 0) {
+        const lastDrop = dropsForMap[dropsForMap.length - 1];
+        setLiveDriverCoords({ lng: lastDrop.lng!, lat: lastDrop.lat! });
+      }
+    } else if (actualDriverCoords) {
+       // Prioritaskan Live GPS dari Firebase
+       setLiveDriverCoords(actualDriverCoords);
+    } else if (isActiveStatus && routeData && typeof routeData === "object" && "coordinates" in routeData) {
       const geometry = routeData as { coordinates: [number, number][] };
       const coords = geometry.coordinates;
       let currentIndex = 0;
@@ -231,37 +247,29 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       if (coords && coords.length > 0) {
         interval = setInterval(() => {
           if (currentIndex < coords.length) {
-            setSimulatedDriverCoords({ lng: coords[currentIndex][0], lat: coords[currentIndex][1] });
-            // Lewati beberapa titik agar truk berjalan dengan kecepatan proporsional
+            setLiveDriverCoords({ lng: coords[currentIndex][0], lat: coords[currentIndex][1] });
             const step = Math.max(1, Math.floor(coords.length / 80)); 
             currentIndex += step;
           } else {
-            currentIndex = 0; // Loop kembali untuk keperluan simulasi
+            currentIndex = 0; 
           }
         }, 150);
       }
-    } else if (isCompletedStatus) {
-      // 2. Jika status selesai, parkirkan truk di titik tujuan (drop terakhir)
-      if (dropsForMap.length > 0) {
-        const lastDrop = dropsForMap[dropsForMap.length - 1];
-        setSimulatedDriverCoords({ lng: lastDrop.lng!, lat: lastDrop.lat! });
-      }
     } else {
-      // 3. Jika baru diproses (belum dikirim), parkirkan truk di titik awal (Origin) atau sembunyikan
-      setSimulatedDriverCoords(trackingData?.driverCoords || originLatLng || null);
+      setLiveDriverCoords(originLatLng || null);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackingData?.status, routeData]);
+  }, [trackingData?.status, routeData, trackingData?.driverCoords]);
 
 
-  const formatFirebaseDate = (timestamp: FirebaseTimestamp) => {
-    if (!timestamp) return "Baru saja";
-    const date = (typeof timestamp === "object" && "toDate" in timestamp && typeof timestamp.toDate === "function") ? timestamp.toDate() : new Date(timestamp as string | number);
-    return date.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const formatFirebaseDate = (timestamp: unknown) => {
+    const millis = getSafeMillis(timestamp);
+    if (millis === 0) return "Baru saja";
+    return new Date(millis).toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
   const getIconForStatus = (statusText: string) => {
@@ -278,12 +286,26 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     if (!trackingData) return [];
     
     if (trackingData.trackingHistory && Array.isArray(trackingData.trackingHistory) && trackingData.trackingHistory.length > 0) {
-      return [...trackingData.trackingHistory].reverse().map((item, idx) => ({
-        ...item,
-        icon: getIconForStatus(item.status),
-        isCurrent: idx === 0, 
-        isCompleted: true
-      }));
+      // 🚀 Definisikan Record<string, unknown> agar aman dari linter
+      return [...trackingData.trackingHistory].reverse().map((item: Record<string, unknown>, idx) => {
+        const rawLocation = (item.location as string) || "Pusat Logistik";
+        const isGeotagged = rawLocation.includes("(Geotagged)");
+        const displayLocation = rawLocation.replace("(Geotagged)", "").trim();
+
+        return {
+          ...item,
+          id: (item.id as string) || `log-${idx}`, // 🚀 PERBAIKAN: Pastikan ID Selalu Ada
+          status: (item.status as string) || "",
+          date: (item.date as string) || "",
+          description: (item.description as string) || "",
+          proofUrl: item.proofUrl as string | undefined, 
+          icon: getIconForStatus((item.status as string) || ""),
+          isCurrent: idx === 0, 
+          isCompleted: true,
+          isGeotagged,
+          displayLocation
+        };
+      });
     }
 
     return [
@@ -291,21 +313,40 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
         id: "def-1",
         status: trackingData.status || "Menunggu Pembayaran",
         description: trackingData.statusSub || "Menunggu verifikasi sistem pembayaran atau penugasan kurir.",
-        location: typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "System Hub"),
+        displayLocation: typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "System Hub"),
+        isGeotagged: false,
         date: formatFirebaseDate(trackingData.createdAt),
         icon: getIconForStatus(trackingData.status || "Menunggu Pembayaran"),
         isCompleted: true,
-        isCurrent: true
+        isCurrent: true,
+        proofUrl: undefined 
       }
     ];
   };
 
   const timelineData = renderTimeline();
+  const isUsingLiveGPS = !!getCoords(trackingData?.driverCoords) && !trackingData?.status?.includes("Selesai");
 
   return (
     <main className="min-h-screen bg-slate-50 py-12 lg:py-16 px-6 relative overflow-hidden font-sans pb-20">
       <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.04] pointer-events-none" />
+
+      {/* 🚀 MODAL PREVIEW BUKTI TRANSFER / PoD (FULLSCREEN) */}
+      <AnimatePresence>
+        {proofModalUrl && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={() => setProofModalUrl(null)}></motion.div>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative z-10 max-w-2xl w-full flex flex-col items-center">
+              <button onClick={() => setProofModalUrl(null)} className="absolute -top-12 right-0 bg-white/20 text-white rounded-full p-2 hover:bg-white/40 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={proofModalUrl} alt="Bukti Foto" className="rounded-2xl max-h-[85vh] w-auto shadow-2xl border border-white/20" />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="max-w-[1300px] mx-auto relative z-10">
         
@@ -351,7 +392,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
                   <div className="flex items-center gap-4 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 shadow-inner">
                     <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-[#7A171D] border border-slate-100 shrink-0">
-                      {}
                       {trackingData.status?.includes("Selesai") ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Package className="w-6 h-6" />}
                     </div>
                     <div>
@@ -365,8 +405,10 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
               <div className="bg-white rounded-[2rem] p-2 shadow-xl shadow-slate-200/50 border border-slate-200 relative group overflow-hidden">
                 <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200 z-20 flex flex-col gap-1 shadow-sm pointer-events-none">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-                    <span className="text-slate-900 text-[10px] font-black uppercase tracking-widest">Radar Armada Live</span>
+                    <div className={`w-2 h-2 rounded-full animate-pulse shadow-sm ${isUsingLiveGPS ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-blue-500 shadow-blue-500/80'}`}></div>
+                    <span className="text-slate-900 text-[10px] font-black uppercase tracking-widest">
+                      {isUsingLiveGPS ? 'GPS Aktual Kurir' : 'Radar Armada Live'}
+                    </span>
                   </div>
                   <p className="text-slate-500 text-[9px] font-bold uppercase">{routeDistanceKm > 0 ? `Jarak: ${routeDistanceKm} KM` : "Menghitung Rute"}</p>
                 </div>
@@ -380,7 +422,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                     originCoords={originLatLng}
                     drops={dropsForMap}
                     routeData={routeData}
-                    driverCoords={simulatedDriverCoords} 
+                    driverCoords={liveDriverCoords} 
                   />
 
                   {!originLatLng && (
@@ -461,7 +503,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                               transition={{ duration: 0.4, delay: index * 0.15, ease: "easeOut" }}
                               className="flex gap-4 md:gap-6 relative items-start group"
                             >
-                              {/* Ring Progress Node Status */}
                               <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 z-10 border-[3px] shadow-sm transition-all duration-300 ${
                                 item.isCurrent 
                                   ? "bg-[#7A171D] text-white border-white shadow-lg shadow-[#7A171D]/30 scale-110" 
@@ -470,7 +511,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                                 <NodeIcon className="w-4 h-4 md:w-5 md:h-5" />
                               </div>
 
-                              {/* Text Deskripsi Node */}
                               <div className={`flex-1 p-5 rounded-2xl transition-all duration-300 ${
                                 item.isCurrent
                                   ? "bg-white border-2 border-slate-200 shadow-md"
@@ -488,8 +528,25 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                                 </div>
                                 <p className="text-xs text-slate-500 font-medium leading-relaxed mb-3">{item.description}</p>
                                 
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-white w-fit px-2.5 py-1.5 rounded-lg border border-slate-100">
-                                  <MapPin className="w-3.5 h-3.5" /> {item.location || "Pusat Logistik"}
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white w-fit px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                    <MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.displayLocation}
+                                  </div>
+                                  {item.isGeotagged && (
+                                    <div className="flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 w-fit px-2 py-1.5 rounded-lg uppercase tracking-wider shadow-sm">
+                                      <CheckCircle2 className="w-3 h-3" /> GPS Verified
+                                    </div>
+                                  )}
+                                  
+                                  {/* 🚀 TOMBOL PREVIEW FOTO BUKTI PENGIRIMAN */}
+                                  {item.proofUrl && (
+                                    <button 
+                                      onClick={() => setProofModalUrl(item.proofUrl as string)}
+                                      className="flex items-center gap-1 text-[9px] font-black text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors px-2 py-1.5 rounded-lg uppercase tracking-wider shadow-sm"
+                                    >
+                                      <Camera className="w-3 h-3" /> Lihat Bukti Foto
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                               

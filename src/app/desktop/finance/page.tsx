@@ -7,8 +7,9 @@ import {
   Building2, CreditCard, Receipt, 
   Upload, ShieldCheck, CheckCircle2, 
   AlertCircle, Activity, FileSpreadsheet, 
-  MapPin, Clock, Wallet, 
-  History, PlusCircle, ArrowDownCircle, ArrowUpCircle, XCircle
+  Clock, Wallet, History, PlusCircle, 
+  ArrowDownCircle, ArrowUpCircle, XCircle,
+  QrCode, Copy
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
-import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
+import { OrderDetail, FirebaseTimestamp, LocationDetail } from "@/types/order";
 
 // Tipe Data untuk Ledger / Buku Besar
 interface LedgerItem {
@@ -30,6 +31,19 @@ interface LedgerItem {
   timestamp: number;
   dateStr: string;
   note: string;
+}
+
+// 🚀 Tipe Data Pembayaran
+interface PaymentMethod {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  color: string;
+}
+
+interface PaymentConfig {
+  transferBank: PaymentMethod[];
+  qrisImageUrl: string | null;
 }
 
 export default function CorporateFinancePortal() {
@@ -62,6 +76,8 @@ export default function CorporateFinancePortal() {
   const [topupFile, setTopupFile] = useState<File | null>(null);
   const [topupPreview, setTopupPreview] = useState<string | null>(null);
   const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
+  
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null); // 🚀 State Data Pembayaran
 
   // ==========================================
   // STATE: RIWAYAT TRANSAKSI (LEDGER)
@@ -105,7 +121,6 @@ export default function CorporateFinancePortal() {
         }
       });
 
-      // Menghilangkan any menggunakan FirebaseTimestamp
       unpaidList.sort((a, b) => {
         const getTs = (ts?: FirebaseTimestamp) => {
           if (!ts) return 0;
@@ -132,7 +147,7 @@ export default function CorporateFinancePortal() {
           id: d.id,
           type: lData.type || "unknown",
           amount: lData.amount || 0,
-          status: "Success", // Wallet logs biasanya sudah success
+          status: "Success",
           timestamp: ts,
           dateStr: new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           note: lData.adminNote || lData.description || "Mutasi Saldo"
@@ -168,7 +183,20 @@ export default function CorporateFinancePortal() {
   };
 
   useEffect(() => {
-    if (user?.role === "b2b") fetchAllFinanceData();
+    // 🚀 Fetch Data Metode Pembayaran dari Admin
+    const fetchPaymentConfig = async () => {
+      try {
+        const snap = await getDoc(doc(db, "settings", "payments"));
+        if (snap.exists()) setPaymentConfig(snap.data() as PaymentConfig);
+      } catch (error) {
+        console.error("Gagal menarik metode pembayaran", error);
+      }
+    };
+
+    if (user?.role === "b2b") {
+      fetchAllFinanceData();
+      fetchPaymentConfig();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -468,8 +496,8 @@ export default function CorporateFinancePortal() {
                                 </td>
                                 <td className="p-5 align-top max-w-[200px]">
                                   <div className="space-y-1.5 text-xs font-bold text-slate-600">
-                                    <p className="truncate flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0"/> {originAddress}</p>
-                                    <p className="truncate flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0"/> {destAddress}</p>
+                                    <p className="truncate flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0"/> {originAddress}</p>
+                                    <p className="truncate flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0"/> {destAddress}</p>
                                   </div>
                                 </td>
                                 <td className="p-5 pr-8 align-top text-right">
@@ -489,6 +517,38 @@ export default function CorporateFinancePortal() {
                     <h3 className="text-lg font-black text-slate-900 flex items-center gap-2"><CreditCard className="w-5 h-5 text-emerald-600" /> Pelunasan Massal</h3>
                     <p className="text-xs text-slate-500 font-medium mt-1.5 leading-relaxed">Lunasi seluruh tagihan tertunda dengan mengunggah satu bukti transfer.</p>
                   </div>
+                  
+                  {/* 🚀 METODE PEMBAYARAN UNTUK PELUNASAN PIUTANG B2B */}
+                  <div className="space-y-4 mb-6 border-b border-slate-100 pb-6">
+                    {paymentConfig?.transferBank && paymentConfig.transferBank.length > 0 && (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-slate-500 block uppercase tracking-widest mt-2">Transfer ke Rekening</label>
+                        {paymentConfig.transferBank.map((bank, idx) => (
+                          <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <div>
+                                <p className="text-xs font-black text-slate-800">{bank.bankName}</p>
+                                <p className="text-sm font-mono font-bold text-slate-600 my-0.5">{bank.accountNumber}</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">A.N: {bank.accountName}</p>
+                              </div>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                navigator.clipboard.writeText(bank.accountNumber);
+                                showToast("success", "Nomor rekening disalin!");
+                              }}
+                              className="p-2 bg-white text-slate-500 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                              title="Salin Rekening"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center shadow-inner">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Harus Dibayar</span>
                     <span className="text-xl font-black text-red-600">{formatRupiah(totalDebt)}</span>
@@ -555,7 +615,54 @@ export default function CorporateFinancePortal() {
                   <h2 className="text-xl font-black text-slate-900">Isi Saldo (Top-Up)</h2>
                 </div>
 
-                <form onSubmit={handleTopupSubmit} className="space-y-6">
+                {/* 🚀 MENAMPILKAN METODE PEMBAYARAN DARI ADMIN */}
+                <div className="space-y-6 mb-8">
+                  {paymentConfig?.qrisImageUrl && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                        <QrCode className="w-5 h-5 text-[#7A171D]"/>
+                        <p className="text-sm font-bold text-slate-700 uppercase tracking-widest">Scan QRIS</p>
+                      </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={paymentConfig.qrisImageUrl} alt="QRIS" className="w-48 h-48 object-contain mx-auto rounded-xl border border-slate-200 shadow-sm bg-white p-2" />
+                    </div>
+                  )}
+
+                  {paymentConfig?.transferBank && paymentConfig.transferBank.length > 0 && (
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold text-slate-500 block uppercase tracking-widest mt-2">Transfer Bank Manual</label>
+                      <div className="grid grid-cols-1 gap-4">
+                        {paymentConfig.transferBank.map((bank, idx) => (
+                          <div key={idx} className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                <Building2 className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-slate-800">{bank.bankName}</p>
+                                <p className="text-base font-mono font-bold text-slate-600 my-0.5">{bank.accountNumber}</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">A.N: {bank.accountName}</p>
+                              </div>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                navigator.clipboard.writeText(bank.accountNumber);
+                                showToast("success", "Nomor rekening disalin!");
+                              }}
+                              className="p-2.5 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                              title="Salin Rekening"
+                            >
+                              <Copy className="w-5 h-5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleTopupSubmit} className="space-y-6 pt-6 border-t border-slate-100">
                   <div>
                     <label className="text-xs font-bold text-slate-500 mb-2 block uppercase tracking-widest">Masukkan Nominal (Rp)</label>
                     <input 
@@ -570,7 +677,7 @@ export default function CorporateFinancePortal() {
 
                   <div>
                     <label className="text-xs font-bold text-slate-500 mb-2 block uppercase tracking-widest">Unggah Bukti Transfer</label>
-                    <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-slate-50 hover:bg-emerald-50/50 min-h-[150px] relative overflow-hidden">
+                    <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-slate-50 hover:bg-emerald-50/50 min-h-[150px] relative overflow-hidden group">
                       <input type="file" accept="image/*" ref={topupFileInputRef} onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                           setTopupFile(e.target.files[0]);
@@ -585,7 +692,7 @@ export default function CorporateFinancePortal() {
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <Upload className="w-6 h-6 text-slate-400 mx-auto" />
+                          <Upload className="w-6 h-6 text-slate-400 mx-auto group-hover:text-emerald-500 transition-colors" />
                           <p className="text-xs font-bold text-slate-600">Klik untuk upload bukti</p>
                         </div>
                       )}

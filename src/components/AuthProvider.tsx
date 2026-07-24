@@ -21,9 +21,11 @@ const CLIENT_PROTECTED_ROUTES = [
 // Daftar rute PUBLIC driver yang butuh login
 const DRIVER_PROTECTED_ROUTES = [
   "/driver/dashboard",
-  // HAPUS BARIS INI: "/driver/pending",
   "/driver/wallet",
   "/driver/profile",
+  "/driver/radar", // Tambahan untuk Fase 4
+  "/driver/awb",   // Tambahan untuk Fase 4
+  "/driver/fleet"
 ];
 
 // Grouping Roles (Memisahkan driver ke ekosistemnya sendiri)
@@ -65,16 +67,33 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             if (mappedRole === "business") mappedRole = "b2b";
             if (mappedRole === "admin_cs" || mappedRole === "admin_ops") mappedRole = "admin_operational";
 
+            // 🚀 STEP 2: INJEKSI CITY & PARTNER TYPE (Khusus Driver)
+            // Deteksi kota dari alamat default, domisili, atau setting regional
+            let detectedCity = "Pusat"; // Fallback default
+            if (userData.regional?.city) {
+              detectedCity = userData.regional.city;
+            } else if (userData.domisili) {
+              detectedCity = userData.domisili;
+            }
+
             login({
               uid: firebaseUser.uid,
               email: firebaseUser.email || "",
               displayName: userData.displayName || userData.name || firebaseUser.displayName || "Pengguna",
               photoURL: firebaseUser.photoURL || undefined,
               role: mappedRole as Role,
+              
+              // Data Regional & Geofencing
               regional: userData.regional || undefined,
+              city: detectedCity,
+              
+              // Data Kapasitas Order (Khusus Driver)
+              partnerType: userData.partnerType || undefined,
+
               createdAt: userData.createdAt || new Date(),
               updatedAt: userData.updatedAt || new Date(),
             } as StoreUser);
+
           } else {
             // ANTI-RACE CONDITION: Cek apakah user sedang berada di jalur driver
             const isRegisteringDriver = window.location.pathname.startsWith("/driver");

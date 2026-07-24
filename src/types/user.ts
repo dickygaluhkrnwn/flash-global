@@ -34,10 +34,14 @@ export interface User {
   b2bLimit?: number;
   b2bRequestedAt?: Date | FirebaseTimestamp;
 
+  // --- 🚀 BARU: Field Spesifik Driver / Mitra ---
+  partnerType?: 'Vendor' | 'Individual' | 'FleetDriver' | string;
+  city?: string; // Digunakan untuk Geofencing Radar Order
+
   // --- Preferensi & Keamanan ---
   preferences?: UserPreferences;
   notifications?: UserNotifications;
-  isSuspended?: boolean; // BARU: Indikator blokir/suspend untuk pengguna B2C/Driver
+  isSuspended?: boolean; // Indikator blokir/suspend untuk pengguna B2C/Driver
   
   // Menggunakan FirebaseTimestamp agar fleksibel saat parsing dari Firestore
   createdAt: Date | FirebaseTimestamp; 

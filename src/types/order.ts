@@ -49,6 +49,10 @@ export interface Quote {
   createdAt: Date | FirebaseTimestamp;
 }
 
+// ----------------------------------------------------------------------
+// 🚀 BUG FIX: Ditambahkan deklarasi items?: DeliveryItem[] agar 
+// dikenali di Layar AWB Mobile Driver
+// ----------------------------------------------------------------------
 export interface LocationDetail {
   address?: string;
   senderName?: string;
@@ -58,6 +62,7 @@ export interface LocationDetail {
   lat?: number;
   lng?: number;
   resi?: string;
+  items?: DeliveryItem[]; // 👈 INI KUNCI PERBAIKANNYA
   [key: string]: unknown;
 }
 
