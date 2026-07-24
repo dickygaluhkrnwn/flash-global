@@ -127,7 +127,7 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
                   Anda belum bisa menerima order. Segera lengkapi dokumen KTP, SIM, dan kendaraan Anda.
                 </p>
                 <button 
-                  onClick={() => router.push("/driver/mobile/profile")}
+                  onClick={() => router.push("/driver/profile")}
                   className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors shadow-sm"
                 >
                   Lengkapi Sekarang
@@ -191,7 +191,7 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className="glass-maroon rounded-3xl p-6 text-center relative overflow-hidden shadow-lg shadow-[#7A171D]/10 border border-[#7A171D]/20 cursor-pointer"
-            onClick={() => router.push("/driver/mobile/radar")}
+            onClick={() => router.push("/driver/radar")}
           >
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-[#7A171D]/20 rounded-full animate-ping"></div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-[#7A171D]/10 rounded-full animate-ping" style={{ animationDelay: "0.2s" }}></div>

@@ -283,7 +283,7 @@ export default function DriverWalletPage() {
         <div className="absolute bottom-[-20px] left-[-20px] w-32 h-32 bg-[#7A171D] rounded-full blur-[60px] opacity-40"></div>
 
         <div className="flex items-center justify-between mb-8 relative z-10">
-          <button onClick={() => router.push("/driver/mobile/dashboard")} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
+          <button onClick={() => router.push("/driver/dashboard")} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
             <ArrowLeft size={18} />
           </button>
           <span className="font-mono text-[10px] font-black bg-white/10 border border-white/20 px-3 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-1.5">
