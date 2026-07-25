@@ -14,9 +14,9 @@ import {
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { AdminInput } from "@/components/admin/ui/AdminInput";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 import { PricingConfig } from "@/types/admin";
@@ -96,6 +96,11 @@ export default function DriverDetailPage() {
     profile: useRef<HTMLInputElement>(null), ktp: useRef<HTMLInputElement>(null), sim: useRef<HTMLInputElement>(null),
     npwp: useRef<HTMLInputElement>(null), stnk: useRef<HTMLInputElement>(null), kir: useRef<HTMLInputElement>(null)
   };
+
+  // =========================================================================
+  // CUSTOM STYLES: APPLE GLASSMORPHISM
+  // =========================================================================
+  const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
   useEffect(() => {
     const loadData = async () => {
@@ -237,7 +242,7 @@ export default function DriverDetailPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -245,8 +250,8 @@ export default function DriverDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
-        <Activity className="w-10 h-10 text-[#7A171D] animate-pulse mb-4" />
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Menarik Berkas Mitra...</p>
+        <Activity className="w-12 h-12 text-[#7A171D] animate-pulse mb-4" />
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Menarik Berkas Mitra...</p>
       </div>
     );
   }
@@ -258,52 +263,59 @@ export default function DriverDetailPage() {
   const isFleetDriver = partner.partnerType === "FleetDriver";
   const isFleetVehicle = partner.partnerType === "FleetVehicle";
 
+  // Warna Logika (Branding Tiap Tipe Kemitraan)
+  let accentColor = "bg-[#C5A059]"; 
+  let iconClass = <User className="w-10 h-10 text-white"/>;
+  if (isVendor) { accentColor = "bg-blue-600"; iconClass = <Building2 className="w-10 h-10 text-white"/>; }
+  else if (isFleetDriver) { accentColor = "bg-[#7A171D]"; iconClass = <User className="w-10 h-10 text-white"/>; }
+  else if (isFleetVehicle) { accentColor = "bg-slate-800"; iconClass = <Truck className="w-10 h-10 text-white"/>; }
+
   return (
-    <div className="space-y-6 font-sans pb-10 max-w-6xl mx-auto">
+    <div className="space-y-6 font-sans pb-10 max-w-7xl mx-auto">
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toast.msg}
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* HEADER PAGE */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <button onClick={() => router.push("/admin/users/drivers")} className="flex items-center gap-2 text-slate-500 hover:text-[#7A171D] font-bold text-sm transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm w-fit">
-          <ArrowLeft className="w-4 h-4" /> Kembali ke Fleet List
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold text-sm transition-colors bg-white/70 backdrop-blur-md px-4 py-2 rounded-xl border border-white shadow-sm w-fit">
+          <ArrowLeft className="w-4 h-4" /> Kembali
         </button>
         
         <div className="flex gap-3 w-full md:w-auto">
           {isEditing ? (
             <>
-              <Button onClick={handleCancel} disabled={isSaving} variant="outline" className="flex-1 md:flex-none border-slate-300 font-bold h-11"><X className="w-4 h-4 mr-2"/> Batal</Button>
-              <Button onClick={handleSave} disabled={isSaving} className="flex-1 md:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white shadow-md font-bold h-11">
+              <AdminButton onClick={handleCancel} disabled={isSaving} variant="outline" className="flex-1 md:flex-none h-11"><X className="w-4 h-4 mr-2"/> Batal</AdminButton>
+              <AdminButton onClick={handleSave} disabled={isSaving} variant="primary" className="flex-1 md:flex-none h-11">
                 {isSaving ? "Menyimpan..." : <><Save className="w-4 h-4 mr-2"/> Simpan Perubahan</>}
-              </Button>
+              </AdminButton>
             </>
           ) : (
-            <Button onClick={() => setIsEditing(true)} className="w-full md:w-auto bg-[#C5A059] hover:bg-[#A68345] text-white shadow-md font-bold h-11 px-6">
+            <AdminButton onClick={() => setIsEditing(true)} variant="gold" className="w-full md:w-auto h-11 px-6 shadow-md">
               <Edit2 className="w-4 h-4 mr-2" /> Edit Informasi Mitra
-            </Button>
+            </AdminButton>
           )}
         </div>
       </div>
 
-      {/* PROFILE HEADER CARD */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-slate-50 to-transparent pointer-events-none" />
+      {/* 1. PROFILE HEADER CARD (Glass Panel) */}
+      <div className={`${glassPanel} rounded-[2rem] p-8 relative overflow-hidden`}>
+        <div className={`absolute top-0 right-0 w-64 h-full bg-gradient-to-l opacity-20 pointer-events-none from-current ${accentColor.replace('bg-', 'text-')}`} />
         
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
-          <div className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm shrink-0 bg-slate-50 flex items-center justify-center">
+          <div className={`relative w-28 h-28 rounded-[1.5rem] border-2 border-white shadow-lg shrink-0 flex items-center justify-center overflow-hidden ${accentColor}`}>
             {formData.fotoProfileUrl || files.profile ? (
               <Image src={files.profile ? URL.createObjectURL(files.profile) : String(formData.fotoProfileUrl)} alt="Profile" fill className="object-cover" sizes="112px" />
-            ) : isVendor ? <Building2 className="w-10 h-10 text-slate-300"/> : isFleetVehicle ? <Truck className="w-10 h-10 text-slate-300"/> : <User className="w-10 h-10 text-slate-300"/>}
+            ) : iconClass}
             
-            {isEditing && (isIndividual || isFleetDriver) && (
-              <label className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity backdrop-blur-sm">
+            {isEditing && (isIndividual || isFleetDriver || isVendor) && (
+              <label className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity backdrop-blur-sm">
                 <Camera className="w-6 h-6 mb-1"/>
-                <span className="text-[10px] font-bold uppercase tracking-widest">Ubah Foto</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-center">Ubah<br/>Foto</span>
                 <input type="file" ref={refs.profile} onChange={(e) => handleFileChange('profile', e)} accept="image/*" className="hidden" />
               </label>
             )}
@@ -314,43 +326,44 @@ export default function DriverDetailPage() {
               <h1 className="text-3xl font-black text-slate-900 tracking-tight">
                 {isVendor ? (formData.companyName || "PT/CV") : (formData.name || "Tanpa Nama")}
               </h1>
-              <Badge variant={partner.isSuspended ? "danger" : "success"} className="uppercase text-[10px] px-3 shadow-sm mx-auto sm:mx-0">
-                {partner.isSuspended ? "Suspended" : "Active"}
-              </Badge>
+              <AdminBadge variant={partner.isSuspended ? "danger" : "success"} className="text-[10px] px-3 shadow-sm mx-auto sm:mx-0">
+                {partner.isSuspended ? "Suspended" : "Active Verified"}
+              </AdminBadge>
             </div>
             
-            <p className="text-xs font-bold text-[#C5A059] uppercase tracking-widest bg-[#C5A059]/10 px-3 py-1 rounded-md w-fit mx-auto sm:mx-0">
-              {String(partner.partnerType)}
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest bg-white/60 border border-white px-3 py-1 rounded-md w-fit mx-auto sm:mx-0 shadow-sm">
+              {String(partner.partnerType || "Entitas Baru")}
             </p>
             
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm font-semibold text-slate-500 pt-2">
-              <span className="flex items-center gap-1.5"><span className="text-[10px] border border-slate-200 text-slate-600 bg-white px-2 py-0.5 rounded-md font-bold">ID: {partner.id}</span></span>
-              {formData.phone && <span className="flex items-center gap-1.5">📞 {formData.phone}</span>}
-              {formData.vehicleType && <span className="flex items-center gap-1.5"><Truck className="w-4 h-4"/> {formData.vehicleType}</span>}
-              {formData.licensePlate && <span className="flex items-center gap-1.5 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-700">{formData.licensePlate}</span>}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-sm font-semibold text-slate-600 pt-3">
+              <span className="bg-slate-100/50 px-2 py-1 rounded-lg border border-slate-200">ID: {partner.id}</span>
+              {formData.phone && <span className="bg-slate-100/50 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5">📞 {formData.phone}</span>}
+              {formData.vehicleType && <span className="bg-slate-100/50 px-2 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5"><Truck className="w-4 h-4"/> {formData.vehicleType}</span>}
+              {formData.licensePlate && <span className="font-mono bg-slate-200/50 px-2 py-1 rounded-lg border border-slate-300 text-slate-800 uppercase tracking-widest">{formData.licensePlate}</span>}
             </div>
           </div>
 
-          <div className="sm:text-right shrink-0 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Saldo Dompet / Wallet</p>
-            <p className="text-2xl font-black text-emerald-600">
+          <div className="sm:text-right shrink-0 bg-white/80 p-5 rounded-2xl border border-white shadow-sm w-full sm:w-auto">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Saldo Dompet / Wallet</p>
+            <p className="text-3xl font-black text-emerald-600 tracking-tight">
               {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(partner.balance || 0)}
             </p>
-            <Button onClick={() => router.push(`/admin/users/drivers/${partner.id}/wallet`)} variant="outline" className="w-full mt-3 h-8 text-[10px] font-bold bg-white shadow-sm border-slate-200">
+            <AdminButton onClick={() => router.push(`/admin/users/drivers/${partner.id}/wallet`)} variant="outline" className="w-full mt-4 h-9 text-[10px]">
               Riwayat Mutasi
-            </Button>
+            </AdminButton>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* 2. BODY CONTENT (Grid Layout) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* KOLOM KIRI: FORM DATA */}
-        <div className="space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           
           {/* DATA PERSONAL / PERUSAHAAN */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
+          <div className={`${glassPanel} rounded-[2rem] p-8`}>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
               {isVendor ? <Building2 className="w-4 h-4 text-[#7A171D]"/> : <User className="w-4 h-4 text-[#7A171D]"/>}
               Informasi Entitas
             </h3>
@@ -359,48 +372,48 @@ export default function DriverDetailPage() {
               {isVendor ? (
                 <>
                   <FieldLabel label="Nama Perusahaan (PT/CV)" value={formData.companyName} isEditing={isEditing} 
-                    input={<Input value={formData.companyName || ""} onChange={e => setFormData({...formData, companyName: e.target.value})} className="font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.companyName || ""} onChange={e => setFormData({...formData, companyName: e.target.value})} />} />
                   <FieldLabel label="Nama Manager / PIC" value={formData.name} isEditing={isEditing} 
-                    input={<Input value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} className="font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} />} />
                   <FieldLabel label="Nomor NPWP" value={formData.npwp} isEditing={isEditing} 
-                    input={<Input value={formData.npwp || ""} onChange={e => setFormData({...formData, npwp: e.target.value})} className="font-mono font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.npwp || ""} onChange={e => setFormData({...formData, npwp: e.target.value})} className="font-mono" />} />
                 </>
               ) : (
                 <>
                   {(!isFleetVehicle) && (
                     <FieldLabel label="Nama Lengkap KTP" value={formData.name} isEditing={isEditing} 
-                      input={<Input value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} className="font-bold border-slate-300" />} />
+                      input={<AdminInput value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} />} />
                   )}
                   {(!isFleetVehicle) && (
                     <FieldLabel label="Nomor NIK KTP" value={formData.nik} isEditing={isEditing} 
-                      input={<Input value={formData.nik || ""} onChange={e => setFormData({...formData, nik: e.target.value})} className="font-mono font-bold border-slate-300" />} />
+                      input={<AdminInput value={formData.nik || ""} onChange={e => setFormData({...formData, nik: e.target.value})} className="font-mono" />} />
                   )}
                   {(!isFleetVehicle) && (
                     <FieldLabel label="Nomor SIM" value={formData.simNumber} isEditing={isEditing} 
-                      input={<Input value={formData.simNumber || ""} onChange={e => setFormData({...formData, simNumber: e.target.value})} className="font-mono font-bold border-slate-300" />} />
+                      input={<AdminInput value={formData.simNumber || ""} onChange={e => setFormData({...formData, simNumber: e.target.value})} className="font-mono" />} />
                   )}
                 </>
               )}
               
               {(!isFleetVehicle) && (
                 <FieldLabel label="Nomor Handphone (WA)" value={formData.phone} isEditing={isEditing} 
-                  input={<Input value={formData.phone || ""} onChange={e => setFormData({...formData, phone: e.target.value})} className="font-mono font-bold border-slate-300" />} />
+                  input={<AdminInput value={formData.phone || ""} onChange={e => setFormData({...formData, phone: e.target.value})} className="font-mono" />} />
               )}
             </div>
           </div>
 
           {/* DATA KENDARAAN & RELASI FLEET */}
           {(isIndividual || isFleetDriver || isFleetVehicle) && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[#7A171D]"/> Informasi Armada & Relasi
+            <div className={`${glassPanel} rounded-[2rem] p-8`}>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#C5A059]"/> Informasi Armada & Relasi
               </h3>
               
               <div className="space-y-4">
                 {(isFleetDriver || isFleetVehicle) && (
                   <FieldLabel label="Induk Vendor (PT)" value={formData.vendorName || formData.vendorId} isEditing={isEditing} 
                     input={
-                      <select value={formData.vendorId || ""} onChange={(e) => setFormData({...formData, vendorId: e.target.value, driverId: ""})} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2 text-slate-900 text-sm font-bold outline-none focus:border-blue-500 shadow-sm">
+                      <select value={formData.vendorId || ""} onChange={(e) => setFormData({...formData, vendorId: e.target.value, driverId: ""})} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl px-4 py-3 text-slate-900 text-sm font-bold outline-none focus:border-[#C5A059] shadow-sm appearance-none">
                         <option value="" disabled>-- Pilih Vendor --</option>
                         {vendors.map(v => <option key={v.id} value={v.id}>{v.companyName || v.name}</option>)}
                       </select>
@@ -412,7 +425,7 @@ export default function DriverDetailPage() {
                 {isFleetVehicle && (
                   <FieldLabel label="Sopir Penanggung Jawab" value={formData.driverName || "Belum Ditugaskan"} isEditing={isEditing} 
                     input={
-                      <select required value={formData.driverId || ""} onChange={(e) => setFormData({...formData, driverId: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2 text-slate-900 text-sm font-bold outline-none focus:border-emerald-500 shadow-sm appearance-none cursor-pointer">
+                      <select required value={formData.driverId || ""} onChange={(e) => setFormData({...formData, driverId: e.target.value})} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl px-4 py-3 text-slate-900 text-sm font-bold outline-none focus:border-emerald-500 shadow-sm appearance-none">
                         <option value="" disabled>-- Pilih Sopir Vendor Ini --</option>
                         {fleetDrivers.filter(d => d.vendorId === formData.vendorId).length === 0 && (
                           <option value="" disabled>Vendor belum mendaftarkan sopir.</option>
@@ -428,7 +441,7 @@ export default function DriverDetailPage() {
                 {(isIndividual || isFleetVehicle) && (
                   <FieldLabel label="Tipe Kendaraan" value={formData.vehicleType} isEditing={isEditing} 
                     input={
-                      <select value={formData.vehicleType || ""} onChange={(e) => setFormData({...formData, vehicleType: e.target.value})} className="w-full bg-white border border-slate-300 rounded-xl px-4 py-2 text-slate-900 text-sm font-bold outline-none focus:border-blue-500 shadow-sm">
+                      <select value={formData.vehicleType || ""} onChange={(e) => setFormData({...formData, vehicleType: e.target.value})} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl px-4 py-3 text-slate-900 text-sm font-bold outline-none focus:border-[#C5A059] shadow-sm appearance-none">
                         <option value="" disabled>-- Pilih Tipe --</option>
                         {vehiclesConfig.filter(v => isFleetVehicle ? v.category === "Truk" : v.category !== "Truk").map(v => (
                           <option key={v.id} value={v.name}>{v.name}</option>
@@ -440,7 +453,7 @@ export default function DriverDetailPage() {
                 
                 {isFleetVehicle && (
                   <FieldLabel label="Plat Nomor" value={formData.licensePlate} isEditing={isEditing} 
-                    input={<Input value={formData.licensePlate || ""} onChange={e => setFormData({...formData, licensePlate: e.target.value.toUpperCase()})} className="font-mono font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.licensePlate || ""} onChange={e => setFormData({...formData, licensePlate: e.target.value.toUpperCase()})} className="font-mono uppercase" />} />
                 )}
               </div>
             </div>
@@ -448,15 +461,15 @@ export default function DriverDetailPage() {
 
           {/* DATA PERBANKAN VENDOR */}
           {isVendor && (
-             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-                 <CreditCard className="w-4 h-4 text-[#7A171D]"/> Informasi Rekening Vendor
+             <div className={`${glassPanel} rounded-[2rem] p-8`}>
+               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                 <CreditCard className="w-4 h-4 text-emerald-600"/> Rekening Perusahaan
                </h3>
                <div className="space-y-4">
                  <FieldLabel label="Nama Bank" value={formData.bankName} isEditing={isEditing} 
-                    input={<Input value={formData.bankName || ""} onChange={e => setFormData({...formData, bankName: e.target.value})} className="font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.bankName || ""} onChange={e => setFormData({...formData, bankName: e.target.value})} />} />
                  <FieldLabel label="Nomor Rekening" value={formData.bankAccount} isEditing={isEditing} 
-                    input={<Input value={formData.bankAccount || ""} onChange={e => setFormData({...formData, bankAccount: e.target.value})} className="font-mono font-bold border-slate-300" />} />
+                    input={<AdminInput value={formData.bankAccount || ""} onChange={e => setFormData({...formData, bankAccount: e.target.value})} className="font-mono" />} />
                </div>
              </div>
           )}
@@ -464,22 +477,22 @@ export default function DriverDetailPage() {
         </div>
 
         {/* KOLOM KANAN: DOKUMEN & PETA */}
-        <div className="space-y-6">
+        <div className="lg:col-span-7 space-y-6">
           
           {/* GALERI DOKUMEN LEGALITAS */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-5 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#C5A059]"/> Dokumen Legalitas
+          <div className={`${glassPanel} rounded-[2rem] p-8`}>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600"/> Dokumen Legalitas Aktif
             </h3>
             
-            <div className="grid grid-cols-2 gap-4">
-              {(!isFleetVehicle) && <DocumentCard title="KTP" url={formData.fotoKtpUrl} file={files.ktp} isEditing={isEditing} onUploadClick={() => refs.ktp.current?.click()} />}
-              {(!isFleetVehicle) && <DocumentCard title="SIM" url={formData.fotoSimUrl} file={files.sim} isEditing={isEditing} onUploadClick={() => refs.sim.current?.click()} />}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(!isFleetVehicle) && <DocumentCard title="KTP Elektronik" url={formData.fotoKtpUrl} file={files.ktp} isEditing={isEditing} onUploadClick={() => refs.ktp.current?.click()} />}
+              {(!isFleetVehicle) && <DocumentCard title="Surat Izin Mengemudi" url={formData.fotoSimUrl} file={files.sim} isEditing={isEditing} onUploadClick={() => refs.sim.current?.click()} />}
               
-              {isVendor && <DocumentCard title="NPWP" url={formData.npwpUrl} file={files.npwp} isEditing={isEditing} onUploadClick={() => refs.npwp.current?.click()} />}
+              {isVendor && <DocumentCard title="NPWP Perusahaan" url={formData.npwpUrl} file={files.npwp} isEditing={isEditing} onUploadClick={() => refs.npwp.current?.click()} />}
               
-              {isFleetVehicle && <DocumentCard title="STNK" url={formData.stnkUrl} file={files.stnk} isEditing={isEditing} onUploadClick={() => refs.stnk.current?.click()} />}
-              {isFleetVehicle && <DocumentCard title="Buku KIR" url={formData.kirUrl} file={files.kir} isEditing={isEditing} onUploadClick={() => refs.kir.current?.click()} />}
+              {isFleetVehicle && <DocumentCard title="STNK Kendaraan" url={formData.stnkUrl} file={files.stnk} isEditing={isEditing} onUploadClick={() => refs.stnk.current?.click()} />}
+              {isFleetVehicle && <DocumentCard title="Buku Uji KIR" url={formData.kirUrl} file={files.kir} isEditing={isEditing} onUploadClick={() => refs.kir.current?.click()} />}
             </div>
 
             {/* Hidden Inputs for upload */}
@@ -492,23 +505,25 @@ export default function DriverDetailPage() {
 
           {/* BASE LOCATION MAPS */}
           {(isIndividual || isVendor) && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-[#7A171D]"/> Lokasi Base / Mangkal
-              </h3>
+            <div className={`${glassPanel} rounded-[2rem] p-8`}>
+               <div className="flex justify-between items-center mb-6">
+                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-600"/> Lokasi Base / Markas
+                 </h3>
+               </div>
               
               {isEditing ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <style dangerouslySetInnerHTML={{__html: `
                     mapbox-search-listbox { z-index: 999999 !important; border-radius: 12px !important; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2) !important; border: 1px solid #e2e8f0 !important; margin-top: 4px !important; }
                     mapbox-search-box { --focus-box-shadow: none; --border-radius: 12px; }
                   `}} />
-                  <div className="border border-slate-300 focus-within:border-[#7A171D] focus-within:ring-4 focus-within:ring-[#7A171D]/10 rounded-xl transition-all bg-white relative z-[9999] h-11 flex items-center">
+                  <div className="border border-white shadow-sm focus-within:border-[#7A171D] focus-within:ring-4 focus-within:ring-[#7A171D]/10 rounded-xl transition-all bg-white/80 relative z-[9999] h-12 flex items-center px-2">
                     <SearchBox
                       accessToken={MAPBOX_TOKEN}
                       options={{ language: 'id', country: 'ID' }}
                       value={formData.baseAddress || ""}
-                      placeholder="Cari alamat baru..."
+                      placeholder="Ketik alamat baru..."
                       onRetrieve={(res) => {
                         const feature = res.features[0];
                         setFormData(prev => ({
@@ -518,17 +533,20 @@ export default function DriverDetailPage() {
                         }));
                         setMapViewState({ longitude: feature.geometry.coordinates[0], latitude: feature.geometry.coordinates[1], zoom: 14 });
                       }}
-                      theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '0px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: 'bold' } }}
+                      theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '0px', fontFamily: 'inherit', unit: '14px', fontWeight: 'bold' } }}
                     />
                   </div>
                 </div>
               ) : (
-                <p className="text-sm font-semibold text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-100 leading-relaxed mb-3">
-                  {formData.baseAddress || "Alamat tidak tersedia"}
-                </p>
+                <div className="bg-white/60 p-4 rounded-xl border border-white shadow-sm flex items-start gap-3 mb-4">
+                  <MapPin className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
+                  <p className="text-sm font-semibold text-slate-800 leading-relaxed">
+                    {formData.baseAddress || "Alamat kordinat belum ditentukan."}
+                  </p>
+                </div>
               )}
 
-              <div className="w-full h-48 sm:h-64 bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative z-0 mt-3">
+              <div className="w-full h-64 lg:h-[400px] bg-slate-100 rounded-2xl overflow-hidden border border-white shadow-inner relative z-0 mt-4">
                 {formData.baseCoords ? (
                   <MapBase 
                     longitude={mapViewState.longitude}
@@ -540,14 +558,16 @@ export default function DriverDetailPage() {
                     onMarkerDragEnd={(lng, lat) => setFormData(prev => ({...prev, baseCoords: {lng, lat}}))}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-slate-400 font-bold text-xs">Koordinat Kosong</div>
+                  <div className="flex flex-col h-full items-center justify-center text-slate-400 font-bold text-xs">
+                    <MapPinned className="w-8 h-8 mb-2 opacity-20" /> Titik Peta Kosong
+                  </div>
                 )}
                 
                 {isEditing && formData.baseCoords && (
-                  <div className="absolute top-2 right-2 flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setActiveDraggable(activeDraggable === "origin" ? null : "origin")} className={`h-8 text-[10px] px-3 shadow-sm ${activeDraggable === "origin" ? "bg-amber-100 text-amber-700 border-amber-300 animate-pulse" : "bg-white text-slate-600"}`}>
-                      <MapPinned className="w-3 h-3 mr-1.5"/> {activeDraggable === "origin" ? "Geser Pin" : "Edit Pin"}
-                    </Button>
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    <AdminButton type="button" variant="outline" size="sm" onClick={() => setActiveDraggable(activeDraggable === "origin" ? null : "origin")} className={`h-9 px-4 shadow-md ${activeDraggable === "origin" ? "bg-amber-100 text-amber-700 border-amber-300 animate-pulse" : "bg-white/90 backdrop-blur-md"}`}>
+                      <MapPinned className="w-4 h-4 mr-2"/> {activeDraggable === "origin" ? "Geser Pin" : "Edit Pin"}
+                    </AdminButton>
                   </div>
                 )}
               </div>
@@ -565,9 +585,13 @@ export default function DriverDetailPage() {
 // =======================================================
 function FieldLabel({ label, value, isEditing, input }: { label: string, value?: string, isEditing: boolean, input: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-      {isEditing ? input : <span className="text-sm font-bold text-slate-900 border border-transparent py-2.5 bg-transparent">{value || "-"}</span>}
+    <div className="flex flex-col gap-1.5 w-full">
+      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{label}</span>
+      {isEditing ? input : (
+        <div className="bg-white/50 border border-white shadow-sm px-4 py-3 rounded-xl min-h-[44px] flex items-center">
+          <span className="text-sm font-bold text-slate-900">{value || <span className="text-slate-400 italic font-medium">Kosong</span>}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -576,25 +600,28 @@ function DocumentCard({ title, url, file, isEditing, onUploadClick }: { title: s
   const displayUrl = file ? URL.createObjectURL(file) : url;
 
   return (
-    <div className="border border-slate-200 rounded-xl p-3 flex flex-col gap-2 relative group bg-slate-50">
-      <div className="flex justify-between items-center">
-        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{title}</span>
+    <div className="bg-white/60 border border-white shadow-sm rounded-[1.25rem] p-3 flex flex-col gap-3 relative group">
+      <div className="flex justify-between items-center px-1">
+        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate">{title}</span>
         {displayUrl && !isEditing && (
-           <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1 rounded-md transition-colors"><ExternalLink className="w-3.5 h-3.5"/></a>
+           <a href={displayUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-lg transition-colors border border-blue-100"><ExternalLink className="w-3.5 h-3.5"/></a>
         )}
       </div>
       
-      <div className="w-full aspect-[4/3] bg-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center border border-slate-300">
+      <div className="w-full aspect-[4/3] bg-slate-100 rounded-xl overflow-hidden relative flex items-center justify-center border-2 border-dashed border-slate-200 group-hover:border-slate-300 transition-colors">
         {displayUrl ? (
           <Image src={displayUrl} alt={title} fill className="object-cover" sizes="200px" />
         ) : (
-          <FileText className="w-6 h-6 text-slate-400 opacity-50" />
+          <div className="flex flex-col items-center opacity-40">
+            <FileText className="w-8 h-8 text-slate-400 mb-1" />
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Belum ada</span>
+          </div>
         )}
 
         {isEditing && (
-          <div onClick={onUploadClick} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity backdrop-blur-sm">
-            <Camera className="w-5 h-5 mb-1"/>
-            <span className="text-[9px] font-bold uppercase tracking-widest">{displayUrl ? "Ganti" : "Upload"}</span>
+          <div onClick={onUploadClick} className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-all backdrop-blur-sm">
+            <Camera className="w-6 h-6 mb-2"/>
+            <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-3 py-1 rounded-full">{displayUrl ? "Ganti File" : "Upload Baru"}</span>
           </div>
         )}
       </div>

@@ -5,15 +5,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Globe, Search, CheckCircle2, AlertCircle, Filter, 
-  ArrowUpDown, DollarSign, Weight, FileText, X, ShieldAlert 
+  ArrowUpDown, DollarSign, Weight, FileText, X, ShieldAlert,
+  Calendar, MapPin, PlaneTakeoff, ArrowRight,
+  User
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { AdminInput } from "@/components/admin/ui/AdminInput";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 import { Quote } from "@/types/order";
@@ -36,6 +39,16 @@ export default function GlobalOrdersPage() {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [quoteForm, setQuoteForm] = useState({ price: "", docUrl: "" });
 
+  // =========================================================================
+  // CUSTOM STYLES: APPLE GLASSMORPHISM
+  // =========================================================================
+  const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
+  // Khusus untuk card per order agar punya batas/sekat yang tegas
+  const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
+
+  // =========================================================================
+  // LOGIC AREA: JANGAN DIUBAH!
+  // =========================================================================
   useEffect(() => {
     const q = query(collection(db, "quotes"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -68,7 +81,6 @@ export default function GlobalOrdersPage() {
     }
   };
 
-  // Helper aman untuk membaca nilai milisecond dari Firebase Timestamp
   const getMillis = (ts: unknown) => {
     if (!ts) return 0;
     const t = ts as { seconds?: number; toMillis?: () => number };
@@ -77,9 +89,6 @@ export default function GlobalOrdersPage() {
     return new Date(ts as string | number).getTime();
   };
 
-  // =======================================================================
-  // HOOKS USEMEMO (Ditempatkan SEBELUM block guard/return)
-  // =======================================================================
   const processedQuotes = useMemo(() => {
     let result = [...quotes];
     if (searchQuery) {
@@ -109,15 +118,16 @@ export default function GlobalOrdersPage() {
   const pendingQuotes = quotes.filter(q => !q.offeredPrice).length;
 
   // =======================================================================
-  // GUARDS: RBAC & LOADING (Mencegah "Hook called conditionally" error)
+  // UI AREA: GLASSMORPHISM BENTO-BOX & MODERN LIST
   // =======================================================================
+  
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -125,147 +135,222 @@ export default function GlobalOrdersPage() {
   if (isLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
-        <div className="w-10 h-10 border-4 border-slate-200 border-t-[#C5A059] rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Menghubungkan ke Global Node...</p>
+        <div className="relative w-16 h-16 mb-6">
+          <div className="absolute inset-0 border-4 border-[#C5A059]/20 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-[#C5A059] border-t-[#7A171D] rounded-full animate-spin"></div>
+        </div>
+        <p className="text-[#C5A059] text-xs font-bold uppercase tracking-widest animate-pulse">Menghubungkan ke Global Node...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
+      {/* GLOBAL TOAST NOTIFICATIONS */}
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-50 p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toast.msg}
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-            <Globe className="w-7 h-7 text-[#C5A059]" /> Global Forwarding
+      {/* 1. HEADER (Bento Glass) */}
+      <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:bg-white/80`}>
+        <div className="relative z-10 space-y-3">
+          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
+            {/* 3D ICON GOLD ACCENT */}
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_16px_rgba(197,160,89,0.3)] border border-[#A68345]">
+              <Globe className="w-6 h-6 text-white" strokeWidth={2.5} />
+            </div>
+            Global Forwarding
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5">Manajemen bea cukai internasional dan penawaran harga ekspor/impor.</p>
+          <p className="text-slate-500 text-sm max-w-xl font-medium mt-2">
+            Manajemen bea cukai internasional, tracking global, dan penawaran harga ekspor/impor.
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Permintaan Kuotasi</span>
-          <p className="text-3xl font-black text-slate-900 mt-2">{totalQuotes}</p>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-          <span className="text-amber-600 text-xs font-bold uppercase tracking-wider">Menunggu Penawaran Harga</span>
-          <p className="text-3xl font-black text-amber-700 mt-2">{pendingQuotes}</p>
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Cari ID Req, Negara Asal / Tujuan..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-4 py-2.5 text-slate-900 outline-none text-sm focus:border-[#C5A059] transition-all shadow-sm" />
+      {/* 2. STATS CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`${glassPanel} rounded-2xl p-6 relative overflow-hidden group hover:bg-white/80`}>
+          <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity" />
+          <div className="flex justify-between items-start relative z-10">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Total Permintaan Kuotasi</span>
+            <div className="w-10 h-10 rounded-full bg-white/60 border border-white shadow-sm flex items-center justify-center"><FileText className="w-5 h-5 text-[#C5A059]" /></div>
           </div>
-          <div className="flex gap-3">
-            <div className="relative">
-              <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#C5A059] shadow-sm appearance-none font-semibold text-slate-700 min-w-[140px]">
+          <p className="text-3xl font-black text-slate-900 mt-4 relative z-10 tracking-tight">{totalQuotes} <span className="text-base text-slate-400 font-bold">Request</span></p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={`${glassPanel} rounded-2xl p-6 relative overflow-hidden group hover:bg-white/80 border-amber-200/50`}>
+          <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-amber-500 rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity" />
+          <div className="flex justify-between items-start relative z-10">
+            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest">Menunggu Penawaran</span>
+            <div className="w-10 h-10 rounded-full bg-amber-100/50 border border-amber-200 shadow-sm flex items-center justify-center"><AlertCircle className="w-5 h-5 text-amber-600" /></div>
+          </div>
+          <p className="text-3xl font-black text-amber-700 mt-4 relative z-10 tracking-tight">{pendingQuotes} <span className="text-base text-amber-600/50 font-bold">Pending</span></p>
+        </motion.div>
+      </div>
+
+      {/* 3. MAIN DATA: CARD-BASED LIST (Floating Cards) */}
+      <div className="flex flex-col gap-6">
+        
+        {/* Filters & Search Bar (Terpisah dari List Order) */}
+        <div className={`${glassPanel} rounded-[1.5rem] p-4 flex flex-col lg:flex-row gap-4 justify-between items-center z-20 relative`}>
+          <div className="w-full lg:w-1/3">
+            <AdminInput 
+              leftIcon={<Search className="w-4 h-4" />}
+              placeholder="Cari ID Req, Negara Asal / Tujuan..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+            />
+          </div>
+          
+          <div className="flex flex-wrap lg:flex-nowrap w-full lg:w-auto gap-3">
+            <div className="relative flex-1 lg:flex-none">
+              <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[160px]">
                 <option value="All">Semua Status</option>
                 <option value="Menunggu">Pending</option>
                 <option value="Disetujui">Approved</option>
               </select>
             </div>
-            <div className="relative">
-              <ArrowUpDown className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#C5A059] shadow-sm appearance-none font-semibold text-slate-700 min-w-[160px]">
-                <option value="newest">Terbaru</option>
-                <option value="oldest">Terlama</option>
-                <option value="heaviest">Terberat (Kg)</option>
+            
+            <div className="relative flex-1 lg:flex-none">
+              <ArrowUpDown className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
+              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[180px]">
+                <option value="newest">Sortir: Terbaru</option>
+                <option value="oldest">Sortir: Terlama</option>
+                <option value="heaviest">Sortir: Terberat (Kg)</option>
+                <option value="highest_value">Sortir: Nilai Terbesar</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* List Pesanan - Card Layout Float */}
+        <div className="space-y-4 min-h-[500px]">
+          
+          {/* Header Penjelas Kolom untuk Desktop */}
+          {processedQuotes.length > 0 && (
+            <div className="hidden lg:grid grid-cols-12 gap-6 px-8 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <div className="col-span-3">ID & Klien</div>
+              <div className="col-span-3">Jalur Penerbangan</div>
+              <div className="col-span-3">Spesifikasi Kargo</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-2 text-right">Tindakan</div>
+            </div>
+          )}
+
           {processedQuotes.length === 0 ? (
-            <div className="p-20 text-center text-slate-500 font-medium">Tidak ada data kuotasi forwarding.</div>
+            <div className={`${glassPanel} rounded-[2rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full`}>
+              <Globe className="w-16 h-16 mb-4 opacity-20" />
+              <p>Tidak ada data kuotasi forwarding yang cocok.</p>
+            </div>
           ) : (
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="bg-white text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
-                  <th className="p-5 pl-6">ID & Jalur Negara</th>
-                  <th className="p-5">Spek Barang</th>
-                  <th className="p-5">Status & Harga</th>
-                  <th className="p-5 pr-6 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {processedQuotes.map(q => (
-                  <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-5 pl-6 align-top">
-                      <p className="font-mono font-black text-[#C5A059] text-base mb-2">#{q.id}</p>
-                      <div className="flex flex-col gap-1 text-xs font-bold text-slate-600">
-                        <p className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Asal: {q.originCountry}</p>
-                        <p className="text-slate-900 font-extrabold flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#C5A059]"></span> Tujuan: {q.destCountry}</p>
+            processedQuotes.map((q, idx) => {
+              // Tentukan varian badge
+              let badgeVariant: "success"|"warning"|"danger"|"default" = "default";
+              if (q.status.includes("Setuju") || q.status.includes("Approved")) badgeVariant = "success";
+              else if (q.status.includes("Menunggu")) badgeVariant = "warning";
+              else if (q.status.includes("Tolak")) badgeVariant = "danger";
+
+              return (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  key={q.id} 
+                  className={`${glassCard} p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center group`}
+                >
+                  {/* KOLOM 1: ID & KLIEN */}
+                  <div className="lg:col-span-3 flex flex-col items-start gap-2">
+                    <AdminBadge variant="gold" className="text-[10px] px-3 py-1 bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] text-white border-[#A68345]">
+                      #{q.id}
+                    </AdminBadge>
+                    <p className="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 ml-1 mt-1 truncate max-w-[200px]" title={q.name}>
+                      <User className="w-3.5 h-3.5 text-slate-400"/> {q.name}
+                    </p>
+                  </div>
+                  
+                  {/* KOLOM 2: JALUR PENERBANGAN */}
+                  <div className="lg:col-span-3 space-y-3 relative pl-5">
+                    <div className="absolute left-[7px] top-2 bottom-2 w-[2px] bg-slate-200 group-hover:bg-[#C5A059]/40 transition-colors"></div>
+                    
+                    <div className="flex items-start gap-3 relative">
+                      <span className="absolute -left-[24px] mt-1 w-3 h-3 bg-slate-300 rounded-full border-2 border-white shadow-sm"></span>
+                      <div className="overflow-hidden w-full bg-white/50 px-3 py-2 rounded-xl border border-white shadow-sm">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Asal (Export)</p>
+                        <p className="font-bold text-slate-900 truncate" title={q.originCountry}>
+                           {q.originCountry}
+                        </p>
                       </div>
-                    </td>
-                    <td className="p-5 align-top pt-6">
-                      <p className="font-black text-slate-700 text-sm flex items-center gap-1.5"><Weight className="w-4 h-4 text-slate-400"/> {q.weight} Kg</p>
-                      <p className="text-xs text-slate-500 font-medium mt-1">Dimensi: {q.length}x{q.width}x{q.height} cm</p>
-                    </td>
-                    <td className="p-5 align-top pt-6">
-                      <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest border border-slate-200 inline-block mb-2">{q.status}</span>
-                      {q.offeredPrice ? (
-                        <p className="text-sm font-black text-emerald-600 flex items-center gap-1"><DollarSign className="w-4 h-4"/> {formatRupiah(q.offeredPrice)}</p>
-                      ) : (
-                        <p className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded w-fit border border-amber-200">Belum ada penawaran</p>
-                      )}
-                    </td>
-                    <td className="p-5 pr-6 align-top pt-6 text-right">
-                      <Button size="sm" variant="gold" onClick={() => { setSelectedQuoteId(q.id); setQuoteForm({ price: q.offeredPrice?.toString() || "", docUrl: q.customsDocUrl || "" }); setShowQuoteModal(true); }} className="h-9 text-[10px] shadow-sm">
-                        <FileText className="w-3.5 h-3.5 mr-1.5" /> Proses Bea Cukai
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <div className="flex items-start gap-3 relative">
+                      <span className="absolute -left-[24px] mt-1 w-3 h-3 bg-[#C5A059] rounded-full border-2 border-white shadow-[0_0_5px_rgba(197,160,89,0.5)]"></span>
+                      <div className="overflow-hidden w-full bg-white/50 px-3 py-2 rounded-xl border border-white shadow-sm">
+                        <p className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest mb-0.5">Tujuan (Import)</p>
+                        <p className="font-bold text-slate-900 truncate" title={q.destCountry}>
+                           {q.destCountry}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KOLOM 3: SPESIFIKASI KARGO */}
+                  <div className="lg:col-span-3 flex flex-col items-start gap-2">
+                    <div className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm w-fit mb-1">
+                      <PlaneTakeoff className="w-4 h-4 text-[#C5A059]" />
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jenis Komoditi</span>
+                        <span className="text-xs font-bold text-slate-800">{q.itemType || "General Cargo"}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5 bg-white/50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <Weight className="w-3.5 h-3.5 text-slate-400"/> {q.weight} Kg
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
+                        Dim: {q.length}x{q.width}x{q.height} cm
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* KOLOM 4: STATUS & HARGA */}
+                  <div className="lg:col-span-1 flex flex-col items-start gap-2">
+                    <AdminBadge variant={badgeVariant} className="text-[10px]">
+                      {q.status}
+                    </AdminBadge>
+                    
+                    {q.offeredPrice ? (
+                      <div className="text-[11px] font-black flex items-center gap-1.5 px-3 py-2 rounded-xl border shadow-sm w-fit bg-emerald-50/50 border-emerald-200 text-emerald-700 mt-1">
+                        <DollarSign className="w-4 h-4 text-emerald-500" /> 
+                        {formatRupiah(q.offeredPrice)}
+                      </div>
+                    ) : (
+                      <div className="text-[9px] font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl border shadow-sm w-fit bg-amber-50/50 border-amber-200 text-amber-600 mt-1 uppercase tracking-widest">
+                        <AlertCircle className="w-4 h-4" /> Pending
+                      </div>
+                    )}
+                  </div>
+
+                  {/* KOLOM 5: TINDAKAN */}
+                  <div className="lg:col-span-2 flex flex-col items-end gap-2 justify-center">
+                    <AdminButton 
+                      size="sm" 
+                      variant="gold" 
+                      onClick={() => router.push(`/admin/orders/global/${q.id}`)} 
+                      className="w-full text-[11px] shadow-sm py-5"
+                    >
+                      Buka Detail <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                    </AdminButton>
+                  </div>
+                </motion.div>
+              );
+            })
           )}
         </div>
       </div>
-
-      <AnimatePresence>
-        {showQuoteModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowQuoteModal(false)} />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white border border-slate-200 rounded-[2rem] p-8 w-full max-w-md relative z-10 shadow-2xl">
-              <div className="flex justify-between items-center mb-6 border-b pb-4 border-slate-100">
-                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2"><FileText className="w-5 h-5 text-[#C5A059]"/> Penawaran Forwarding</h2>
-                <button type="button" onClick={() => setShowQuoteModal(false)} className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center hover:bg-red-50 text-slate-400 hover:text-red-500"><X className="w-4 h-4"/></button>
-              </div>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Input harga final penawaran kargo (termasuk Freight, Duty & Tax) beserta tautan dokumen GDrive untuk Klien.</p>
-              
-              <form onSubmit={handleSubmitQuote} className="space-y-5">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Harga Final (IDR)</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">Rp</span>
-                    <Input type="number" required value={quoteForm.price} onChange={(e) => setQuoteForm({...quoteForm, price: e.target.value})} className="pl-11 h-12 font-black text-lg focus-visible:border-[#C5A059]" placeholder="0" />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">URL Dokumen Bea Cukai</label>
-                  <Input type="url" required value={quoteForm.docUrl} onChange={(e) => setQuoteForm({...quoteForm, docUrl: e.target.value})} className="h-12 font-medium focus-visible:border-[#C5A059]" placeholder="https://drive.google.com/..." />
-                </div>
-                <div className="pt-4 border-t border-slate-100 mt-4">
-                  <Button type="submit" variant="gold" className="w-full h-12 font-bold text-sm shadow-md">Kirim Penawaran ke Klien</Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

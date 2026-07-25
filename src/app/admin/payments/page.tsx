@@ -7,63 +7,66 @@ import {
   Save, CheckCircle2, AlertCircle, 
   Building2, QrCode, RefreshCw, ShieldAlert, 
   Plus, Trash2, X, Upload, CreditCard, Image as ImageIcon,
-  Activity
+  Activity, Check
 } from "lucide-react";
 
-// --- IMPORT FIREBASE CORE ---
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
-// --- IMPORT UI KIT PREMIUM ---
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
 import { PaymentMethod, PaymentConfig } from "@/types/finance";
 
 const BANK_COLOR_OPTIONS = [
-  { label: "Biru (BCA / Mandiri / BNI)", value: "bg-blue-600" },
-  { label: "Kuning (Mandiri / Maybank)", value: "bg-amber-500" },
-  { label: "Hijau (BSI / Tokopedia)", value: "bg-emerald-600" },
-  { label: "Ungu (OVO / Muamalat)", value: "bg-purple-600" },
-  { label: "Merah (CIMB / Telkomsel)", value: "bg-red-600" },
-  { label: "Cyan (Bank Jago / BNC)", value: "bg-cyan-500" },
-  { label: "Gelap (Default)", value: "bg-slate-800" },
+  { label: "Biru (BCA / Mandiri / BNI)", value: "bg-gradient-to-br from-blue-500 to-blue-700 border-blue-600 shadow-blue-500/20" },
+  { label: "Kuning (Mandiri / Maybank)", value: "bg-gradient-to-br from-amber-400 to-amber-600 border-amber-500 shadow-amber-500/20" },
+  { label: "Hijau (BSI / Tokopedia)", value: "bg-gradient-to-br from-emerald-500 to-emerald-700 border-emerald-600 shadow-emerald-500/20" },
+  { label: "Ungu (OVO / Muamalat)", value: "bg-gradient-to-br from-purple-500 to-purple-700 border-purple-600 shadow-purple-500/20" },
+  { label: "Merah (CIMB / Telkomsel)", value: "bg-gradient-to-br from-red-500 to-red-700 border-red-600 shadow-red-500/20" },
+  { label: "Cyan (Bank Jago / BNC)", value: "bg-gradient-to-br from-cyan-400 to-cyan-600 border-cyan-500 shadow-cyan-500/20" },
+  { label: "Gelap (Default)", value: "bg-gradient-to-br from-slate-700 to-slate-900 border-slate-800 shadow-slate-900/20" },
 ];
+
+const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
 export default function AdminPaymentsPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+  
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
 
-  // Core Data
+  // Core Data Asli dari Server
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({
     transferBank: [],
     qrisImageUrl: null
   });
 
-  // State File QRIS
+  // State Lokal (Contextual Editing)
+  const [localBanks, setLocalBanks] = useState<PaymentMethod[]>([]);
+  const [localQrisUrl, setLocalQrisUrl] = useState<string | null>(null);
+  
+  // File QRIS (Unsaved)
   const [qrisFile, setQrisFile] = useState<File | null>(null);
   const [qrisPreview, setQrisPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State Modal Tambah Bank
+  // Modal Bank State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newBank, setNewBank] = useState<PaymentMethod>({
     bankName: "",
     accountNumber: "",
     accountName: "PT FLASH GLOBAL LOGISTIK",
-    color: "bg-blue-600"
+    color: BANK_COLOR_OPTIONS[0].value
   });
 
-  // Tarik data saat halaman dimuat
+  const [isSavingBank, setIsSavingBank] = useState(false);
+  const [isSavingQris, setIsSavingQris] = useState(false);
+
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -76,9 +79,9 @@ export default function AdminPaymentsPage() {
             transferBank: data.transferBank || [],
             qrisImageUrl: data.qrisImageUrl || null
           });
-          if (data.qrisImageUrl) {
-            setQrisPreview(data.qrisImageUrl);
-          }
+          setLocalBanks(data.transferBank || []);
+          setLocalQrisUrl(data.qrisImageUrl || null);
+          setQrisPreview(data.qrisImageUrl || null);
         }
       } catch (error) {
         console.error("Gagal menarik master data pembayaran:", error);
@@ -88,20 +91,52 @@ export default function AdminPaymentsPage() {
       }
     };
     fetchSettings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Mencegah scroll body saat modal terbuka
-  useEffect(() => {
-    if (isModalOpen) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "auto";
-    return () => { document.body.style.overflow = "auto"; };
-  }, [isModalOpen]);
 
   const showToast = (type: "success" | "error", text: string) => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  // =========================================================================
+  // HANDLERS: REKENING BANK
+  // =========================================================================
+  const isBankDirty = JSON.stringify(localBanks) !== JSON.stringify(paymentConfig.transferBank);
+
+  const handleAddBankSubmit = () => {
+    if (!newBank.bankName || !newBank.accountNumber || !newBank.accountName) {
+      alert("Harap lengkapi semua field rekening bank!");
+      return;
+    }
+    setLocalBanks([...localBanks, newBank]);
+    setIsModalOpen(false);
+    setNewBank({ bankName: "", accountNumber: "", accountName: "PT FLASH GLOBAL LOGISTIK", color: BANK_COLOR_OPTIONS[0].value });
+  };
+
+  const handleDeleteBank = (index: number) => {
+    if (confirm("Yakin ingin menghapus rekening ini?")) {
+      setLocalBanks(localBanks.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleSaveBanks = async () => {
+    setIsSavingBank(true);
+    try {
+      await setDoc(doc(db, "settings", "payments"), { transferBank: localBanks, updatedAt: serverTimestamp() }, { merge: true });
+      setPaymentConfig(prev => ({ ...prev, transferBank: localBanks }));
+      showToast("success", "Daftar Rekening Bank berhasil diperbarui!");
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Gagal menyimpan konfigurasi rekening bank.");
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
+  // =========================================================================
+  // HANDLERS: QRIS UPLOAD
+  // =========================================================================
+  const isQrisDirty = qrisFile !== null;
 
   const handleQrisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -111,99 +146,55 @@ export default function AdminPaymentsPage() {
     }
   };
 
-  const uploadQrisToCloudinary = async (): Promise<string | null> => {
-    if (!qrisFile) return paymentConfig.qrisImageUrl; // Jika tidak ada file baru, kembalikan URL lama
-
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset) {
-      throw new Error("Kredensial Cloudinary belum diatur.");
-    }
-
-    const imageFormData = new FormData();
-    imageFormData.append("file", qrisFile);
-    imageFormData.append("upload_preset", uploadPreset);
-
-    const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-      method: "POST",
-      body: imageFormData,
-    });
-
-    const cloudData = await cloudinaryRes.json();
-    if (cloudData.secure_url) {
-      return cloudData.secure_url;
-    } else {
-      throw new Error("Gagal mengunggah QRIS ke server gambar.");
-    }
-  };
-
-  const handleSaveConfiguration = async () => {
-    setIsSaving(true);
+  const handleSaveQris = async () => {
+    setIsSavingQris(true);
     try {
-      // 1. Upload Gambar QRIS jika ada perubahan
-      let finalQrisUrl = paymentConfig.qrisImageUrl;
+      let finalQrisUrl = localQrisUrl;
+      
       if (qrisFile) {
-        showToast("success", "Mengunggah gambar QRIS...");
-        finalQrisUrl = await uploadQrisToCloudinary();
+        showToast("success", "Mengunggah barcode QRIS...");
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+        const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+        if (!cloudName || !uploadPreset) throw new Error("Kredensial Cloudinary belum diatur.");
+
+        const imageFormData = new FormData();
+        imageFormData.append("file", qrisFile);
+        imageFormData.append("upload_preset", uploadPreset);
+
+        const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: "POST", body: imageFormData });
+        const cloudData = await cloudinaryRes.json();
+        
+        if (cloudData.secure_url) {
+          finalQrisUrl = cloudData.secure_url;
+        } else {
+          throw new Error("Gagal mengunggah QRIS ke server gambar.");
+        }
       }
 
-      const finalConfig = {
-        transferBank: paymentConfig.transferBank,
-        qrisImageUrl: finalQrisUrl,
-        updatedAt: serverTimestamp(),
-      };
-
-      // 2. Simpan ke Firestore
-      await setDoc(doc(db, "settings", "payments"), finalConfig, { merge: true });
+      await setDoc(doc(db, "settings", "payments"), { qrisImageUrl: finalQrisUrl, updatedAt: serverTimestamp() }, { merge: true });
       
-      setPaymentConfig({ ...paymentConfig, qrisImageUrl: finalQrisUrl });
-      setQrisFile(null); // Reset state file karena sudah tersimpan
-
-      showToast("success", "Konfigurasi metode pembayaran berhasil diperbarui!");
+      setPaymentConfig(prev => ({ ...prev, qrisImageUrl: finalQrisUrl }));
+      setLocalQrisUrl(finalQrisUrl);
+      setQrisFile(null);
+      showToast("success", "Barcode QRIS berhasil diperbarui!");
     } catch (error: unknown) {
-      console.error("Gagal menyimpan konfigurasi:", error);
-      const errMsg = error instanceof Error ? error.message : "Gagal menyimpan konfigurasi ke database.";
+      console.error("Gagal menyimpan QRIS:", error);
+      const errMsg = error instanceof Error ? error.message : "Gagal menyimpan QRIS ke database.";
       showToast("error", errMsg);
     } finally {
-      setIsSaving(false);
+      setIsSavingQris(false);
     }
   };
 
-  const handleAddBankSubmit = () => {
-    if (!newBank.bankName || !newBank.accountNumber || !newBank.accountName) {
-      alert("Harap lengkapi semua field rekening bank!");
-      return;
-    }
-
-    setPaymentConfig(prev => ({
-      ...prev,
-      transferBank: [...prev.transferBank, newBank]
-    }));
-
-    setIsModalOpen(false);
-    setNewBank({ bankName: "", accountNumber: "", accountName: "PT FLASH GLOBAL LOGISTIK", color: "bg-blue-600" });
-  };
-
-  const handleDeleteBank = (index: number) => {
-    if (confirm("Yakin ingin menghapus rekening ini?")) {
-      const updatedBanks = paymentConfig.transferBank.filter((_, i) => i !== index);
-      setPaymentConfig(prev => ({ ...prev, transferBank: updatedBanks }));
-    }
-  };
-
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
-
-  // RBAC GUARD (Hanya Superadmin & Finance)
+  // RBAC GUARD
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Konfigurasi Pembayaran ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -211,95 +202,88 @@ export default function AdminPaymentsPage() {
   if (isLoading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
-        <Activity className="w-10 h-10 text-[#C5A059] animate-pulse mb-4" />
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Memuat Modul Pembayaran...</p>
+        <Activity className="w-12 h-12 text-[#C5A059] animate-pulse mb-4" />
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Memuat Modul Pembayaran...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pb-10 font-sans">
+    <div className="space-y-8 pb-20 font-sans max-w-7xl mx-auto">
       
       <AnimatePresence>
         {toastMessage && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-50 p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toastMessage.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {toastMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toastMessage.text}
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toastMessage.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
+            {toastMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toastMessage.text}
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* HEADER CONTROL PANEL */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <Badge variant="gold" className="mb-3 px-3 py-1 shadow-sm inline-flex items-center gap-1.5">
-            <CreditCard className="w-3 h-3 fill-current"/> Finance & Billing Panel
-          </Badge>
-          <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
-            Metode <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C5A059] to-[#A68345]">Pembayaran</span>
+      <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden`}>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
+        <div className="relative z-10">
+          <AdminBadge variant="gold" className="mb-4">Finance & Billing Panel</AdminBadge>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <CreditCard className="w-8 h-8 text-[#C5A059]" />
+            Metode Pembayaran
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5 max-w-2xl">Kelola daftar rekening bank aktif dan barcode QRIS yang akan ditampilkan pada halaman pembayaran Klien.</p>
+          <p className="text-slate-500 text-sm mt-2 max-w-2xl font-medium leading-relaxed">
+            Kelola daftar rekening bank aktif dan barcode QRIS yang akan ditampilkan pada halaman pembayaran tagihan klien secara real-time.
+          </p>
         </div>
-        
-        <Button 
-          onClick={handleSaveConfiguration}
-          disabled={isSaving}
-          variant="gold"
-          className="w-full md:w-auto h-12 px-8 text-sm font-bold shrink-0"
-        >
-          {isSaving ? (
-            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Menyimpan Data...</>
-          ) : (
-            <><Save className="w-4 h-4 mr-2" /> Publikasi & Simpan</>
-          )}
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
         {/* KOLOM KIRI: TRANSFER BANK */}
         <div className="xl:col-span-7 space-y-6">
-          <Card className="shadow-sm border-slate-200">
-            <CardHeader className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between space-y-0">
+          <div className={`${glassPanel} rounded-[2rem] p-6 lg:p-8 flex flex-col h-full`}>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-white/60 pb-6">
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-[#C5A059]/10 text-[#C5A059] rounded-xl flex items-center justify-center shrink-0 border border-[#C5A059]/20">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 border border-blue-200">
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Rekening Transfer Bank</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Daftar bank penerima pembayaran manual.</p>
+                  <h2 className="text-lg font-black text-slate-900">Rekening Transfer Bank</h2>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">Metode Bayar Manual</p>
                 </div>
               </div>
-              <Button onClick={() => setIsModalOpen(true)} variant="outline" size="sm" className="h-9 border-slate-300">
+              <AdminButton onClick={() => setIsModalOpen(true)} variant="outline" className="h-10 bg-white border-slate-200 text-slate-600 hover:text-blue-600 font-bold shrink-0">
                 <Plus className="w-4 h-4 mr-1.5" /> Tambah Bank
-              </Button>
-            </CardHeader>
+              </AdminButton>
+            </div>
 
-            <CardContent className="p-6">
-              {paymentConfig.transferBank.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <Building2 className="w-10 h-10 text-slate-300 mb-3" />
-                  <h4 className="text-slate-700 font-bold">Belum Ada Rekening Bank</h4>
-                  <p className="text-slate-500 text-sm mt-1">Tambahkan rekening agar klien dapat melakukan pembayaran.</p>
+            <div className="flex-1">
+              {localBanks.length === 0 ? (
+                <div className="py-16 flex flex-col items-center justify-center text-center bg-white/50 rounded-[1.5rem] border border-dashed border-slate-300">
+                  <Building2 className="w-12 h-12 text-slate-300 mb-3 opacity-50" />
+                  <h4 className="text-slate-700 font-black tracking-tight">Belum Ada Rekening Aktif</h4>
+                  <p className="text-slate-500 text-sm mt-1 max-w-xs">Tambahkan rekening bank resmi perusahaan agar klien dapat melakukan pembayaran.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <AnimatePresence>
-                    {paymentConfig.transferBank.map((rek, index) => (
+                    {localBanks.map((rek, index) => (
                       <motion.div key={index} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative group">
-                        <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-white hover:border-[#C5A059] hover:shadow-md transition-all h-full flex flex-col justify-between">
-                          <div className="space-y-1 mb-4">
-                            <span className={cn("inline-block text-white font-black px-2.5 py-0.5 rounded text-[10px] tracking-wide", rek.color)}>{rek.bankName}</span>
-                            <p className="font-mono font-black text-slate-900 text-lg tracking-wider mt-2">{rek.accountNumber}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{rek.accountName}</p>
+                        <div className={cn("p-5 border rounded-2xl transition-all h-full flex flex-col justify-between shadow-lg relative overflow-hidden", rek.color)}>
+                          <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
+                            <Building2 className="w-16 h-16 text-white mix-blend-overlay" />
+                          </div>
+                          <div className="space-y-1 mb-6 relative z-10">
+                            <span className="inline-block text-white font-black px-2 py-0.5 rounded text-[10px] tracking-widest bg-black/20 uppercase backdrop-blur-sm border border-white/10 mb-2">{rek.bankName}</span>
+                            <p className="font-mono font-black text-white text-xl tracking-widest drop-shadow-md">{rek.accountNumber}</p>
+                            <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest leading-snug">{rek.accountName}</p>
                           </div>
                           
                           <button 
                             type="button" 
                             onClick={() => handleDeleteBank(index)}
-                            className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors opacity-0 group-hover:opacity-100 shadow-sm"
+                            className="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 text-white flex items-center justify-center hover:bg-red-500 hover:text-white hover:border-red-600 transition-colors opacity-0 group-hover:opacity-100 shadow-sm z-20"
                             title="Hapus Rekening"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </motion.div>
@@ -307,69 +291,92 @@ export default function AdminPaymentsPage() {
                   </AnimatePresence>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* ACTION FOOTER KHUSUS BANK */}
+            <div className="mt-8 pt-6 border-t border-white/60 flex items-center justify-end">
+              <AdminButton 
+                onClick={handleSaveBanks} 
+                disabled={!isBankDirty || isSavingBank}
+                className={cn("h-12 px-8 font-bold transition-all", isBankDirty ? "bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/20" : "bg-slate-100 text-slate-400 border-transparent")}
+              >
+                {isSavingBank ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : isBankDirty ? <Save className="w-4 h-4 mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                {isBankDirty ? "Simpan Perubahan Bank" : "Tersimpan"}
+              </AdminButton>
+            </div>
+
+          </div>
         </div>
 
         {/* KOLOM KANAN: QRIS UPLOAD */}
         <div className="xl:col-span-5 space-y-6">
-          <Card className="shadow-sm border-slate-200">
-            <CardHeader className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center gap-4 space-y-0">
-              <div className="w-10 h-10 bg-[#7A171D]/10 text-[#7A171D] rounded-xl flex items-center justify-center shrink-0 border border-[#7A171D]/20">
+          <div className={`${glassPanel} rounded-[2rem] p-6 lg:p-8 flex flex-col h-full`}>
+            
+            <div className="flex items-center gap-4 mb-6 border-b border-white/60 pb-6">
+              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 border border-emerald-200">
                 <QrCode className="w-5 h-5" />
               </div>
               <div>
                 <h2 className="text-lg font-bold text-slate-900">QRIS Pembayaran</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Barcode universal untuk e-wallet & m-banking.</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">E-Wallet & M-Banking</p>
               </div>
-            </CardHeader>
+            </div>
 
-            <CardContent className="p-6">
-              <div className="space-y-4">
+            <div className="flex-1 flex flex-col justify-center">
+              <label className="group relative block w-full h-[320px] rounded-[1.5rem] border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-white/50 hover:bg-emerald-50/50 transition-all cursor-pointer overflow-hidden shadow-inner">
+                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleQrisFileChange} className="hidden" />
                 
-                {/* Upload Area */}
-                <label className="block border-2 border-dashed border-slate-200 hover:border-[#C5A059] rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors bg-slate-50 hover:bg-[#C5A059]/5 min-h-[280px] relative overflow-hidden group">
-                  <input type="file" accept="image/*" ref={fileInputRef} onChange={handleQrisFileChange} className="hidden" />
-                  
-                  <AnimatePresence mode="wait">
-                    {qrisPreview ? (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-10 bg-white p-3 flex items-center justify-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={qrisPreview} alt="QRIS Flash Global" className="max-w-full max-h-full object-contain rounded-xl" />
-                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                          <span className="bg-white text-slate-900 font-bold px-4 py-2 rounded-xl shadow-xl flex items-center gap-2 transform group-hover:scale-105 transition-transform text-sm">
-                            <Upload className="w-4 h-4" /> Ganti Gambar QRIS
-                          </span>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-                        <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center mx-auto text-slate-400 group-hover:text-[#C5A059] group-hover:scale-110 transition-all duration-300">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-700">Unggah Gambar QRIS</p>
-                          <p className="text-[11px] text-slate-400 mt-1 font-medium max-w-[200px] mx-auto">Gunakan gambar jelas dan tidak terpotong (Maks 5MB)</p>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </label>
+                <AnimatePresence mode="wait">
+                  {qrisPreview ? (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-slate-900">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={qrisPreview} alt="QRIS Flash Global" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                        <span className="bg-white text-slate-900 font-bold px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2 transform group-hover:scale-105 transition-transform text-xs">
+                          <Upload className="w-4 h-4" /> Ganti Gambar QRIS
+                        </span>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                      <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-4 text-slate-400 group-hover:text-emerald-500 group-hover:scale-110 transition-all duration-300">
+                        <ImageIcon className="w-8 h-8" />
+                      </div>
+                      <p className="text-sm font-black text-slate-700">Unggah Gambar QRIS</p>
+                      <p className="text-[10px] text-slate-400 mt-1.5 font-bold uppercase tracking-widest max-w-[200px] leading-relaxed">Format JPG/PNG. Pastikan gambar jelas & tidak blur.</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </label>
 
-                {qrisFile && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    Gambar QRIS baru belum tersimpan. Jangan lupa klik Publikasi.
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              {qrisFile && (
+                <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  Gambar baru belum disimpan!
+                </div>
+              )}
+            </div>
+
+            {/* ACTION FOOTER KHUSUS QRIS */}
+            <div className="mt-6 pt-6 border-t border-white/60 flex items-center justify-end">
+              <AdminButton 
+                onClick={handleSaveQris} 
+                disabled={!isQrisDirty || isSavingQris}
+                className={cn("h-12 px-8 font-bold transition-all w-full", isQrisDirty ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-100 text-slate-400 border-transparent")}
+              >
+                {isSavingQris ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : isQrisDirty ? <Upload className="w-4 h-4 mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                {isQrisDirty ? "Upload & Simpan QRIS" : "QRIS Tersimpan"}
+              </AdminButton>
+            </div>
+
+          </div>
         </div>
 
       </div>
 
+      {/* ================================================================= */}
       {/* MODAL TAMBAH BANK */}
+      {/* ================================================================= */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
@@ -381,68 +388,78 @@ export default function AdminPaymentsPage() {
             
             <motion.div 
               initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 flex flex-col"
+              className="relative w-full max-w-md bg-white/90 backdrop-blur-xl rounded-[2rem] shadow-2xl overflow-hidden border border-white flex flex-col"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-[#C5A059]" /> Tambah Rekening Bank
-                </h2>
+              <div className="p-6 md:p-8 border-b border-slate-200 flex items-center justify-between bg-white/50 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Tambah Bank Baru</h2>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-0.5">Input Detail Rekening</p>
+                  </div>
+                </div>
                 <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shadow-sm">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="p-6 space-y-5">
+              <div className="p-6 md:p-8 space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Bank (Cth: BCA)</label>
-                  <Input 
-                    placeholder="BCA" 
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nama Bank Resmi</label>
+                  <input 
+                    type="text"
+                    placeholder="Contoh: BANK BCA" 
                     value={newBank.bankName} 
                     onChange={(e) => setNewBank({...newBank, bankName: e.target.value.toUpperCase()})} 
-                    className="border-slate-200 uppercase font-bold" 
+                    className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-slate-900 text-sm font-black outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all uppercase" 
                   />
                 </div>
                 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nomor Rekening</label>
-                  <Input 
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nomor Rekening</label>
+                  <input 
                     type="number"
                     placeholder="1234567890" 
                     value={newBank.accountNumber} 
                     onChange={(e) => setNewBank({...newBank, accountNumber: e.target.value})} 
-                    className="border-slate-200 font-mono font-bold text-lg tracking-wider" 
+                    className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-slate-900 text-lg font-mono font-black outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all tracking-widest" 
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Atas Nama (A.N)</label>
-                  <Input 
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Atas Nama (A.N)</label>
+                  <input 
+                    type="text"
                     placeholder="PT FLASH GLOBAL LOGISTIK" 
                     value={newBank.accountName} 
                     onChange={(e) => setNewBank({...newBank, accountName: e.target.value.toUpperCase()})} 
-                    className="border-slate-200 uppercase font-bold" 
+                    className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-slate-900 text-sm font-black outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all uppercase" 
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tema Warna Label</label>
-                  <select 
-                    value={newBank.color} 
-                    onChange={(e) => setNewBank({...newBank, color: e.target.value})}
-                    className="flex w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 transition-all outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/10"
-                  >
-                    {BANK_COLOR_OPTIONS.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tema Visual Kartu</label>
+                  <div className="relative">
+                    <select 
+                      value={newBank.color} 
+                      onChange={(e) => setNewBank({...newBank, color: e.target.value})}
+                      className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 text-slate-900 text-sm font-bold outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer"
+                    >
+                      {BANK_COLOR_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-6 border-t border-slate-100 bg-white shrink-0 flex gap-4">
-                <Button onClick={() => setIsModalOpen(false)} variant="outline" className="flex-1 border-slate-300">Batal</Button>
-                <Button onClick={handleAddBankSubmit} variant="gold" className="flex-1 shadow-md">
+              <div className="p-6 md:p-8 border-t border-slate-100 bg-slate-50/50 shrink-0 flex flex-col-reverse sm:flex-row gap-3 justify-end">
+                <AdminButton onClick={() => setIsModalOpen(false)} variant="outline" className="h-12 px-6 w-full sm:w-auto bg-white border-slate-300 font-bold">Batal</AdminButton>
+                <AdminButton onClick={handleAddBankSubmit} className="h-12 px-8 w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/30 font-bold border-blue-700">
                   <Plus className="w-4 h-4 mr-1.5" /> Tambah Rekening
-                </Button>
+                </AdminButton>
               </div>
             </motion.div>
           </div>

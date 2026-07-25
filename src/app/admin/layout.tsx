@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminTopNav from "@/components/admin/AdminTopNav"; // <-- IMPORT TOP NAV BARU
+
+// --- IMPORT ISOLASI CSS KHUSUS ADMIN ---
+import "./admin.css";
 
 // --- IMPORT FIREBASE CORE & AUTH SESSION ---
 import { auth, db } from "@/lib/firebase";
@@ -22,7 +26,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [currentRole, setCurrentRole] = useState<Role | "">("");
 
-  // Jalur pengamanan rute Admin
+  // =========================================================================
+  // LOGIC AREA: JANGAN DIUBAH! (Menjaga stabilitas sistem & routing)
+  // =========================================================================
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (pathname === "/admin/login") {
@@ -37,18 +43,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
 
       try {
-        // Verifikasi ulang status role admin di database
         const userDoc = await getDoc(doc(db, "users", user.uid));
         const userData = userDoc.data();
         
-        // Pengecekan aman dan konversi Role Legacy jika ada
         let userRole = (userData?.role || "") as Role | string;
         if (userRole === "admin_ops" || userRole === "admin_cs") userRole = "admin_operational";
         
         if (userDoc.exists() && allowedRoles.includes(userRole as Role)) {
           setCurrentRole(userRole as Role);
           
-          // PROTEKSI MODUL BERDASARKAN ROLE SPESIFIK
           if (userRole === "admin_finance" && pathname === "/admin/vehicles") {
             router.push("/admin/pricing"); 
           }
@@ -71,39 +74,56 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => unsubscribe();
   }, [pathname, router]);
 
-  // State Loading Guard Screen Premium (Light Mode)
+  // =========================================================================
+  // UI/UX AREA: ROMBAKAN MODERN GEN-Z & ENTERPRISE DESKTOP
+  // =========================================================================
+
+  // 1. Loading Guard Screen Premium (Khas Flash Global)
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-bold text-sm">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mb-4 shadow-sm"></div>
-        <span className="animate-pulse tracking-widest uppercase text-xs">Memverifikasi Otoritas Administrator...</span>
+      <div className="h-screen w-full bg-[var(--admin-bg)] flex flex-col items-center justify-center text-[var(--admin-fg-muted)]">
+        <div className="relative w-16 h-16 mb-6">
+          <div className="absolute inset-0 border-4 border-[#7A171D]/20 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-[#7A171D] border-t-[#C5A059] rounded-full animate-spin"></div>
+        </div>
+        <span className="animate-pulse tracking-[0.2em] uppercase text-xs font-semibold text-[#7A171D]">
+          Memverifikasi Akses Sistem...
+        </span>
       </div>
     );
   }
 
-  // Jika di halaman login, bypass layout sidebar dan render form langsung
+  // 2. Bypass layout untuk halaman Login Admin
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
-  // Jika lolos guard perlindungan, render sistem Admin Workspace (Light Mode Pro)
+  // 3. Workspace Admin (Desktop Optimized)
   if (allowedRoles.includes(currentRole as Role)) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex relative overflow-hidden font-sans">
+      <div className="h-screen w-full bg-[var(--admin-bg)] text-[var(--admin-fg)] flex relative overflow-hidden font-sans selection:bg-[#7A171D]/20 selection:text-[#7A171D]">
         
-        {/* Ornamen Premium Background Khusus Admin (Clean Modern) */}
-        <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-600 rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-emerald-600 rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
+        {/* Ornamen Premium Background */}
+        <div className="absolute top-[-15%] right-[-10%] w-[600px] h-[600px] bg-[#7A171D] rounded-full blur-[180px] opacity-[0.04] pointer-events-none" />
+        <div className="absolute bottom-[-15%] left-[-10%] w-[700px] h-[700px] bg-[#C5A059] rounded-full blur-[180px] opacity-[0.04] pointer-events-none" />
 
-        {/* SIDEBAR WORKSPACE ADMIN (COLLAPSIBLE/HOVERABLE) */}
-        <div className="z-50">
+        {/* SIDEBAR WORKSPACE ADMIN */}
+        <div className="z-50 shrink-0">
           <AdminSidebar currentRole={currentRole} pathname={pathname} />
         </div>
 
-        {/* WORKSPACE AREA - Padding kiri disesuaikan dengan lebar Sidebar collapsed */}
-        <main className="flex-1 max-h-screen overflow-y-auto w-full md:pl-20 transition-all duration-300 relative z-10 p-6 md:p-8">
-          <div className="max-w-[1600px] mx-auto w-full">
-            {children}
+        {/* WORKSPACE AREA - BUG FIX: Tambahkan md:pl-[120px] untuk menghindari overlap dengan Floating Sidebar */}
+        <main className="flex-1 h-screen overflow-y-auto admin-scrollbar relative z-10 transition-all duration-300 pl-4 md:pl-[120px] pr-4 md:pr-8 py-6">
+          <div className="min-h-full w-full max-w-[1600px] mx-auto flex flex-col">
+            
+            {/* SUNTIKKAN TOP NAVBAR DI SINI */}
+            <AdminTopNav />
+
+            {/* AREA KONTEN HALAMAN */}
+            <div className="flex-1">
+              {children}
+            </div>
+            
           </div>
         </main>
 

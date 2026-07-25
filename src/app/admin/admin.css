@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* --- ADMIN CANVAS COLORS --- */
+    /* Background utama sedikit abu-abu (slate-50) agar Bento Card warna putih bisa pop-up */
+    --admin-bg: #f8fafc; 
+    --admin-surface: #ffffff;
+    
+    /* --- TYPOGRAPHY --- */
+    /* Slate-900 untuk teks utama (lebih soft dari pure black), Slate-500 untuk secondary */
+    --admin-fg: #0f172a; 
+    --admin-fg-muted: #64748b; 
+    
+    /* --- BORDERS --- */
+    /* Border super tipis khas desain Gen Z / Linear / Vercel style */
+    --admin-border: #e2e8f0; /* slate-200 */
+    --admin-border-hover: #cbd5e1; /* slate-300 */
+
+    /* --- BRAND ACCENTS (Dari Logo Flash Global) --- */
+    --admin-primary: #7A171D;
+    --admin-primary-hover: #9A242B;
+    --admin-primary-light: #fee2e2; /* Soft red untuk background badge/hover */
+    
+    --admin-accent: #C5A059;
+    --admin-accent-hover: #DFBE7B;
+    
+    /* --- SEMANTIC STATUS COLORS (Pastel/Soft vibe) --- */
+    --admin-success-bg: #dcfce7;
+    --admin-success-fg: #166534;
+    --admin-warning-bg: #fef08a;
+    --admin-warning-fg: #854d0e;
+    --admin-info-bg: #e0f2fe;
+    --admin-info-fg: #075985;
+  }
+
+  /* Kunci tema Admin HANYA di Light Mode */
+  body {
+    @apply bg-[var(--admin-bg)] text-[var(--admin-fg)] antialiased;
+  }
+
+  /* Custom Selection Text matching brand */
+  ::selection {
+    background-color: rgba(122, 23, 29, 0.15); /* Maroon transparan */
+    color: var(--admin-primary);
+  }
+}
+
+@layer utilities {
+  /* --- BENTO-BOX LAYOUT UTILITIES --- */
+  .bento-grid {
+    @apply grid gap-4 md:gap-6 auto-rows-min;
+  }
+  
+  .bento-card {
+    @apply bg-[var(--admin-surface)] rounded-[1.25rem] border border-[var(--admin-border)] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all duration-300 hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:border-[var(--admin-border-hover)] overflow-hidden;
+  }
+
+  /* --- MODERN GLASSMORPHISM --- */
+  /* Lebih halus dari shadow-glass lama, cocok untuk floating navbar atau modal */
+  .admin-glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)];
+  }
+
+  .admin-glass-maroon {
+    @apply bg-[#7A171D]/5 backdrop-blur-md border border-[#7A171D]/10 text-[#7A171D];
+  }
+
+  /* --- TYPOGRAPHY UTILITIES --- */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* --- MODERN SCROLLBAR --- */
+  /* Scrollbar yang tipis dan elegan khusus Admin */
+  .admin-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .admin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .admin-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full transition-colors;
+  }
+  .admin-scrollbar:hover::-webkit-scrollbar-thumb {
+    @apply bg-slate-300;
+  }
+  
+  /* Utility untuk menyembunyikan scrollbar sepenuhnya */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

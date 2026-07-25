@@ -3,17 +3,26 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   Search, History, ShieldAlert, Filter, 
-  ChevronLeft, ChevronRight, Activity, Database
+  ChevronLeft, ChevronRight, Activity, Database, Key, ShieldCheck,
+  Globe
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 // IMPORT GLOBAL TYPES
 import { AuditLog } from "@/types/support";
+
+// =========================================================================
+// CUSTOM STYLES: APPLE GLASSMORPHISM (Dark/Security Theme)
+// =========================================================================
+const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
+const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(15,23,42,0.1)] transition-all duration-300 rounded-2xl";
 
 export default function AdminAuditPage() {
   const router = useRouter();
@@ -49,7 +58,7 @@ export default function AdminAuditPage() {
 
   // Safe Date Parsing
   const formatTime = (ts?: unknown) => {
-    if (!ts) return "Memproses...";
+    if (!ts) return { date: "Memproses...", time: "" };
     let dateObj: Date;
     const timestamp = ts as { toDate?: () => Date, seconds?: number };
     
@@ -61,31 +70,32 @@ export default function AdminAuditPage() {
       dateObj = new Date(ts as string | number);
     }
     
-    return dateObj.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return {
+      date: dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
   };
 
   // Smart Color Coding untuk Action
-  const getActionBadgeClass = (action: string = "") => {
+  const getActionTheme = (action: string = "") => {
     const act = action.toLowerCase();
     if (act.includes('delete') || act.includes('remove') || act.includes('suspend') || act.includes('reject')) {
-      return 'bg-red-50 text-red-700 border-red-200';
+      return { badge: "danger", text: "text-red-600" };
     }
     if (act.includes('create') || act.includes('add') || act.includes('approve') || act.includes('lunas')) {
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return { badge: "success", text: "text-emerald-600" };
     }
     if (act.includes('update') || act.includes('edit') || act.includes('modify') || act.includes('ubah')) {
-      return 'bg-blue-50 text-blue-700 border-blue-200';
+      return { badge: "info", text: "text-blue-600" };
     }
-    return 'bg-slate-100 text-slate-600 border-slate-200';
+    return { badge: "default", text: "text-slate-600" };
   };
 
-  // Ekstrak unik modul dari database untuk dropdown filter dinamis
   const uniqueModules = useMemo(() => {
     const modules = new Set(logs.map(l => l.targetModule).filter(Boolean));
     return Array.from(modules).sort();
   }, [logs]);
 
-  // ENGINE FILTERING
   const filteredLogs = useMemo(() => {
     let res = [...logs];
     
@@ -94,7 +104,8 @@ export default function AdminAuditPage() {
       res = res.filter(l => 
         (l.adminEmail || "").toLowerCase().includes(sq) || 
         (l.action || "").toLowerCase().includes(sq) || 
-        (l.targetId || "").toLowerCase().includes(sq)
+        (l.targetId || "").toLowerCase().includes(sq) ||
+        (l.targetModule || "").toLowerCase().includes(sq)
       );
     }
     
@@ -110,13 +121,8 @@ export default function AdminAuditPage() {
     setCurrentPage(1);
   }, [searchQuery, filterModule]);
 
-  // ENGINE PAGINATION
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
   const currentData = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  // =========================================================================
-  // GUARDS: DITEMPATKAN DI BAWAH SEMUA HOOKS AGAR TIDAK MELANGGAR ATURAN REACT
-  // =========================================================================
 
   // RBAC GUARD (Hanya Superadmin yang boleh melihat Audit Trail)
   if (currentUser && currentUser.role !== 'superadmin') {
@@ -125,154 +131,190 @@ export default function AdminAuditPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Audit Trail ini sangat rahasia dan hanya dapat diakses oleh Superadmin.</p>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12 font-sans">
+    <div className="space-y-8 pb-20 font-sans max-w-7xl mx-auto">
 
-      <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl relative overflow-hidden text-white">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full blur-[80px] pointer-events-none" />
-        <div className="relative z-10">
-          <Badge variant="default" className="text-slate-300 border-slate-700 mb-3 px-3 py-1 shadow-sm text-[10px] uppercase tracking-widest bg-slate-800/50 backdrop-blur-sm">
-            Security & Compliance
-          </Badge>
-          <h1 className="text-2xl md:text-3xl font-black flex items-center gap-3 tracking-tight">
-            <History className="w-8 h-8 text-red-400" /> Audit Trail Keamanan
+      {/* HEADER MODUL */}
+      <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden`}>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-red-500 rounded-full blur-[100px] opacity-10 pointer-events-none" />
+        <div className="relative z-10 flex-1">
+          <AdminBadge variant="danger" className="mb-4 bg-red-100 text-red-700 border-red-200">System Security</AdminBadge>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <History className="w-8 h-8 text-red-600" />
+            Audit Trail Keamanan
           </h1>
-          <p className="text-slate-400 text-sm mt-2 font-medium max-w-xl leading-relaxed">
-            Jejak log aktivitas sistem yang tidak dapat diubah (Immutable). Pantau setiap manipulasi data krusial untuk investigasi dan kepatuhan.
+          <p className="text-slate-500 text-sm mt-2 max-w-2xl font-medium leading-relaxed">
+            Jejak log aktivitas sistem yang tidak dapat diubah (Immutable). Pantau setiap manipulasi data krusial untuk investigasi, akuntabilitas, dan kepatuhan standar keamanan data.
           </p>
         </div>
-        <div className="relative z-10 bg-slate-800/50 border border-slate-700 p-4 rounded-2xl flex items-center gap-4 shrink-0 backdrop-blur-sm">
-           <Database className="w-8 h-8 text-slate-400" />
+
+        <div className="relative z-10 bg-slate-900 border border-slate-800 p-6 rounded-[1.5rem] flex items-center gap-5 shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+           <Database className="w-10 h-10 text-emerald-400" />
            <div>
-             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Total Rekaman Event</p>
-             <p className="text-2xl font-black text-slate-200">{logs.length.toLocaleString('id-ID')}</p>
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Rekaman Event</p>
+             <p className="text-3xl font-black text-white font-mono tracking-tight">{logs.length.toLocaleString('id-ID')}</p>
            </div>
         </div>
       </div>
 
-      <div className="bg-red-50/50 border border-red-100 text-red-800 text-[11px] md:text-xs font-medium rounded-2xl p-5 flex items-start gap-3 shadow-sm">
-        <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-        <p className="leading-relaxed">Sistem ini mematuhi standar <strong>Data Compliance Internasional</strong>. Setiap perubahan data krusial di-*generate* otomatis oleh sistem *backend* (Cloud Functions) dan tidak dapat diedit atau dihapus oleh level otorisasi manapun demi keperluan audit.</p>
+      {/* ALERT COMPLIANCE */}
+      <div className="bg-red-50/80 backdrop-blur-md border border-red-200 p-5 rounded-[1.5rem] flex items-start gap-4 shadow-sm relative overflow-hidden">
+        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-red-500"></div>
+        <ShieldCheck className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-red-800 font-medium leading-relaxed">
+          <b className="font-black tracking-wide">Data Compliance Level 3.</b> Setiap log yang ada di halaman ini dihasilkan secara otomatis oleh <i>Cloud Functions</i> (*server-side*). Data tidak dapat dimanipulasi, diedit, atau dihapus oleh siapapun (termasuk Superadmin) demi menjaga integritas audit.
+        </p>
       </div>
 
-      {/* TOOLBAR FILTER */}
-      <div className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row gap-4 justify-between items-center shadow-sm">
-        <div className="relative w-full sm:flex-1">
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Cari email admin, aksi, atau ID target..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-slate-900 outline-none text-xs font-semibold focus:border-slate-500 focus:bg-white transition-all shadow-inner" 
-          />
-        </div>
-        <div className="relative w-full sm:w-64 shrink-0">
-          <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <select 
-            value={filterModule} 
-            onChange={(e) => setFilterModule(e.target.value)} 
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-8 py-3 text-slate-700 text-xs font-bold outline-none focus:border-slate-500 focus:bg-white appearance-none shadow-inner cursor-pointer"
-          >
-            <option value="All">Semua Modul Target</option>
-            {uniqueModules.map(mod => (
-              <option key={mod} value={mod}>{mod}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* TABEL DATA */}
-      <div className="bg-white border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm flex flex-col min-h-[500px]">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center flex-1 min-h-[400px]">
-            <div className="w-10 h-10 border-4 border-slate-100 border-t-red-600 rounded-full animate-spin mb-4 shadow-sm"></div>
-            <p className="text-slate-400 font-bold animate-pulse text-sm uppercase tracking-widest">Dekripsi Log Keamanan...</p>
+      <div className="flex flex-col gap-6">
+        
+        {/* TOOLBAR FILTER & SEARCH */}
+        <div className={`${glassPanel} rounded-[1.5rem] p-4 flex flex-col lg:flex-row gap-4 justify-between items-center z-20 relative`}>
+          <div className="relative w-full lg:w-1/2">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+            <input 
+              type="text" 
+              placeholder="Cari email admin, IP, atau target ID..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-4 py-2.5 text-sm outline-none focus:border-slate-800 focus:ring-[3px] focus:ring-slate-800/15 shadow-sm font-bold text-slate-700 transition-all hover:bg-white placeholder:text-slate-400 placeholder:font-medium" 
+            />
           </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto flex-1 custom-scrollbar">
-              <table className="w-full text-left border-collapse text-xs relative">
-                <thead className="sticky top-0 bg-slate-50 shadow-sm z-10 border-b border-slate-200">
-                  <tr className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">
-                    <th className="p-5 pl-6">Waktu Eksekusi (Server)</th>
-                    <th className="p-5">Pelaku / Aktor (Admin)</th>
-                    <th className="p-5">Modul & Target ID</th>
-                    <th className="p-5 pr-6 w-1/3">Deskripsi Aktivitas Terenkripsi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {currentData.length === 0 ? (
-                    <tr><td colSpan={4} className="p-16 text-center text-slate-400 font-medium flex flex-col items-center justify-center"><Activity className="w-10 h-10 mb-3 opacity-20"/> Tidak ada aktivitas log yang cocok dengan filter.</td></tr>
-                  ) : currentData.map((log, i) => (
-                    <tr key={log.id || i} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-5 pl-6 align-top">
-                        <p className="text-slate-900 font-mono font-bold text-[11px] whitespace-nowrap bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm w-fit">
-                          {formatTime(log.timestamp)}
-                        </p>
-                      </td>
-                      <td className="p-5 align-top">
-                        <p className="font-bold text-slate-900 flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-slate-400"/> {log.adminEmail}</p>
-                        {log.ipAddress && <p className="text-[9px] text-slate-400 font-mono mt-1">IP: {log.ipAddress}</p>}
-                      </td>
-                      <td className="p-5 align-top">
-                        <div className="flex flex-col gap-1.5 items-start">
-                          <span className="px-2.5 py-0.5 bg-slate-800 text-white rounded text-[9px] uppercase font-black tracking-widest shadow-sm">
-                            {log.targetModule}
-                          </span>
-                          {log.targetId && <span className="text-[10px] font-mono text-slate-500 font-bold border-b border-slate-200 border-dashed pb-0.5" title="Target Document ID">ID: {log.targetId.substring(0,10)}...</span>}
-                        </div>
-                      </td>
-                      <td className="p-5 pr-6 align-top">
-                        <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border inline-block mb-2 shadow-sm ${getActionBadgeClass(log.action)}`}>
-                          {log.action}
-                        </span>
-                        {log.details && <p className="text-[11px] text-slate-600 font-medium leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-100">{log.details}</p>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          
+          <div className="flex flex-wrap lg:flex-nowrap w-full lg:w-auto gap-3">
+            <div className="relative flex-1 lg:flex-none w-full lg:w-64">
+              <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+              <select 
+                value={filterModule} 
+                onChange={(e) => setFilterModule(e.target.value)} 
+                className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-slate-800 focus:ring-[3px] focus:ring-slate-800/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer"
+              >
+                <option value="All">Semua Modul Filter</option>
+                {uniqueModules.map(mod => (
+                  <option key={mod} value={mod}>{mod}</option>
+                ))}
+              </select>
             </div>
+          </div>
+        </div>
 
-            {/* PAGINATION CONTROLS */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-between shrink-0">
-                <p className="text-xs font-bold text-slate-500 hidden sm:block">
-                  Menampilkan <span className="text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> - <span className="text-slate-900">{Math.min(currentPage * itemsPerPage, filteredLogs.length)}</span> dari <span className="text-slate-900">{filteredLogs.length}</span> log
-                </p>
-                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="h-9 text-xs border-slate-300 font-bold"
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
-                  </Button>
-                  <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-2 rounded-lg border border-slate-200">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="h-9 text-xs border-slate-300 font-bold"
-                  >
-                    Next <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
+        {/* LIST LOG AKTIVITAS (ROW CARDS) */}
+        <div className="min-h-[500px]">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full min-h-[400px]">
+              <Activity className="w-12 h-12 mb-4 text-red-600 animate-pulse" />
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse">Mendekripsi Log Keamanan...</p>
+            </div>
+          ) : currentData.length === 0 ? (
+            <div className={`${glassPanel} rounded-[2rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full border border-dashed border-slate-300`}>
+              <ShieldAlert className="w-16 h-16 mb-4 opacity-20 text-slate-500" />
+              <h4 className="text-slate-700 font-black text-xl tracking-tight mb-2">Tidak Ada Log Ditemukan</h4>
+              <p className="font-medium text-slate-500">Coba gunakan kata kunci pencarian yang lain.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <AnimatePresence>
+                {currentData.map((log, i) => {
+                  const { date, time } = formatTime(log.timestamp);
+                  const theme = getActionTheme(log.action);
+
+                  return (
+                    <motion.div 
+                      key={log.id || i} 
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: i * 0.02 }}
+                      className={`${glassRow} p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6 group border border-white`}
+                    >
+                      {/* Kolom 1: Timestamp & IP */}
+                      <div className="flex flex-col gap-2 w-full lg:w-[15%] shrink-0 border-b lg:border-b-0 border-slate-100 pb-4 lg:pb-0">
+                        <div className="bg-slate-100/80 border border-slate-200 rounded-lg px-3 py-2 w-fit shadow-sm">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">{date}</p>
+                          <p className="text-sm font-black text-slate-900 font-mono tracking-tight leading-none">{time}</p>
+                        </div>
+                        {log.ipAddress && (
+                          <p className="text-[9px] text-slate-400 font-mono font-bold flex items-center gap-1"><Globe className="w-3 h-3"/> {log.ipAddress}</p>
+                        )}
+                      </div>
+
+                      {/* Kolom 2: Aktor (Admin) */}
+                      <div className="w-full lg:w-[25%] flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-sm border border-slate-700">
+                          <Key className="w-4 h-4" />
+                        </div>
+                        <div className="overflow-hidden pt-0.5">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Aktor / Admin</p>
+                          <p className="text-sm font-bold text-slate-900 truncate">{log.adminEmail}</p>
+                        </div>
+                      </div>
+
+                      {/* Kolom 3: Modul Target */}
+                      <div className="w-full lg:w-[20%] flex flex-col">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Modul Target</p>
+                        <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[10px] uppercase font-black tracking-widest shadow-sm w-fit truncate max-w-full">
+                          {log.targetModule}
+                        </span>
+                        {log.targetId && (
+                          <p className="text-[10px] font-mono text-slate-400 mt-1.5 truncate max-w-full" title={log.targetId}>ID: {log.targetId}</p>
+                        )}
+                      </div>
+
+                      {/* Kolom 4: Aksi & Deskripsi */}
+                      <div className="w-full lg:w-[40%] flex flex-col gap-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100 shadow-inner h-full min-h-[80px]">
+                        <div className="flex items-center gap-2">
+                          {/* @ts-ignore */}
+                          <AdminBadge variant={theme.badge} className="text-[9px] uppercase tracking-widest py-0.5 px-2">{log.action}</AdminBadge>
+                        </div>
+                        {log.details && (
+                          <p className="text-[11px] font-medium text-slate-600 leading-relaxed line-clamp-2" title={log.details}>
+                            {log.details}
+                          </p>
+                        )}
+                      </div>
+
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+
+        {/* PAGINATION CONTROLS */}
+        {totalPages > 1 && (
+          <div className={`${glassPanel} rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-20 relative border border-white mt-2`}>
+            <p className="text-xs font-bold text-slate-500">
+              Menampilkan <span className="text-slate-900">{(currentPage - 1) * itemsPerPage + 1}</span> - <span className="text-slate-900">{Math.min(currentPage * itemsPerPage, filteredLogs.length)}</span> dari <span className="text-slate-900">{filteredLogs.length}</span> rekam jejak
+            </p>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <AdminButton 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="h-10 text-xs border-slate-200 font-bold bg-white"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+              </AdminButton>
+              <div className="h-10 px-4 flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200 text-xs font-black text-slate-700 font-mono tracking-widest min-w-[80px]">
+                {currentPage} / {totalPages}
               </div>
-            )}
-          </>
+              <AdminButton 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="h-10 text-xs border-slate-200 font-bold bg-white"
+              >
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </AdminButton>
+            </div>
+          </div>
         )}
+
       </div>
     </div>
   );

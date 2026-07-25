@@ -14,8 +14,9 @@ import {
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { AdminInput } from "@/components/admin/ui/AdminInput";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 import { DriverData } from "@/types/admin";
@@ -33,10 +34,18 @@ export default function FleetManagementDashboard() {
 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // =========================================================================
+  // CUSTOM STYLES: APPLE GLASSMORPHISM
+  // =========================================================================
+  const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
+  const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
+
+  // =========================================================================
+  // LOGIC AREA
+  // =========================================================================
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // 🚀 THE ULTIMATE MERGE: Menarik data dari 'users' dan 'driver_wallets'
       const usersQuery = query(collection(db, "users"), where("role", "==", "driver"));
       
       const [usersSnap, walletsSnap] = await Promise.all([
@@ -46,12 +55,10 @@ export default function FleetManagementDashboard() {
       
       const dataMap = new Map<string, DriverData>();
 
-      // 1. Masukkan data dari tabel users (Akun Dasar yang baru daftar)
       usersSnap.docs.forEach(d => {
         dataMap.set(d.id, { id: d.id, ...d.data() } as DriverData);
       });
 
-      // 2. Timpa & Lengkapi dengan data dari tabel driver_wallets (Data Valid & Armada)
       walletsSnap.docs.forEach(d => {
         const existing = dataMap.get(d.id) || {};
         dataMap.set(d.id, { ...existing, id: d.id, ...d.data() } as DriverData);
@@ -89,16 +96,12 @@ export default function FleetManagementDashboard() {
 
   const handleApprove = async (partnerId: string) => {
     if (!confirm("Setujui pendaftaran dan aktifkan entitas mitra ini?")) return;
-    
     try {
       await updateDoc(doc(db, "driver_wallets", partnerId), { status: "Active", isSuspended: false });
-      
-      // Update di tabel users jika akun memiliki login
       const targetPartner = partners.find(p => p.id === partnerId);
       if (targetPartner && targetPartner.email) {
         await updateDoc(doc(db, "users", partnerId), { status: "Active" }).catch(()=> {});
       }
-
       showToast("success", "Mitra berhasil diverifikasi dan aktif.");
       setPartners(prev => prev.map(p => p.id === partnerId ? { ...p, status: "Active", isSuspended: false } : p));
     } catch (error) {
@@ -109,7 +112,6 @@ export default function FleetManagementDashboard() {
 
   const handleToggleSuspend = async (partnerId: string, currentStatus: boolean) => {
     if (!confirm(currentStatus ? "Yakin ingin mengaktifkan kembali entitas ini?" : "PERINGATAN! Entitas yang di-suspend tidak akan bisa menerima order. Yakin suspend?")) return;
-    
     try {
       await updateDoc(doc(db, "driver_wallets", partnerId), { isSuspended: !currentStatus });
       showToast("success", "Status operasional diperbarui.");
@@ -121,7 +123,6 @@ export default function FleetManagementDashboard() {
 
   const handleDelete = async (partnerId: string) => {
     if (!confirm("Tindakan ini sangat fatal! Menghapus mitra akan menghilangkan seluruh rekam jejak. Anda yakin?")) return;
-
     try {
       await deleteDoc(doc(db, "driver_wallets", partnerId)).catch(() => {});
       await deleteDoc(doc(db, "users", partnerId)).catch(() => {});
@@ -138,7 +139,7 @@ export default function FleetManagementDashboard() {
     let result = [...partners];
     
     if (statusFilter === "Basic") {
-      result = result.filter(p => !p.partnerType); // FIX: Hanya yang belum punya PartnerType
+      result = result.filter(p => !p.partnerType); 
     } else if (statusFilter === "Pending") {
       result = result.filter(p => p.partnerType && p.status === "Pending");
     } else if (statusFilter === "Suspended") {
@@ -162,7 +163,7 @@ export default function FleetManagementDashboard() {
 
   const stats = {
     totalEntities: partners.length,
-    basicAccounts: partners.filter(p => !p.partnerType).length, // FIX: Belum pilih kemitraan
+    basicAccounts: partners.filter(p => !p.partnerType).length, 
     individu: partners.filter(p => p.partnerType === "Individual").length,
     vendor: partners.filter(p => p.partnerType === "Vendor").length,
     supirTruk: partners.filter(p => p.partnerType === "FleetDriver").length,
@@ -170,12 +171,15 @@ export default function FleetManagementDashboard() {
     pending: partners.filter(p => p.partnerType && p.status === "Pending").length
   };
 
+  // =========================================================================
+  // UI AREA
+  // =========================================================================
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <Button onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</Button>
+        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -183,70 +187,90 @@ export default function FleetManagementDashboard() {
   return (
     <div className="space-y-6 font-sans pb-10">
       
+      {/* GLOBAL TOAST NOTIFICATIONS */}
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toast.msg}
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
+            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-            <Users2 className="w-7 h-7 text-[#7A171D]" /> Pusat Verifikasi & Ekosistem
+      {/* 1. HEADER */}
+      <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:bg-white/80`}>
+        <div className="relative z-10 space-y-3">
+          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#9A242B] to-[#7A171D] shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),0_8px_16px_rgba(122,23,29,0.3)] border border-[#5A0E13]">
+              <Users2 className="w-6 h-6 text-white" strokeWidth={2.5} />
+            </div>
+            Verifikasi & Ekosistem
           </h1>
-          <p className="text-slate-500 text-sm mt-1.5">Dashboard utama untuk memantau pendaftar baru dan merangkum seluruh ekosistem mitra.</p>
+          <p className="text-slate-500 text-sm max-w-xl font-medium mt-2">
+            Dashboard utama untuk memantau pendaftar baru dan merangkum seluruh ekosistem mitra pengemudi & armada vendor.
+          </p>
         </div>
-        <Button onClick={() => router.push("/admin/users/drivers/add")} className="bg-[#7A171D] hover:bg-[#5A0E13] text-white shadow-md shadow-[#7A171D]/20 font-bold h-12 px-6">
+        <AdminButton onClick={() => router.push("/admin/users/drivers/add")} className="h-12 shadow-[0_8px_20px_rgba(122,23,29,0.25)]">
           <Plus className="w-4 h-4 mr-2" /> Pendaftaran Manual
-        </Button>
+        </AdminButton>
       </div>
 
-      {/* STATISTIK HELICOPTER VIEW TERLENGKAP */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm relative overflow-hidden group cursor-pointer hover:border-slate-400 transition-colors" onClick={() => setStatusFilter("Basic")}>
-          <div className="absolute top-0 right-0 p-2 opacity-5"><UserMinus className="w-10 h-10 text-slate-600"/></div>
-          <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Akun Dasar</span>
-          <p className="text-xl font-black text-slate-700 mt-1">{stats.basicAccounts}</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm relative overflow-hidden group hover:border-[#C5A059] transition-colors cursor-pointer" onClick={() => router.push('/admin/users/drivers/individual')}>
-          <div className="absolute top-0 right-0 p-2 opacity-10"><User className="w-10 h-10 text-[#C5A059]"/></div>
-          <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Mitra Individu</span>
-          <p className="text-xl font-black text-slate-900 mt-1">{stats.individu}</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm relative overflow-hidden group hover:border-blue-500 transition-colors cursor-pointer" onClick={() => router.push('/admin/users/drivers/vendor')}>
-          <div className="absolute top-0 right-0 p-2 opacity-10"><Building2 className="w-10 h-10 text-blue-600"/></div>
-          <span className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">Vendor PT</span>
-          <p className="text-xl font-black text-slate-900 mt-1">{stats.vendor}</p>
-        </div>
-        <div className="bg-[#7A171D]/5 border border-[#7A171D]/20 rounded-xl p-3 shadow-sm relative overflow-hidden group hover:bg-[#7A171D]/10 transition-colors cursor-pointer" onClick={() => router.push('/admin/users/drivers/fleet-drivers')}>
-          <div className="absolute top-0 right-0 p-2 opacity-10"><UserSquare2 className="w-10 h-10 text-[#7A171D]"/></div>
-          <span className="text-[#7A171D] text-[9px] font-bold uppercase tracking-wider">Sopir Vendor</span>
-          <p className="text-xl font-black text-[#7A171D] mt-1">{stats.supirTruk}</p>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 shadow-lg relative overflow-hidden group hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => router.push('/admin/users/drivers/fleet-vehicles')}>
-          <div className="absolute top-0 right-0 p-2 opacity-10"><Truck className="w-10 h-10 text-white"/></div>
-          <span className="text-slate-400 text-[9px] font-bold uppercase tracking-wider">Armada Truk</span>
-          <p className="text-xl font-black text-white mt-1">{stats.armadaTruk}</p>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 shadow-sm relative overflow-hidden group cursor-pointer" onClick={() => setStatusFilter("Pending")}>
-          <div className="absolute top-0 right-0 p-2 opacity-10"><Clock className="w-10 h-10 text-amber-500"/></div>
-          <span className="text-amber-700 text-[9px] font-bold uppercase tracking-wider">Antrean Verifikasi</span>
-          <p className="text-xl font-black text-amber-600 mt-1">{stats.pending}</p>
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      {/* 2. STATISTIK HELICOPTER VIEW TERLENGKAP (Mini Bento Glass) */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         
-        <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row gap-4 bg-slate-50/50">
-          <div className="relative flex-1">
-            <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="text" placeholder="Cari nama, PT, plat nomor, email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl pl-11 pr-4 py-2.5 text-slate-900 outline-none text-sm focus:border-[#7A171D] transition-all shadow-sm" />
+        <div className={`${glassPanel} p-5 relative overflow-hidden group cursor-pointer hover:border-slate-400 hover:bg-white`} onClick={() => setStatusFilter("Basic")}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-slate-400 rounded-full blur-[60px] opacity-20" />
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><UserMinus className="w-3.5 h-3.5"/> Akun Dasar</span>
+          <p className="text-2xl font-black text-slate-800 mt-2 relative z-10">{stats.basicAccounts}</p>
+        </div>
+
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#C5A059] hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/individual')}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-[#C5A059] rounded-full blur-[60px] opacity-20" />
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-[#C5A059]"/> Mitra Individu</span>
+          <p className="text-2xl font-black text-slate-900 mt-2 relative z-10">{stats.individu}</p>
+        </div>
+
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-blue-500 hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/vendor')}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-blue-500 rounded-full blur-[60px] opacity-20" />
+          <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-blue-500"/> Vendor PT</span>
+          <p className="text-2xl font-black text-slate-900 mt-2 relative z-10">{stats.vendor}</p>
+        </div>
+
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#7A171D] hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/fleet-drivers')}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-[#7A171D] rounded-full blur-[60px] opacity-20" />
+          <span className="text-[#7A171D] text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><UserSquare2 className="w-3.5 h-3.5"/> Sopir Vendor</span>
+          <p className="text-2xl font-black text-[#7A171D] mt-2 relative z-10">{stats.supirTruk}</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-950 rounded-[1.5rem] p-5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_8px_20px_rgba(15,23,42,0.3)] relative overflow-hidden group hover:brightness-110 cursor-pointer transition-all" onClick={() => router.push('/admin/users/drivers/fleet-vehicles')}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-slate-500 rounded-full blur-[60px] opacity-20" />
+          <span className="text-slate-300 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-white"/> Armada Truk</span>
+          <p className="text-2xl font-black text-white mt-2 relative z-10">{stats.armadaTruk}</p>
+        </div>
+
+        <div className={`${glassPanel} p-5 relative overflow-hidden group cursor-pointer border-amber-200/50 hover:bg-amber-50/50`} onClick={() => setStatusFilter("Pending")}>
+          <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-amber-500 rounded-full blur-[60px] opacity-20" />
+          <span className="text-amber-700 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Verifikasi</span>
+          <p className="text-2xl font-black text-amber-700 mt-2 relative z-10">{stats.pending}</p>
+        </div>
+      </div>
+
+      {/* 3. MAIN DATA: CARD-BASED LIST */}
+      <div className="flex flex-col gap-6">
+        
+        {/* Filters & Search Bar */}
+        <div className={`${glassPanel} rounded-[1.5rem] p-4 flex flex-col lg:flex-row gap-4 justify-between items-center z-20 relative`}>
+          <div className="w-full lg:w-1/3">
+            <AdminInput 
+              leftIcon={<Search className="w-4 h-4" />}
+              placeholder="Cari nama, PT, plat nomor, email..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+            />
           </div>
-          <div className="relative">
-            <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "All" | "Basic" | "Pending" | "Active" | "Suspended")} className="bg-white border border-slate-300 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none focus:border-[#7A171D] shadow-sm appearance-none font-semibold text-slate-700 min-w-[200px]">
+          
+          <div className="relative w-full lg:w-auto shrink-0">
+            <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#7A171D] focus:ring-[3px] focus:ring-[#7A171D]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[240px]">
               <option value="All">Semua Kondisi & Status</option>
               <option value="Basic">Akun Dasar (Pre-Onboard)</option>
               <option value="Pending">Menunggu Verifikasi</option>
@@ -256,129 +280,137 @@ export default function FleetManagementDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto min-h-[400px]">
+        {/* Card Layout Float */}
+        <div className="space-y-4 min-h-[500px]">
+          
           {isLoading ? (
-            <div className="p-20 flex flex-col items-center gap-4 text-slate-500"><Activity className="w-8 h-8 text-[#7A171D] animate-pulse" /> Sinkronisasi Database...</div>
+            <div className="flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full">
+              <Activity className="w-12 h-12 mb-4 text-[#7A171D] animate-pulse" />
+              <p>Menyelaraskan Ekosistem Database...</p>
+            </div>
           ) : processedData.length === 0 ? (
-            <div className="p-20 text-center text-slate-500 font-medium">Tidak ada data yang sesuai filter.</div>
+            <div className={`${glassPanel} rounded-[2rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full`}>
+              <Users2 className="w-16 h-16 mb-4 opacity-20" />
+              <p>Tidak ada entitas mitra yang sesuai dengan filter.</p>
+            </div>
           ) : (
-            <table className="w-full text-left border-collapse text-sm relative">
-              <thead className="sticky top-0 bg-white shadow-sm z-10">
-                <tr className="text-slate-500 uppercase font-bold tracking-wider border-b border-slate-200 text-[10px]">
-                  <th className="p-5 pl-6">Profil & Entitas</th>
-                  <th className="p-5">Kategori Mitra</th>
-                  <th className="p-5">Kelengkapan Data</th>
-                  <th className="p-5">Status App</th>
-                  <th className="p-5 pr-6 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {processedData.map(p => {
-                  // FIX LOGIC: Hanya dianggap Basic jika partnerType benar-benar tidak ada
-                  const isBasic = !p.partnerType;
+            processedData.map((p, idx) => {
+              const isBasic = !p.partnerType;
+              let badgeVariant: "success"|"warning"|"danger"|"default" = "default";
+              
+              if (isBasic) badgeVariant = "default";
+              else if (p.status === "Pending") badgeVariant = "warning";
+              else if (p.isSuspended) badgeVariant = "danger";
+              else badgeVariant = "success";
 
-                  let rowClass = "hover:bg-slate-50 transition-colors";
-                  if (isBasic) rowClass = "bg-slate-50/50 hover:bg-slate-100/50 transition-colors";
-                  else if (p.status === "Pending") rowClass = "bg-amber-50/30 hover:bg-amber-50/60 transition-colors";
-                  else if (p.isSuspended) rowClass = "bg-red-50/30 hover:bg-red-50/60 transition-colors";
+              return (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                  key={p.id} 
+                  className={`${glassCard} p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center ${isBasic ? 'opacity-70 hover:opacity-100' : ''}`}
+                >
+                  
+                  {/* KOLOM 1: PROFIL & ENTITAS */}
+                  <div className="lg:col-span-4 flex items-start gap-4">
+                    <div className="relative w-14 h-14 rounded-2xl border border-white shadow-[0_4px_10px_rgba(0,0,0,0.05)] shrink-0 overflow-hidden bg-white/60 flex items-center justify-center">
+                       {p.fotoProfileUrl ? <Image src={String(p.fotoProfileUrl)} alt="Foto" fill className="object-cover" sizes="56px" /> : 
+                        isBasic ? <UserMinus className="w-6 h-6 text-slate-300" /> :
+                        p.partnerType === "Vendor" ? <Building2 className="w-6 h-6 text-[#7A171D]" /> :
+                        p.partnerType === "FleetVehicle" ? <Truck className="w-6 h-6 text-slate-400" /> :
+                        <User className="w-6 h-6 text-[#C5A059]" />
+                       }
+                    </div>
+                    <div className="flex flex-col gap-1 w-full">
+                      <p className="font-black text-slate-900 text-sm truncate max-w-[200px]" title={String(p.companyName || p.name || "Pendaftar Baru")}>
+                        {String(p.companyName || p.name || "Pendaftar Baru")}
+                      </p>
+                      {(p.phone || p.email || p.licensePlate) && (
+                        <p className="text-[11px] text-slate-500 font-mono font-medium truncate max-w-[200px]">
+                          {String(p.phone || p.email || p.licensePlate)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* KOLOM 2: KATEGORI MITRA */}
+                  <div className="lg:col-span-2 flex flex-col items-start gap-2">
+                    {isBasic ? (
+                      <AdminBadge variant="outline" className="text-[9px]">Belum Pilih Jalur</AdminBadge>
+                    ) : p.partnerType === "Vendor" ? (
+                      <span className="text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg shadow-sm">PT / VENDOR</span>
+                    ) : p.partnerType === "Individual" ? (
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-1 rounded w-fit font-bold uppercase tracking-widest flex items-center gap-1.5"><Truck className="w-3 h-3 text-slate-400"/> {String(p.vehicleType || "Armada")}</span>
+                        <span className="text-[10px] font-black text-[#C5A059] uppercase tracking-widest">Sopir Pribadi</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5 w-full">
+                        {p.vehicleType && <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-1 rounded w-fit font-bold uppercase tracking-widest flex items-center gap-1.5"><Truck className="w-3 h-3 text-slate-400"/> {String(p.vehicleType)}</span>}
+                        <span className="text-[9px] bg-white border border-[#C5A059]/30 text-[#A68345] px-2 py-1 rounded font-bold truncate max-w-[150px] shadow-sm" title={String(p.vendorName || "Vendor")}>PT: {String(p.vendorName || "Unknown")}</span>
+                      </div>
+                    )}
+                  </div>
 
-                  return (
-                    <tr key={p.id} className={rowClass}>
-                      <td className="p-5 pl-6 align-top">
-                        <div className="flex items-center gap-3">
-                          <div className="relative w-10 h-10 rounded-xl border border-slate-200 shrink-0 overflow-hidden bg-white flex items-center justify-center shadow-sm">
-                             {p.fotoProfileUrl ? <Image src={String(p.fotoProfileUrl)} alt="Foto" fill className="object-cover" sizes="40px" /> : 
-                              isBasic ? <UserMinus className="w-5 h-5 text-slate-300" /> :
-                              p.partnerType === "Vendor" ? <Building2 className="w-5 h-5 text-slate-400" /> :
-                              p.partnerType === "FleetVehicle" ? <Truck className="w-5 h-5 text-slate-400" /> :
-                              <User className="w-5 h-5 text-slate-400" />
-                             }
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900">{String(p.companyName || p.name || "Pendaftar Baru")}</p>
-                            <p className="text-[10px] font-black text-[#C5A059] uppercase tracking-widest mt-0.5">{String(p.partnerType || "User Biasa")}</p>
-                            {(p.phone || p.email || p.licensePlate) ? <p className="text-xs text-slate-500 font-mono mt-0.5">{String(p.phone || p.email || p.licensePlate)}</p> : null}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-5 align-top">
-                        {isBasic ? (
-                          <Badge variant="outline">Belum Pilih Kemitraan</Badge>
-                        ) : p.partnerType === "Vendor" ? (
-                           <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">Induk Perusahaan</span>
-                        ) : p.partnerType === "Individual" ? (
-                           <div className="flex flex-col gap-1">
-                             <span className="text-xs font-bold text-slate-700"><Truck className="w-3.5 h-3.5 inline mr-1 opacity-60"/> {String(p.vehicleType || "Armada")}</span>
-                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Sopir Pribadi</span>
-                           </div>
-                        ) : (
-                           <div className="flex flex-col gap-1">
-                             {p.vehicleType ? <span className="text-xs font-bold text-slate-700"><Truck className="w-3.5 h-3.5 inline mr-1 opacity-60"/> {String(p.vehicleType)}</span> : null}
-                             <span className="text-[10px] bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md font-bold truncate max-w-[150px]" title={String(p.vendorName || "Vendor")}>PT: {String(p.vendorName || "Unknown")}</span>
-                           </div>
-                        )}
-                      </td>
-                      <td className="p-5 align-top">
-                        {isBasic ? (
-                           <span className="text-[10px] text-slate-400 italic">Belum melengkapi formulir onboarding.</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                            {p.nik ? <Badge variant="default" className="text-[9px] px-1.5 py-0">NIK</Badge> : null}
-                            {p.simNumber ? <Badge variant="default" className="text-[9px] px-1.5 py-0">SIM</Badge> : null}
-                            {p.npwp ? <Badge variant="warning" className="text-[9px] px-1.5 py-0">NPWP</Badge> : null}
-                            {p.stnkUrl ? <Badge variant="default" className="text-[9px] px-1.5 py-0 border-blue-200 text-blue-700 bg-blue-50">STNK</Badge> : null}
-                            {p.kirUrl ? <Badge variant="success" className="text-[9px] px-1.5 py-0">KIR</Badge> : null}
-                            {!p.nik && !p.simNumber && !p.npwp && !p.stnkUrl && !p.kirUrl ? <span className="text-[10px] text-slate-400 italic">Data minim</span> : null}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-5 align-top">
-                        {isBasic ? (
-                          <span className="px-2.5 py-1 rounded-lg font-black uppercase tracking-widest text-[9px] border bg-slate-100 text-slate-400 border-slate-200 shadow-sm">
-                            PRE-ONBOARD
-                          </span>
-                        ) : p.status === "Pending" ? (
-                          <span className="px-2.5 py-1 rounded-lg font-black uppercase tracking-widest text-[9px] border bg-amber-50 text-amber-600 border-amber-200 flex items-center gap-1 w-fit shadow-sm">
-                            <Clock className="w-3 h-3"/> PERLU CEK
-                          </span>
-                        ) : p.isSuspended ? (
-                          <span className="px-2.5 py-1 rounded-lg font-black uppercase tracking-widest text-[9px] border bg-red-50 text-red-600 border-red-200 shadow-sm">
-                            SUSPENDED
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-lg font-black uppercase tracking-widest text-[9px] border bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm">
-                            ACTIVE
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-5 pr-6 flex justify-end gap-2 align-top">
-                        
-                        {!isBasic && p.status === "Pending" && (
-                          <button onClick={() => handleApprove(p.id)} className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm" title="Setujui Kemitraan">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                        )}
+                  {/* KOLOM 3: KELENGKAPAN DATA */}
+                  <div className="lg:col-span-2">
+                    {isBasic ? (
+                       <span className="text-[10px] text-slate-400 italic font-medium">Pra-Onboarding...</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.nik ? <AdminBadge variant="default" className="text-[9px]">NIK</AdminBadge> : null}
+                        {p.simNumber ? <AdminBadge variant="default" className="text-[9px]">SIM</AdminBadge> : null}
+                        {p.npwp ? <AdminBadge variant="warning" className="text-[9px]">NPWP</AdminBadge> : null}
+                        {p.stnkUrl ? <AdminBadge variant="info" className="text-[9px]">STNK</AdminBadge> : null}
+                        {p.kirUrl ? <AdminBadge variant="success" className="text-[9px]">KIR</AdminBadge> : null}
+                        {!p.nik && !p.simNumber && !p.npwp && !p.stnkUrl && !p.kirUrl ? <span className="text-[10px] text-slate-400 italic">Data kosong</span> : null}
+                      </div>
+                    )}
+                  </div>
 
-                        <button onClick={() => router.push(`/admin/users/drivers/${p.id}`)} className="p-2 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm" title="Lihat Detail Entitas">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        
-                        {!isBasic && p.status !== "Pending" && (
-                          <button onClick={() => handleToggleSuspend(p.id, p.isSuspended || false)} className={`p-2 rounded-xl border transition-all shadow-sm ${p.isSuspended ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:bg-orange-500 hover:text-white hover:border-orange-500'}`} title={p.isSuspended ? "Aktifkan Kembali" : "Suspend Entitas"}>
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        <button onClick={() => handleDelete(p.id)} className="p-2 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all shadow-sm" title="Hapus Permanen">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  {/* KOLOM 4: STATUS */}
+                  <div className="lg:col-span-2 flex flex-col items-start gap-2">
+                    {isBasic ? (
+                      <AdminBadge variant="outline" className="text-[9px]">PRE-ONBOARD</AdminBadge>
+                    ) : p.status === "Pending" ? (
+                      <AdminBadge variant="warning" className="text-[9px] flex items-center gap-1.5"><Clock className="w-3 h-3"/> PERLU CEK</AdminBadge>
+                    ) : p.isSuspended ? (
+                      <AdminBadge variant="danger" className="text-[9px]">SUSPENDED</AdminBadge>
+                    ) : (
+                      <AdminBadge variant="success" className="text-[9px]">ACTIVE VERIFIED</AdminBadge>
+                    )}
+                  </div>
+
+                  {/* KOLOM 5: TINDAKAN */}
+                  <div className="lg:col-span-2 flex items-center justify-end gap-2">
+                    
+                    {/* Tombol Approval Khusus Pending */}
+                    {!isBasic && p.status === "Pending" && (
+                      <button onClick={() => handleApprove(p.id)} className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center justify-center" title="Setujui Kemitraan">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </button>
+                    )}
+
+                    <button onClick={() => router.push(`/admin/users/drivers/${p.id}`)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm flex items-center justify-center" title="Lihat Detail Entitas">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    
+                    {!isBasic && p.status !== "Pending" && (
+                      <button onClick={() => handleToggleSuspend(p.id, p.isSuspended || false)} className={`w-10 h-10 rounded-xl border transition-all shadow-sm flex items-center justify-center ${p.isSuspended ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'bg-white border-slate-200 text-slate-400 hover:bg-amber-500 hover:text-white hover:border-amber-500'}`} title={p.isSuspended ? "Aktifkan Kembali" : "Suspend Entitas"}>
+                        <Ban className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    <button onClick={() => handleDelete(p.id)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all shadow-sm flex items-center justify-center" title="Hapus Permanen">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+
+                  </div>
+
+                </motion.div>
+              );
+            })
           )}
         </div>
       </div>
