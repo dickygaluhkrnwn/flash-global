@@ -7,7 +7,7 @@ import Image from "next/image";
 import { 
   Search, CheckCircle2, AlertCircle, Ban, 
   ShieldAlert, Activity, Eye, Trash2, 
-  Clock, Filter, UserSquare2, Building2, IdCard, MapPin, Phone
+  Clock, Filter, UserSquare2, Building2, MapPin, Phone
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -20,6 +20,8 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 // IMPORT GLOBAL TYPES
 import { DriverData } from "@/types/admin";
 
+type StatusFilterType = "All" | "Pending" | "Active" | "Suspended";
+
 export default function FleetDriversPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -29,7 +31,7 @@ export default function FleetDriversPage() {
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Active" | "Suspended">("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>("All");
 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -238,7 +240,7 @@ export default function FleetDriversPage() {
           
           <div className="relative w-full lg:w-auto shrink-0">
             <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#7A171D] focus:ring-[3px] focus:ring-[#7A171D]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[240px]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#7A171D] focus:ring-[3px] focus:ring-[#7A171D]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[240px]">
               <option value="All">Filter: Semua Status</option>
               <option value="Active">Hanya Aktif</option>
               <option value="Pending">Butuh Verifikasi</option>
@@ -261,7 +263,7 @@ export default function FleetDriversPage() {
             </div>
           ) : (
             processedData.map((d, idx) => {
-              let badgeVariant: "success"|"warning"|"danger" = "success";
+              let badgeVariant: "success"|"warning"|"danger"|"info"|"brand"|"default" = "success";
               if (d.status === "Pending") badgeVariant = "warning";
               else if (d.isSuspended) badgeVariant = "danger";
 
@@ -322,13 +324,9 @@ export default function FleetDriversPage() {
 
                   {/* KOLOM 4: STATUS */}
                   <div className="lg:col-span-1 flex flex-col items-start gap-2">
-                    {d.status === "Pending" ? (
-                      <AdminBadge variant="warning" className="text-[9px] flex items-center gap-1.5"><Clock className="w-3 h-3"/> Pending</AdminBadge>
-                    ) : d.isSuspended ? (
-                      <AdminBadge variant="danger" className="text-[9px]">Suspended</AdminBadge>
-                    ) : (
-                      <AdminBadge variant="success" className="text-[9px]">Active</AdminBadge>
-                    )}
+                    <AdminBadge variant={badgeVariant} className="text-[9px] flex items-center gap-1.5">
+                       {d.status === "Pending" ? <><Clock className="w-3 h-3"/> Pending</> : d.isSuspended ? "Suspended" : "Active"}
+                    </AdminBadge>
                   </div>
 
                   {/* KOLOM 5: TINDAKAN */}

@@ -93,14 +93,22 @@ export default function B2CDetailPage() {
     }
   };
 
-  const formatDate = (dateInput: any) => {
+  const formatDate = (dateInput: unknown) => {
     if (!dateInput) return "-";
-    // Jika berupa Firestore Timestamp
-    if (dateInput.toDate) {
-      return dateInput.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+    
+    // Jika berupa object (Firestore Timestamp)
+    if (typeof dateInput === 'object' && dateInput !== null) {
+      const ts = dateInput as { toDate?: () => Date; seconds?: number };
+      if (typeof ts.toDate === 'function') {
+        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+      }
+      if (typeof ts.seconds === 'number') {
+        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+      }
     }
-    // Jika berupa String (ISO)
-    return new Date(dateInput).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+    
+    // Jika berupa String (ISO) atau number
+    return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
   };
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {

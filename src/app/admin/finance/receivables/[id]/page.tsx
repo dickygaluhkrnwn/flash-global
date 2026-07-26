@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, CheckCircle2, AlertCircle, 
   Building2, CalendarClock, ShieldAlert, Activity, 
-  MapPin, FileSpreadsheet, Download, Printer, Receipt, Mail, Phone, Map
+  MapPin, FileSpreadsheet, Download, Printer, Mail, Phone, Map
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -14,7 +14,6 @@ import { collection, getDocs, query, where, writeBatch, doc, getDoc, serverTimes
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { cn } from "@/lib/utils";
 
 // IMPORT LIBRARY PRINT DAN TEMPLATE A4
 import { useReactToPrint } from "react-to-print";
@@ -382,14 +381,14 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
                     
                     <div className="text-left md:text-right shrink-0 bg-white px-5 py-3 rounded-xl border border-slate-100 w-full md:w-auto shadow-sm">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 text-left md:text-right">Nilai Tagihan</p>
-                      <p className="text-base font-black text-red-600 text-left md:text-right font-mono">{formatRupiah(order.amount)}</p>
+                      <p className="text-lg font-black text-red-600 text-left md:text-right font-mono tracking-tight">{formatRupiah(order.amount)}</p>
                     </div>
                   </motion.div>
                 ))}
               </div>
            </div>
 
-           {/* Section Action Pelunasan (Tidak lagi fixed bottom) */}
+           {/* Section Action Pelunasan */}
            <div className={`${glassPanel} rounded-[2rem] p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 border border-emerald-100/50 bg-gradient-to-r from-emerald-50/50 to-transparent`}>
              <div className="flex items-start gap-4 max-w-lg">
                <ShieldAlert className="w-8 h-8 text-emerald-600 shrink-0 mt-1" />

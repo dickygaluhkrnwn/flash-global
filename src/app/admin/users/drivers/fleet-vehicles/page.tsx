@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -20,6 +20,8 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 // IMPORT GLOBAL TYPES
 import { DriverData } from "@/types/admin";
 
+type StatusFilterType = "All" | "Pending" | "Active" | "Suspended";
+
 export default function FleetVehiclesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -29,7 +31,7 @@ export default function FleetVehiclesPage() {
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Active" | "Suspended">("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>("All");
 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -39,7 +41,12 @@ export default function FleetVehiclesPage() {
   const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
   const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
 
-  const fetchData = async () => {
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const q = query(collection(db, "driver_wallets"), where("partnerType", "==", "FleetVehicle"));
@@ -66,17 +73,11 @@ export default function FleetVehiclesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
-  };
+  }, [fetchData]);
 
   const handleApprove = async (partnerId: string) => {
     if (!confirm("Verifikasi kelengkapan dokumen armada ini (STNK/KIR) dan izinkan beroperasi?")) return;
@@ -236,7 +237,7 @@ export default function FleetVehiclesPage() {
           
           <div className="relative w-full lg:w-auto shrink-0">
             <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-slate-800 focus:ring-[3px] focus:ring-slate-800/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[200px]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-slate-800 focus:ring-[3px] focus:ring-slate-800/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[200px]">
               <option value="All">Filter: Semua Kondisi</option>
               <option value="Active">Hanya Siap Jalan</option>
               <option value="Pending">Butuh Verifikasi Surat</option>
@@ -259,10 +260,6 @@ export default function FleetVehiclesPage() {
             </div>
           ) : (
             processedData.map((v, idx) => {
-              let badgeVariant: "success"|"warning"|"danger" = "success";
-              if (v.status === "Pending") badgeVariant = "warning";
-              else if (v.isSuspended) badgeVariant = "danger";
-
               return (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}

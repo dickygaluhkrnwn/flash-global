@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Search, Filter, ArrowUpDown, 
   Clock, CheckCircle2, AlertCircle, LifeBuoy, ShieldAlert,
-  MessageCircle, Headset, CheckCircle, Flame, X, User, Mail, CalendarDays,
+  MessageCircle, Headset, CheckCircle, Flame, X, Mail, CalendarDays,
   Activity
 } from "lucide-react";
 
@@ -264,7 +264,6 @@ export default function AdminTicketsPage() {
                   const isUrgent = t.priority === "Urgent";
                   const isResolved = t.status === "Resolved";
                   const isInProgress = t.status === "In Progress";
-                  const isOpen = t.status === "Open";
 
                   return (
                     <motion.div 

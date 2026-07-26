@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
@@ -15,8 +15,8 @@ import { collection, getDocs, doc, updateDoc, serverTimestamp, increment, addDoc
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 interface B2BWalletData {
@@ -51,7 +51,12 @@ export default function AdminWalletClientsPage() {
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchData = async () => {
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const b2bQ = query(collection(db, "users"), where("role", "==", "b2b"));
@@ -75,16 +80,11 @@ export default function AdminWalletClientsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
-  };
+  }, [fetchData]);
 
   const handleMutasi = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { 
   Search, CheckCircle2, AlertCircle, Ban, Activity, Filter, 
   Plus, Save, Mail, ShieldAlert, ShieldCheck, ArrowRight, User, X
@@ -333,7 +334,7 @@ export default function StaffManagementPage() {
                 <div className="md:col-span-5 flex items-center gap-4">
                   <div className="relative w-12 h-12 rounded-full border border-slate-200 shadow-sm shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center">
                      {s.photoURL ? (
-                       <img src={s.photoURL} alt="Foto" className="w-full h-full object-cover" />
+                       <Image src={s.photoURL} alt="Foto" fill className="object-cover" sizes="48px" />
                      ) : (
                        <User className="w-5 h-5 text-slate-400" />
                      )}

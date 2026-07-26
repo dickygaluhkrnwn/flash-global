@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -8,7 +8,7 @@ import {
   Search, CheckCircle2, AlertCircle, Ban, Truck, 
   Plus, User, Building2, UserSquare2, 
   ShieldAlert, Activity, Eye, Trash2, Clock, Filter,
-  Users2, UserMinus
+  Users2, UserMinus, FileText
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -21,6 +21,8 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 // IMPORT GLOBAL TYPES
 import { DriverData } from "@/types/admin";
 
+type StatusFilterType = "All" | "Basic" | "Pending" | "Active" | "Suspended";
+
 export default function FleetManagementDashboard() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -30,7 +32,7 @@ export default function FleetManagementDashboard() {
   
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "Basic" | "Pending" | "Active" | "Suspended">("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>("All");
 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -43,7 +45,13 @@ export default function FleetManagementDashboard() {
   // =========================================================================
   // LOGIC AREA
   // =========================================================================
-  const fetchData = async () => {
+  
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const usersQuery = query(collection(db, "users"), where("role", "==", "driver"));
@@ -82,17 +90,11 @@ export default function FleetManagementDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
-  };
+  }, [fetchData]);
 
   const handleApprove = async (partnerId: string) => {
     if (!confirm("Setujui pendaftaran dan aktifkan entitas mitra ini?")) return;
@@ -237,7 +239,7 @@ export default function FleetManagementDashboard() {
 
         <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#7A171D] hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/fleet-drivers')}>
           <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-[#7A171D] rounded-full blur-[60px] opacity-20" />
-          <span className="text-[#7A171D] text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><UserSquare2 className="w-3.5 h-3.5"/> Sopir Vendor</span>
+          <span className="#7A171D text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5 text-[#7A171D]"><UserSquare2 className="w-3.5 h-3.5"/> Sopir Vendor</span>
           <p className="text-2xl font-black text-[#7A171D] mt-2 relative z-10">{stats.supirTruk}</p>
         </div>
 
@@ -270,7 +272,7 @@ export default function FleetManagementDashboard() {
           
           <div className="relative w-full lg:w-auto shrink-0">
             <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#7A171D] focus:ring-[3px] focus:ring-[#7A171D]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[240px]">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)} className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#7A171D] focus:ring-[3px] focus:ring-[#7A171D]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[240px]">
               <option value="All">Semua Kondisi & Status</option>
               <option value="Basic">Akun Dasar (Pre-Onboard)</option>
               <option value="Pending">Menunggu Verifikasi</option>
@@ -296,12 +298,6 @@ export default function FleetManagementDashboard() {
           ) : (
             processedData.map((p, idx) => {
               const isBasic = !p.partnerType;
-              let badgeVariant: "success"|"warning"|"danger"|"default" = "default";
-              
-              if (isBasic) badgeVariant = "default";
-              else if (p.status === "Pending") badgeVariant = "warning";
-              else if (p.isSuspended) badgeVariant = "danger";
-              else badgeVariant = "success";
 
               return (
                 <motion.div 
@@ -362,7 +358,7 @@ export default function FleetManagementDashboard() {
                         {p.nik ? <AdminBadge variant="default" className="text-[9px]">NIK</AdminBadge> : null}
                         {p.simNumber ? <AdminBadge variant="default" className="text-[9px]">SIM</AdminBadge> : null}
                         {p.npwp ? <AdminBadge variant="warning" className="text-[9px]">NPWP</AdminBadge> : null}
-                        {p.stnkUrl ? <AdminBadge variant="info" className="text-[9px]">STNK</AdminBadge> : null}
+                        {p.stnkUrl ? <AdminBadge variant="info" className="text-[9px] flex items-center gap-1"><FileText className="w-2.5 h-2.5"/> STNK</AdminBadge> : null}
                         {p.kirUrl ? <AdminBadge variant="success" className="text-[9px]">KIR</AdminBadge> : null}
                         {!p.nik && !p.simNumber && !p.npwp && !p.stnkUrl && !p.kirUrl ? <span className="text-[10px] text-slate-400 italic">Data kosong</span> : null}
                       </div>

@@ -7,7 +7,7 @@ import {
   Search, CheckCircle2, AlertCircle, Activity, 
   Filter, ArrowUpDown, ArrowUpRight, ArrowDownRight, 
   Building2, FileText, CreditCard, ShieldAlert, Edit3, ShieldX,
-  ArrowRight, User, Mail
+  ArrowRight, Mail
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -15,9 +15,16 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+import { cn } from "@/lib/utils";
 
 // IMPORT GLOBAL TYPES
 import { User as UserType } from "@/types/user";
+
+// =========================================================================
+// CUSTOM STYLES: APPLE GLASSMORPHISM (Corporate Indigo Accent)
+// =========================================================================
+const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
+const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
 
 export default function B2BManagementPage() {
   const router = useRouter();
@@ -29,12 +36,6 @@ export default function B2BManagementPage() {
   const [filterStatus, setFilterStatus] = useState("all"); 
   const [sortBy, setSortBy] = useState("name_asc");
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
-
-  // =========================================================================
-  // CUSTOM STYLES: APPLE GLASSMORPHISM (Corporate Indigo Accent)
-  // =========================================================================
-  const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
-  const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
 
   useEffect(() => {
     const loadData = async () => {
@@ -125,7 +126,7 @@ export default function B2BManagementPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12 font-sans">
+    <div className="space-y-6 pb-12 font-sans max-w-7xl mx-auto">
       <AnimatePresence>
         {toast && (
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
@@ -257,7 +258,7 @@ export default function B2BManagementPage() {
               <p>Tidak ada entitas B2B yang cocok dengan filter pencarian.</p>
             </div>
           ) : (
-            processedData.map(u => <B2BCardItem key={u.uid} user={u} onUpdate={handleUpdateContract} router={router} />)
+            processedData.map(u => <B2BCardItem key={u.uid} user={u} onUpdate={handleUpdateContract} />)
           )}
         </div>
       </div>
@@ -266,7 +267,8 @@ export default function B2BManagementPage() {
 }
 
 // KOMPONEN CARD TERPISAH UNTUK MANAJEMEN STATE LOKAL TIAP KLIEN
-function B2BCardItem({ user, onUpdate, router }: { user: UserType; onUpdate: (id: string, status: "Approved" | "Rejected" | "Pending", limitVal: number) => void; router: any }) {
+function B2BCardItem({ user, onUpdate }: { user: UserType; onUpdate: (id: string, status: "Approved" | "Rejected" | "Pending", limitVal: number) => void; }) {
+  const router = useRouter();
   const [localLimit, setLocalLimit] = useState<number | "">(user.b2bLimit || 0);
 
   const displayCompanyName = user.companyName || user.displayName || (user as unknown as Record<string, unknown>).name as string || "Klien Korporat";
@@ -278,7 +280,10 @@ function B2BCardItem({ user, onUpdate, router }: { user: UserType; onUpdate: (id
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem] p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center group"
+      className={cn(
+        "p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center group",
+        glassRow
+      )}
     >
       
       {/* KOLOM 1: PROFIL PERUSAHAAN */}

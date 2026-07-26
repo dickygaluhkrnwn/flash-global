@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  ArrowLeft, Search, ArrowDownCircle, 
+  ArrowLeft, ArrowDownCircle, 
   UserCircle, CheckCircle2, AlertCircle, ShieldAlert, 
-  Activity, Check, X, Clock, CalendarDays, Banknote, Wallet
+  Activity, Check, X, Clock, CalendarDays, Banknote,
+  Search
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, serverTimestamp, increment, query, where, writeBatch } from "firebase/firestore";
+import { collection, getDocs, doc, serverTimestamp, increment, query, where, writeBatch } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
-import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
 import { DriverData } from "@/types/admin";
@@ -66,7 +66,12 @@ export default function AdminWalletWithdrawalsPage() {
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchData = async () => {
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       // 1. Tarik Data Wallets untuk Mapping Identitas
@@ -99,16 +104,11 @@ export default function AdminWalletWithdrawalsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
-  };
+  }, [fetchData]);
 
   const handleReviewWithdrawal = async (reqId: string, driverId: string, amount: number, action: "Disetujui" | "Ditolak") => {
     if (!confirm(`Yakin menandai pengajuan pencairan Rp ${amount.toLocaleString('id-ID')} ini sebagai ${action}? \n\nPastikan Anda sudah benar-benar men-transfer dana ke rekening tujuan jika Disetujui.`)) {

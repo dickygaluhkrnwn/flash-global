@@ -4,14 +4,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { 
-  Truck, Coins, Package, ShieldCheck, 
+  Truck, Coins, 
   LayoutDashboard, WalletCards, Users, Send, 
   Banknote, Ticket, LifeBuoy, ChevronDown, 
-  User, Building2, UserCog, CreditCard, Globe, Map,
-  MessageSquare, FileWarning, History, Users2,
-  Receipt, FileSpreadsheet, UserSquare2
+  CreditCard,
+  Users2
 } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---

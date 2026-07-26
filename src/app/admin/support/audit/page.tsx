@@ -13,7 +13,6 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
 
 // IMPORT GLOBAL TYPES
 import { AuditLog } from "@/types/support";
@@ -265,7 +264,7 @@ export default function AdminAuditPage() {
                       {/* Kolom 4: Aksi & Deskripsi */}
                       <div className="w-full lg:w-[40%] flex flex-col gap-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100 shadow-inner h-full min-h-[80px]">
                         <div className="flex items-center gap-2">
-                          {/* @ts-ignore */}
+                          {/* @ts-expect-error Pengecualian disengaja karena varian dinamis belum didukung penuh oleh komponen AdminBadge di versi ini */}
                           <AdminBadge variant={theme.badge} className="text-[9px] uppercase tracking-widest py-0.5 px-2">{log.action}</AdminBadge>
                         </div>
                         {log.details && (

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Search, Bell, User, Settings, LogOut, ChevronRight, Menu } from "lucide-react";
+import { Search, Bell, User, Settings, LogOut, ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";

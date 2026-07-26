@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   Building2, Search, ArrowUpDown, 
   AlertCircle, ShieldAlert, CheckCircle2, 
-  TrendingUp, BarChart3, Wallet, Activity, ArrowRight, User
+  BarChart3, Wallet, Activity, ArrowRight, User
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -41,8 +41,6 @@ export default function FinanceReceivablesPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("highest_debt");
-  
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   useEffect(() => {
     const fetchDebts = async () => {
@@ -59,7 +57,7 @@ export default function FinanceReceivablesPage() {
             const userId = data.userId;
             if (!userId) return; // Skip order yang tidak memiliki userId
 
-            // PARSING AMAN (Menghindari Type '{}' is not assignable to string)
+            // PARSING AMAN
             const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
             const originAddress = originObj?.address ? String(originObj.address) : (typeof data.origin === 'string' ? String(data.origin) : "-");
             const senderNameFallback = originObj?.senderName ? String(originObj.senderName) : (data.senderName ? String(data.senderName) : "");
@@ -112,7 +110,7 @@ export default function FinanceReceivablesPage() {
               existing.orders.push(orderDetail);
             } else {
               debtMap.set(userId, {
-                id: String(userId), // ID klien asli dari Firebase Users
+                id: String(userId),
                 name: clientName,
                 email: clientEmail,
                 unpaidCount: 1,
@@ -158,7 +156,6 @@ export default function FinanceReceivablesPage() {
 
   const totalOutstanding = b2bDebts.reduce((acc, curr) => acc + curr.totalDebt, 0);
   const totalClients = b2bDebts.length;
-  const avgDebt = totalClients > 0 ? totalOutstanding / totalClients : 0;
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
     return (
@@ -174,13 +171,6 @@ export default function FinanceReceivablesPage() {
 
   return (
     <div className="space-y-6 font-sans pb-10 max-w-7xl mx-auto">
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
-            <CheckCircle2 className="w-5 h-5" /> {toast.msg}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden`}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-red-500 rounded-full blur-[100px] opacity-10 pointer-events-none" />

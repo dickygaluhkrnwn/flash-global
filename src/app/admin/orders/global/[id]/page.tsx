@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Globe, MapPin, User, Mail, Phone, 
-  Weight, Box, PlaneTakeoff, DollarSign, FileText, CheckCircle2, AlertCircle 
+  Weight, Box, PlaneTakeoff, FileText, CheckCircle2, AlertCircle 
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";

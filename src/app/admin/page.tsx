@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   LayoutDashboard, Truck, Coins, Building, 
-  TrendingUp, Package, MapPin, 
-  Activity, ArrowUpRight, Clock, Scale, LifeBuoy, Calculator,
+  TrendingUp, Package, 
+  ArrowUpRight, Clock, Scale, LifeBuoy, Calculator,
   BarChart3, Zap
 } from "lucide-react";
 

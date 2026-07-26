@@ -4,9 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  FileWarning, Search, Filter, ArrowUpDown, 
-  Clock, CheckCircle2, AlertCircle, Eye, XCircle, 
-  CheckCircle, ChevronDown, Package, MapPin, ShieldAlert,
+  Search, Filter, ArrowUpDown, 
+  Clock, CheckCircle2, AlertCircle, XCircle, 
+  ChevronDown, Package, ShieldAlert,
   Wallet, MessageSquareWarning, Image as ImageIcon, Send, Activity
 } from "lucide-react";
 
@@ -25,7 +25,6 @@ import { OrderDetail, LocationDetail } from "@/types/order";
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Amber/Support Theme)
 // =========================================================================
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
-const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(245,158,11,0.15)] transition-all duration-300 rounded-[2rem]";
 
 export default function AdminClaimsPage() {
   const router = useRouter();

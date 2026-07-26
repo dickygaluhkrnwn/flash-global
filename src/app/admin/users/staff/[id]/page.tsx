@@ -92,7 +92,7 @@ export default function StaffDetailPage() {
         employeeId: formData.employeeId
       });
       
-      setStaffData(prev => prev ? { ...prev, phoneNumber: formData.phone, defaultAddress: formData.address, employeeId: formData.employeeId } as any : null);
+      setStaffData(prev => prev ? { ...prev, phoneNumber: formData.phone, defaultAddress: formData.address, employeeId: formData.employeeId } as UserType : null);
       setIsEditing(false);
       showToast("success", "Detail staf berhasil diperbarui.");
     } catch {
@@ -127,12 +127,20 @@ export default function StaffDetailPage() {
     }
   };
 
-  const formatDate = (dateInput: any) => {
+  const formatDate = (dateInput: unknown) => {
     if (!dateInput) return "-";
-    if (dateInput.toDate) {
-      return dateInput.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    
+    if (typeof dateInput === 'object' && dateInput !== null) {
+      const ts = dateInput as { toDate?: () => Date; seconds?: number };
+      if (typeof ts.toDate === 'function') {
+        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+      if (typeof ts.seconds === 'number') {
+        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
     }
-    return new Date(dateInput).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    
+    return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
   if (currentUser?.role !== 'superadmin') {

@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, Search, ArrowUpCircle, 
   CheckCircle2, AlertCircle, ShieldAlert, 
-  Activity, Eye, Check, X, Clock, User, Building2, CalendarDays,
+  Activity, Eye, Check, X, Clock, Building2, CalendarDays,
   UserCircle
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, updateDoc, serverTimestamp, increment, query, where, writeBatch } from "firebase/firestore";
+import { collection, getDocs, doc, serverTimestamp, increment, query, where, writeBatch } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
@@ -68,7 +68,12 @@ export default function AdminWalletTopupsPage() {
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchData = async () => {
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       // Perlu ambil data wallets untuk identifikasi apakah user ini Driver atau B2B
@@ -98,16 +103,11 @@ export default function AdminWalletTopupsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
-  };
+  }, [fetchData]);
 
   const handleReviewTopup = async (req: TopupRequest, action: "Disetujui" | "Ditolak") => {
     if (!confirm(`Yakin ingin menandai Top-Up sejumlah Rp ${req.amount.toLocaleString('id-ID')} ini sebagai ${action}?`)) {

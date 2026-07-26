@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowLeft, Package, MapPin, User, Phone, 
+  ArrowLeft, MapPin, User, Phone, 
   Weight, Box, DollarSign, CheckCircle2, AlertCircle, Clock,
   Truck, Building2, UserPlus, X, Camera, Map, FileText
 } from "lucide-react";
@@ -27,6 +27,17 @@ interface TrackingLog {
   description?: string;
   location?: string;
   proofUrl?: string;
+}
+
+interface CargoItem {
+  name?: string;
+  dimType?: string;
+  length?: number | string;
+  width?: number | string;
+  height?: number | string;
+  weightType?: string;
+  value?: number | string;
+  [key: string]: unknown;
 }
 
 export default function DomesticOrderDetailPage({ params }: { params: { id: string } }) {
@@ -220,23 +231,24 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   const destPhone = String(destObj?.receiverPhone || order.receiverPhone || "-");
 
   // Ekstraksi Item Barang (Mencari di dalam Array Destinations)
-  // Ini perbaikan utama agar rincian item terbaca!
   const orderItems = destObj?.items && Array.isArray(destObj.items) ? destObj.items : [];
 
   const isPaymentVerified = order.paymentStatus === "Lunas" || order.isB2BApplied; 
   
-  const bd = (order.breakdown as Record<string, any>) || {};
+  // PERBAIKAN DI SINI: DOUBLE CASTING (unknown -> Record)
+  const bd = (order.breakdown as unknown as Record<string, unknown>) || {};
   const deliveryFee = Number(bd.deliveryFee || 0);
   const insuranceFee = Number(bd.insuranceFee || 0);
   const porterFee = Number(bd.porterFee || 0);
   const tollFee = Number(bd.tollFee || 0);
   const b2bDiscount = Number(bd.b2bDiscount || 0);
   
-  const discountPromoAmount = Number((order as any).discountPromoAmount || 0);
-  const porterCount = Number((order as any).porterCount || 1);
+  const orderRecord = order as unknown as Record<string, unknown>;
+  const discountPromoAmount = Number(orderRecord.discountPromoAmount || 0);
+  const porterCount = Number(orderRecord.porterCount || 1);
   const grandTotal = Number(order.finalGrandTotal || bd.grandTotal || order.totalCost || 0);
   
-  const receiptUrl = (order as any).receiptUrl ? String((order as any).receiptUrl) : null;
+  const receiptUrl = orderRecord.receiptUrl ? String(orderRecord.receiptUrl) : null;
 
   return (
     <div className="space-y-6 pb-10 max-w-7xl mx-auto">
@@ -343,15 +355,18 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-white/60">
-                     {orderItems.map((itm: any, i: number) => (
-                       <tr key={i} className="hover:bg-white/40 transition-colors">
-                         <td className="p-4 pl-6 font-black text-slate-800">{itm.name || "Barang"}</td>
-                         <td className="p-4 font-semibold text-slate-600">
-                           {itm.dimType === "S" && itm.length ? `${itm.length}x${itm.width}x${itm.height} cm` : (itm.weightType || "-")}
-                         </td>
-                         <td className="p-4 pr-6 text-right font-black text-emerald-600">{formatRupiah(Number(itm.value || 0))}</td>
-                       </tr>
-                     ))}
+                     {orderItems.map((rawItm: unknown, i: number) => {
+                       const itm = rawItm as CargoItem;
+                       return (
+                         <tr key={i} className="hover:bg-white/40 transition-colors">
+                           <td className="p-4 pl-6 font-black text-slate-800">{itm.name || "Barang"}</td>
+                           <td className="p-4 font-semibold text-slate-600">
+                             {itm.dimType === "S" && itm.length ? `${itm.length}x${itm.width}x${itm.height} cm` : (itm.weightType || "-")}
+                           </td>
+                           <td className="p-4 pr-6 text-right font-black text-emerald-600">{formatRupiah(Number(itm.value || 0))}</td>
+                         </tr>
+                       );
+                     })}
                    </tbody>
                  </table>
                )}

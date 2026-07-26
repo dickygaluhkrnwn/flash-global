@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
@@ -44,7 +44,12 @@ export default function AdminWalletDriversPage() {
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchData = async () => {
+  const showToast = useCallback((type: "success" | "error", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const driverSnap = await getDocs(collection(db, "driver_wallets"));
@@ -58,16 +63,11 @@ export default function AdminWalletDriversPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
-  };
+  }, [fetchData]);
 
   const handleMutasi = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,6 +396,9 @@ export default function AdminWalletDriversPage() {
                         placeholder="0" 
                       />
                     </div>
+                    {mutasiType === "topup" && (
+                      <p className="text-[10px] text-blue-600 font-bold mt-2 text-center">Dana ini akan digunakan sebagai saldo Prabayar / Potongan Tagihan Otomatis.</p>
+                    )}
                   </div>
                   
                   <div className="flex flex-col-reverse sm:flex-row gap-3 pt-6 border-t border-slate-100">

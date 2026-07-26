@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { 
   CheckCircle2, Truck, Box, Scale, AlertCircle, 
   Plus, Trash2, Search, Filter, ArrowUpDown, ShieldAlert, Activity, ArrowRight, Car
@@ -257,7 +258,7 @@ export default function AdminVehiclesPage() {
 // ======================================================================
 // KOMPONEN CARD ARMADA 3D APPLE STYLE
 // ======================================================================
-function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router: any; onDelete: () => void }) {
+function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router: AppRouterInstance; onDelete: () => void }) {
   const vCat = data.category || (data.isMotor ? "Motor" : "Mobil");
   
   // Custom 3D Icon styling berdasarkan kategori

@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { 
-  Globe, Search, CheckCircle2, AlertCircle, Filter, 
-  ArrowUpDown, DollarSign, Weight, FileText, X, ShieldAlert,
-  Calendar, MapPin, PlaneTakeoff, ArrowRight,
-  User
+  Globe, Search, Filter, 
+  ArrowUpDown, DollarSign, Weight, FileText, ShieldAlert,
+  PlaneTakeoff, ArrowRight, User
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
@@ -27,17 +26,11 @@ export default function GlobalOrdersPage() {
 
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   // Filters & Sorting
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortOrder, setSortOrder] = useState("newest");
-
-  // Modal State
-  const [showQuoteModal, setShowQuoteModal] = useState(false);
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
-  const [quoteForm, setQuoteForm] = useState({ price: "", docUrl: "" });
 
   // =========================================================================
   // CUSTOM STYLES: APPLE GLASSMORPHISM
@@ -58,28 +51,7 @@ export default function GlobalOrdersPage() {
     return () => unsubscribe();
   }, []);
 
-  const showToast = (type: "success" | "error", msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 4000);
-  };
-
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-
-  const handleSubmitQuote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedQuoteId) return;
-    
-    try {
-      await updateDoc(doc(db, "quotes", selectedQuoteId), {
-        offeredPrice: Number(quoteForm.price), customsDocUrl: quoteForm.docUrl, status: "Menunggu Persetujuan Klien"
-      });
-      showToast("success", "Penawaran Bea Cukai berhasil diterbitkan!");
-      setShowQuoteModal(false);
-    } catch (error) {
-      console.error(error);
-      showToast("error", "Gagal menerbitkan penawaran.");
-    }
-  };
 
   const getMillis = (ts: unknown) => {
     if (!ts) return 0;
@@ -146,14 +118,6 @@ export default function GlobalOrdersPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      {/* GLOBAL TOAST NOTIFICATIONS */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toast.msg}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* 1. HEADER (Bento Glass) */}
       <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:bg-white/80`}>
@@ -186,7 +150,7 @@ export default function GlobalOrdersPage() {
           <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-amber-500 rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity" />
           <div className="flex justify-between items-start relative z-10">
             <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest">Menunggu Penawaran</span>
-            <div className="w-10 h-10 rounded-full bg-amber-100/50 border border-amber-200 shadow-sm flex items-center justify-center"><AlertCircle className="w-5 h-5 text-amber-600" /></div>
+            <div className="w-10 h-10 rounded-full bg-amber-100/50 border border-amber-200 shadow-sm flex items-center justify-center"><ShieldAlert className="w-5 h-5 text-amber-600" /></div>
           </div>
           <p className="text-3xl font-black text-amber-700 mt-4 relative z-10 tracking-tight">{pendingQuotes} <span className="text-base text-amber-600/50 font-bold">Pending</span></p>
         </motion.div>
@@ -329,7 +293,7 @@ export default function GlobalOrdersPage() {
                       </div>
                     ) : (
                       <div className="text-[9px] font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl border shadow-sm w-fit bg-amber-50/50 border-amber-200 text-amber-600 mt-1 uppercase tracking-widest">
-                        <AlertCircle className="w-4 h-4" /> Pending
+                        <ShieldAlert className="w-4 h-4" /> Pending
                       </div>
                     )}
                   </div>

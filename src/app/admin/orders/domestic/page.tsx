@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Package, Search, CheckCircle2, AlertCircle, Filter, 
+  Package, Search, AlertCircle, Filter, 
   ArrowUpDown, DollarSign, Weight, UserPlus, Calendar, ArrowRight
 } from "lucide-react";
 

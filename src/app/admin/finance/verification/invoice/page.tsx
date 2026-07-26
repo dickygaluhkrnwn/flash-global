@@ -14,7 +14,6 @@ import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp, arrayUnion, increment } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 

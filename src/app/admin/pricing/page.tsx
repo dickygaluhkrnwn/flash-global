@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Save, CheckCircle2, AlertCircle, Coins, 
-  Building, Car, MapPin, RefreshCw, Shield, Users, 
+  Building, Car, RefreshCw, Shield, Users, 
   Search, Filter, ArrowUpDown, ShieldAlert, Activity, PieChart
 } from "lucide-react";
 

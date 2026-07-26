@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
-  Receipt, CheckCircle2, AlertCircle, 
-  DollarSign, ShieldAlert, Clock, 
-  Undo2, Wallet, ArrowRight, Activity, Building2, User
+  Receipt, Clock, 
+  DollarSign, ShieldAlert, 
+  Undo2, Wallet, ArrowRight, Activity
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -14,7 +14,6 @@ import { collection, onSnapshot, query, orderBy, where } from "firebase/firestor
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { cn } from "@/lib/utils";
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Emerald/Finance Accent)
@@ -33,7 +32,6 @@ export default function FinanceVerificationHub() {
   const [totalRevenue, setTotalRevenue] = useState(0);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -105,13 +103,6 @@ export default function FinanceVerificationHub() {
 
   return (
     <div className="space-y-6 font-sans pb-12 max-w-6xl mx-auto">
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl backdrop-blur-xl ${toast.type === 'success' ? 'bg-white/90 border-emerald-200 text-emerald-700' : 'bg-white/90 border-red-200 text-red-700'}`}>
-            {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <AlertCircle className="w-5 h-5 text-red-500" />} {toast.msg}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* 1. HEADER HALAMAN (Command Center) */}
       <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden`}>

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { 
   FileSpreadsheet, Search, Filter, 
   Download, CalendarClock, ShieldAlert, 
-  CheckCircle2, Eye, X, FileText, User, 
+  CheckCircle2, X, FileText, User, 
   MapPin, Package, Truck, Scale, Receipt, 
   TicketPercent, Building, Activity, ArrowRight, Wallet,
   AlertCircle
@@ -17,7 +17,6 @@ import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 
@@ -311,7 +310,6 @@ export default function FinanceReportsPage() {
                 {processedData.map((r, idx) => {
                   const isLunas = r.paymentStatus === 'Lunas';
                   const isPending = r.paymentStatus.includes('Menunggu');
-                  const isOverdue = r.paymentStatus === 'Belum Bayar' || r.paymentStatus === 'Ditolak';
 
                   return (
                     <motion.div 

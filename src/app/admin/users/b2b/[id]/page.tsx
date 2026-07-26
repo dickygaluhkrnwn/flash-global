@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, CheckCircle2, AlertCircle, 
-  Building2, Mail, Phone, Calendar, 
+  Building2, Mail, Phone, 
   ShieldAlert, Activity, CreditCard, 
   FileCheck, ShieldCheck, MapPin, Briefcase, User
 } from "lucide-react";
@@ -14,7 +14,6 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // ======================================================================
 // JURUS SHIELDING INTERFACE (Khusus untuk profil B2B yang kompleks)
@@ -29,8 +28,8 @@ export interface SafeB2BUser {
   photoURL?: string;
   role?: string;
   isSuspended?: boolean;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: unknown;
+  updatedAt?: unknown;
   // B2B Specific Fields (dari BusinessTab)
   picName?: string;
   companyName?: string;
@@ -43,10 +42,9 @@ export interface SafeB2BUser {
   defaultAddress?: string;
   contractStatus?: "Pending" | "Approved" | "Rejected";
   b2bLimit?: number;
-  b2bRequestedAt?: any;
-  depositBalance?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any; 
+  b2bRequestedAt?: unknown;
+  depositBalance?: number; // <-- Memastikan depositBalance terdaftar agar tidak error di baris 214
+  [key: string]: unknown; 
 }
 
 export default function B2BDetailPage() {
@@ -100,15 +98,26 @@ export default function B2BDetailPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const formatDate = (dateInput: any) => {
+  const formatDate = (dateInput: unknown) => {
     if (!dateInput) return "-";
-    if (dateInput.toDate) {
-      return dateInput.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    
+    if (typeof dateInput === 'object' && dateInput !== null) {
+      const ts = dateInput as { toDate?: () => Date; seconds?: number };
+      if (typeof ts.toDate === 'function') {
+        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+      if (typeof ts.seconds === 'number') {
+        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
     }
-    return new Date(dateInput).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    
+    return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
+  const formatRupiah = (val: number | undefined) => {
+    const safeVal = typeof val === 'number' ? val : 0;
+    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(safeVal);
+  };
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
     return (
@@ -227,7 +236,7 @@ export default function B2BDetailPage() {
                <div>
                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${isApproved ? "text-indigo-300" : "text-slate-500"}`}>Plafon Kredit (Piutang) Tersedia</p>
                  <p className={`text-4xl font-black tracking-tight ${isApproved ? "text-white" : "text-slate-900"}`}>
-                   {formatRupiah(clientData.b2bLimit || 0)}
+                   {formatRupiah(clientData.b2bLimit)}
                  </p>
                </div>
                
