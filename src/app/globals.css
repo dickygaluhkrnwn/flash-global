@@ -5,8 +5,8 @@
 @layer base {
   :root {
     /* Background utama dominan putih bersih & light gray agar luas dan eksklusif */
-    --background: #ffffff;
-    --background-alt: #F8F9FA;
+    --background: #f8fafc; /* Diganti ke slate-50 agar efek glass warna putih bisa pop-up */
+    --background-alt: #f1f5f9;
     
     /* Warna teks utama menggunakan Slate yang mewah, bukan hitam kaku */
     --foreground: #0f172a; /* slate-900 */
@@ -23,7 +23,13 @@
   }
 
   body {
-    @apply bg-[var(--background)] text-[var(--foreground)] antialiased selection:bg-[#7A171D]/20 selection:text-[#7A171D];
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+  }
+
+  /* Custom Selection Text matching brand */
+  ::selection {
+    background-color: rgba(122, 23, 29, 0.15); /* Maroon transparan */
+    color: var(--brand-maroon);
   }
 }
 
@@ -32,22 +38,27 @@
     text-wrap: balance;
   }
   
-  /* Glassmorphism Premium Effect khusus Light Mode */
-  .shadow-glass {
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+  /* ======================================================================
+     APPLE GLASSMORPHISM PREMIUM UTILITIES 
+     ====================================================================== */
+  
+  /* Efek Kartu Utama (Bento Box) */
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-[40px] saturate-[150%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.04)] transition-all duration-500;
   }
 
-  .glass-card {
-    @apply bg-white/80 backdrop-blur-xl border border-white/60 shadow-glass;
+  /* Efek Panel yang lebih tebal (Untuk Header / Navbar) */
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-2xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] transition-all duration-300;
   }
   
   /* Efek semi-transparan premium untuk aksen brand */
   .glass-maroon {
-    @apply bg-[#7A171D]/5 backdrop-blur-md border border-[#7A171D]/10;
+    @apply bg-[#7A171D]/5 backdrop-blur-lg border border-[#7A171D]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)];
   }
   
   .glass-gold {
-    @apply bg-[#C5A059]/5 backdrop-blur-md border border-[#C5A059]/10;
+    @apply bg-[#C5A059]/10 backdrop-blur-lg border border-[#C5A059]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)];
   }
 
   /* Utility untuk menyembunyikan scrollbar tapi tetap bisa di-scroll */
@@ -57,5 +68,20 @@
   .no-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
+  }
+
+  /* Modern Scrollbar untuk list/tabel */
+  .client-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .client-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .client-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200/80 rounded-full transition-colors;
+  }
+  .client-scrollbar:hover::-webkit-scrollbar-thumb {
+    @apply bg-slate-300;
   }
 }

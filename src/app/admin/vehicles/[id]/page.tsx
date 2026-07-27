@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, CheckCircle2, AlertCircle, Save, 
-  Truck, Car, Box, Scale, Info, ShieldAlert, Activity
+  Truck, Car, Box, Scale, Info, ShieldAlert, Activity, ImagePlus, UploadCloud, Loader2
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { cn } from "@/lib/utils";
 
-// IMPORT GLOBAL TYPES
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
+
+// EXTEND TYPE UNTUK MENGAKOMODASI imageUrl
+type ExtendedVehicle = DynamicVehicle & { imageUrl?: string };
 
 export default function VehicleDetailPage() {
   const router = useRouter();
@@ -29,19 +32,19 @@ export default function VehicleDetailPage() {
   const { user: currentUser } = useAuthStore();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Data Global Pricing Config
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
 
-  const [currentVehicle, setCurrentVehicle] = useState<Partial<DynamicVehicle>>({
-    name: "", id: "", category: "Mobil", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0,
+  const [currentVehicle, setCurrentVehicle] = useState<Partial<ExtendedVehicle>>({
+    name: "", id: "", category: "Mobil", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0, imageUrl: "",
     dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
   });
 
-  // =========================================================================
-  // CUSTOM STYLES: APPLE GLASSMORPHISM
-  // =========================================================================
   const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
   useEffect(() => {
@@ -54,14 +57,14 @@ export default function VehicleDetailPage() {
           const config = docSnap.data() as PricingConfig;
           setPricingConfig(config);
 
-          // Jika Edit Mode, cari datanya
           if (!isAddMode) {
-            const foundVehicle = config.customVehicles?.find(v => v.id === vehicleId);
+            const foundVehicle = config.customVehicles?.find(v => v.id === vehicleId) as ExtendedVehicle;
             if (foundVehicle) {
               const fallbackCategory = foundVehicle.category || (foundVehicle.isMotor ? "Motor" : "Mobil");
               setCurrentVehicle({
                 ...foundVehicle,
                 category: fallbackCategory,
+                imageUrl: foundVehicle.imageUrl || "",
                 dimS: foundVehicle.dimS || { p: 20, l: 20, t: 20 },
                 dimM: foundVehicle.dimM || { p: 40, l: 40, t: 40 },
                 dimL: foundVehicle.dimL || { p: 50, l: 50, t: 50 }
@@ -87,6 +90,29 @@ export default function VehicleDetailPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validasi ukuran max 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("error", "Ukuran gambar terlalu besar. Maksimal 2MB.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setCurrentVehicle(prev => ({ ...prev, imageUrl: url }));
+      showToast("success", "Gambar armada berhasil diunggah!");
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Gagal mengunggah gambar. Pastikan .env Cloudinary benar.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSaveToDatabase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentVehicle.name || !currentVehicle.id) {
@@ -97,7 +123,7 @@ export default function VehicleDetailPage() {
 
     setIsSaving(true);
 
-    const vehicleData: DynamicVehicle = {
+    const vehicleData: ExtendedVehicle = {
       id: currentVehicle.id.toLowerCase().replace(/\s+/g, '-'),
       name: currentVehicle.name,
       category: currentVehicle.category as "Motor" | "Mobil" | "Truk",
@@ -107,6 +133,7 @@ export default function VehicleDetailPage() {
       minKm: Number(currentVehicle.minKm) || 0,
       perKm: Number(currentVehicle.perKm) || 0,
       insurancePercent: Number(currentVehicle.insurancePercent) || 0,
+      imageUrl: currentVehicle.imageUrl || "", // Simpan URL Gambar
     };
 
     if (vehicleData.isMotor) {
@@ -115,7 +142,7 @@ export default function VehicleDetailPage() {
       vehicleData.dimL = currentVehicle.dimL;
     }
 
-    const updatedVehicles = [...(pricingConfig.customVehicles || [])];
+    const updatedVehicles = [...(pricingConfig.customVehicles || [])] as ExtendedVehicle[];
     
     if (isAddMode) {
       if (updatedVehicles.find(v => v.id === vehicleData.id)) {
@@ -164,7 +191,6 @@ export default function VehicleDetailPage() {
 
   const vCat = currentVehicle.category;
   
-  // Custom 3D Icon styling & Glow Colors berdasarkan kategori
   let icon3DClass = "";
   let icon = <Car className="w-10 h-10 text-white drop-shadow-md" />;
   let glowColor = "bg-blue-500";
@@ -206,17 +232,17 @@ export default function VehicleDetailPage() {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">
             {isAddMode ? "Tambah Spesifikasi Armada" : "Edit Spesifikasi Armada"}
           </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Tentukan kapasitas dan dimensi ukuran standar agar akurat di kalkulator biaya pengiriman.</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Tentukan kapasitas dan unggah foto asli untuk ditampilkan di kalkulator Client Portal.</p>
         </div>
       </div>
 
       <form onSubmit={handleSaveToDatabase} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* KOLOM KIRI: INFO UTAMA */}
+        {/* KOLOM KIRI: INFO UTAMA & GAMBAR */}
         <div className={`lg:col-span-7 ${glassPanel} rounded-[2rem] p-8 space-y-6 relative overflow-hidden transition-all duration-500`}>
            <div className={cn("absolute top-0 right-0 w-64 h-64 rounded-full blur-[80px] opacity-20 pointer-events-none transition-colors duration-500", glowColor)} />
            
-           {/* HEADER CARD: 3D ICON */}
+           {/* HEADER CARD: 3D ICON & INFO */}
            <div className="flex items-center gap-5 border-b border-white/60 pb-6 relative z-10">
              <div className={cn("w-24 h-24 rounded-[1.75rem] flex items-center justify-center shrink-0 transition-all duration-500", icon3DClass)}>
                 {icon}
@@ -230,7 +256,41 @@ export default function VehicleDetailPage() {
            </div>
 
            <div className="space-y-6 relative z-10">
-              
+              {/* UPLOAD GAMBAR ARMADA */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Gambar Armada (Opsional)</label>
+                <div 
+                  onClick={() => !isUploading && fileInputRef.current?.click()}
+                  className={cn(
+                    "w-full h-40 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden relative",
+                    currentVehicle.imageUrl ? "border-slate-300" : "border-slate-300 bg-white/50 hover:bg-white hover:border-[#7A171D]/50",
+                    isUploading && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
+                  
+                  {isUploading ? (
+                    <div className="flex flex-col items-center">
+                      <Loader2 className="w-8 h-8 text-[#7A171D] animate-spin mb-2" />
+                      <span className="text-xs font-bold text-slate-500">Mengunggah ke Cloudinary...</span>
+                    </div>
+                  ) : currentVehicle.imageUrl ? (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={currentVehicle.imageUrl} alt="Vehicle preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-white text-xs font-bold bg-slate-900/60 px-3 py-1.5 rounded-lg backdrop-blur-md">Ubah Gambar</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-slate-400 group">
+                      <UploadCloud className="w-8 h-8 mb-2 group-hover:text-[#7A171D] transition-colors" />
+                      <span className="text-xs font-bold">Klik untuk unggah gambar (.jpg, .png)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* OPSI KATEGORI INTERAKTIF */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Pilih Kategori Kendaraan</label>
@@ -344,7 +404,7 @@ export default function VehicleDetailPage() {
             <AdminButton type="button" onClick={() => router.push("/admin/vehicles")} variant="outline" className="font-bold h-12 w-auto px-6 bg-white border-slate-200 hover:bg-slate-50 shadow-sm">
               Batal
             </AdminButton>
-            <AdminButton type="submit" disabled={isSaving} className="bg-gradient-to-br from-slate-800 to-slate-900 text-white border-slate-950 font-bold h-12 w-auto px-8 shadow-[0_8px_20px_rgba(15,23,42,0.25)] hover:brightness-110">
+            <AdminButton type="submit" disabled={isSaving || isUploading} className="bg-gradient-to-br from-slate-800 to-slate-900 text-white border-slate-950 font-bold h-12 w-auto px-8 shadow-[0_8px_20px_rgba(15,23,42,0.25)] hover:brightness-110">
               <Save className="w-4 h-4 mr-2" /> {isSaving ? "Menyimpan..." : "Simpan Spesifikasi"}
             </AdminButton>
           </div>

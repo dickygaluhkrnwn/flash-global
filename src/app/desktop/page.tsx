@@ -1,62 +1,54 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { 
   MapPin, Box, Maximize, 
-  Globe2, Calculator, Truck, Lock, X, ChevronRight, 
-  User, PackageSearch, Scale, Navigation, Car
+  Globe2, Calculator, Truck, ChevronRight, 
+  Scale, Navigation, Car, ArrowRight, ShieldCheck, Zap
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
-// --- IMPORT FIREBASE CORE ---
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
-// --- IMPORT UI KIT ---
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { cn } from "@/lib/utils";
 
-// --- IMPORT GLOBAL TYPES ---
 import { AdminPricingConfig, EstimateData, DynamicVehicle } from "@/types/order";
 
-// BUG FIX: Perluasan (Extending) tipe AdminPricingConfig agar TypeScript tidak protes
+// --- IMPORT KOMPONEN BARU ---
+import AuthModal from "./components/AuthModal";
+import VehicleShowcase from "./components/VehicleShowcase";
+
 interface ExtendedPricingConfig extends AdminPricingConfig {
   customVehicles?: DynamicVehicle[];
 }
 
-// ======================================================================
-// PENGGUNAAN DYNAMIC IMPORT SSR: FALSE (UNTUK MAPBOX INDEPENDEN)
-// ======================================================================
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
-  loading: () => <div className="h-[52px] w-full bg-slate-50 rounded-xl border border-slate-200 animate-pulse flex items-center px-4 text-xs text-slate-400 font-medium">Menyelaraskan koordinat...</div> 
+  loading: () => <div className="h-[56px] w-full bg-slate-100 rounded-2xl animate-pulse flex items-center px-5 text-sm text-slate-400 font-bold">Menyiapkan radar lokasi...</div> 
 });
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
-  loading: () => <div className="w-full h-full bg-slate-100 animate-pulse flex flex-col items-center justify-center rounded-[2.5rem]"><div className="w-10 h-10 border-4 border-slate-300 border-t-[#7A171D] rounded-full animate-spin mb-4"></div><p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Menyiapkan Peta</p></div> 
+  loading: () => (
+    <div className="w-full h-full bg-slate-100/50 backdrop-blur-md animate-pulse flex flex-col items-center justify-center rounded-[2.5rem]">
+      <div className="w-12 h-12 border-4 border-slate-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-400 text-xs font-black uppercase tracking-widest">Memuat Peta Satelit</p>
+    </div>
+  ) 
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
-// ======================================================================
-// LOGIKA KALKULASI TARIF MENGGUNAKAN DATA DINAMIS DARI ADMIN FIRESTORE
-// ======================================================================
 const getDynamicPricingSimulation = async (params: {
-  category: "domestik" | "internasional";
-  weight: number;
-  length: number;
-  width: number;
-  height: number;
-  distanceKm: number; 
-  vehicle: string;
-  adminConfig: ExtendedPricingConfig | null;
+  category: "domestik" | "internasional"; weight: number; length: number; width: number; height: number;
+  distanceKm: number; vehicle: string; adminConfig: ExtendedPricingConfig | null;
 }): Promise<EstimateData> => {
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await new Promise(resolve => setTimeout(resolve, 800)); 
 
   const volumeWeight = (params.length * params.width * params.height) / 6000;
   const chargeableWeight = Math.max(params.weight, volumeWeight);
@@ -91,51 +83,38 @@ const getDynamicPricingSimulation = async (params: {
 
   const discountThreshold = params.adminConfig?.discounts?.thresholdKg || 50;
   const discountRate = params.adminConfig?.discounts?.rate || 0.95; 
-  
-  if (chargeableWeight >= discountThreshold) {
-    finalPrice *= discountRate; 
-  }
+  if (chargeableWeight >= discountThreshold) { finalPrice *= discountRate; }
 
   return {
     chargeableWeight: parseFloat(chargeableWeight.toFixed(2)),
     finalEstimate: Math.round(finalPrice),
-    parameters: {
-      actualWeight: params.weight,
-      volumeWeight: parseFloat(volumeWeight.toFixed(2)),
-      distanceTraveled: params.distanceKm,
-      category: params.category,
-      vehicleName: vehicleName
-    }
+    parameters: { actualWeight: params.weight, volumeWeight: parseFloat(volumeWeight.toFixed(2)), distanceTraveled: params.distanceKm, category: params.category, vehicleName }
   };
 };
 
-export default function DesktopLandingPage() {
+export default function DesktopPortalPage() {
   const router = useRouter();
   const { user, isHydrated } = useAuthStore();
-  const calculatorRef = useRef<HTMLDivElement>(null);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [estimateData, setEstimateData] = useState<EstimateData | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const domestikRef = useRef<HTMLElement>(null);
   
-  const [activeTab, setActiveTab] = useState<"domestik" | "internasional">("domestik");
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [adminPricing, setAdminPricing] = useState<ExtendedPricingConfig | null>(null);
   const [availableVehicles, setAvailableVehicles] = useState<DynamicVehicle[]>([]);
 
-  const [formData, setFormData] = useState({ 
-    origin: "", destination: "", weight: "", length: "", width: "", height: "", vehicle: "auto" 
-  });
-  
+  // --- STATE KHUSUS DOMESTIK ---
+  const [isDomestikLoading, setIsDomestikLoading] = useState(false);
+  const [domestikEstimate, setDomestikEstimate] = useState<EstimateData | null>(null);
+  const [domestikData, setDomestikData] = useState({ origin: "", destination: "", weight: "", length: "", width: "", height: "", vehicle: "auto" });
   const [originCoords, setOriginCoords] = useState<{lng: number, lat: number} | null>(null);
   const [destCoords, setDestCoords] = useState<{lng: number, lat: number} | null>(null);
   const [routeData, setRouteData] = useState<unknown>(null); 
   const [routeDistanceKm, setRouteDistanceKm] = useState<number>(0);
-  
-  const [mapViewState, setMapViewState] = useState({
-    longitude: 118.0149,
-    latitude: -2.5489,
-    zoom: 4.5
-  });
+  const [mapViewState, setMapViewState] = useState({ longitude: 118.0149, latitude: -2.5489, zoom: 4.5 });
+
+  // --- STATE KHUSUS FORWARDING ---
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [globalEstimate, setGlobalEstimate] = useState<EstimateData | null>(null);
+  const [globalData, setGlobalData] = useState({ origin: "", destination: "", weight: "", length: "", width: "", height: "" });
 
   useEffect(() => {
     const fetchLivePricing = async () => {
@@ -146,19 +125,31 @@ export default function DesktopLandingPage() {
           const data = docSnap.data() as ExtendedPricingConfig;
           setAdminPricing(data);
           if (data.customVehicles && Array.isArray(data.customVehicles)) {
-            setAvailableVehicles(data.customVehicles.sort((a: DynamicVehicle, b: DynamicVehicle) => a.maxWeight - b.maxWeight));
+            setAvailableVehicles(data.customVehicles.sort((a, b) => a.maxWeight - b.maxWeight));
           }
         }
-      } catch (error) { 
-        console.error("Gagal sinkronisasi master data tarif:", error); 
-      }
+      } catch (error) { console.error("Gagal sinkronisasi master data tarif:", error); }
     };
     fetchLivePricing();
   }, []);
 
   useEffect(() => {
-    if (!originCoords && !destCoords) return;
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      if (hash) {
+        setTimeout(() => {
+          const el = document.getElementById(hash.substring(1));
+          if (el) {
+            const y = el.getBoundingClientRect().top + window.scrollY - 100;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+          }
+        }, 500);
+      }
+    }
+  }, []);
 
+  useEffect(() => {
+    if (!originCoords && !destCoords) return;
     if ((originCoords && !destCoords) || (!originCoords && destCoords)) {
       const point = originCoords || destCoords;
       setMapViewState({ longitude: point!.lng, latitude: point!.lat, zoom: 12 });
@@ -169,7 +160,6 @@ export default function DesktopLandingPage() {
 
     const fetchRealRoute = async () => {
       if (!originCoords || !destCoords) return;
-      
       try {
         const waypoints = `${originCoords.lng},${originCoords.lat};${destCoords.lng},${destCoords.lat}`;
         const response = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`);
@@ -196,413 +186,355 @@ export default function DesktopLandingPage() {
           
           setMapViewState({ longitude: midLng, latitude: midLat, zoom: dynamicZoom });
         }
-      } catch (err) { 
-        console.error("Gagal memproses AI Route:", err); 
-      }
+      } catch (err) { console.error("Gagal memproses AI Route:", err); }
     };
     
     const timer = setTimeout(fetchRealRoute, 500); 
     return () => clearTimeout(timer);
   }, [originCoords, destCoords]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setEstimateData(null); 
-  };
-
-  const handleSmartMapChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setEstimateData(null);
-  };
-
-  const handleCalculate = async (e: React.FormEvent) => {
+  const handleCalculateDomestik = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setEstimateData(null);
-
-    if (!formData.origin || !formData.destination || !formData.weight || !formData.length || !formData.width || !formData.height) {
-      setIsLoading(false); return;
+    setIsDomestikLoading(true); setDomestikEstimate(null);
+    if (!domestikData.origin || !domestikData.destination || !domestikData.weight || !domestikData.length) {
+      setIsDomestikLoading(false); return;
     }
-
     try {
       const result = await getDynamicPricingSimulation({
-        category: activeTab,
-        weight: parseFloat(formData.weight), 
-        length: parseFloat(formData.length), 
-        width: parseFloat(formData.width), 
-        height: parseFloat(formData.height),
-        distanceKm: routeDistanceKm, 
-        vehicle: formData.vehicle,
-        adminConfig: adminPricing
+        category: "domestik", weight: parseFloat(domestikData.weight), length: parseFloat(domestikData.length), width: parseFloat(domestikData.width), height: parseFloat(domestikData.height),
+        distanceKm: routeDistanceKm, vehicle: domestikData.vehicle, adminConfig: adminPricing
       });
-      setEstimateData(result);
-    } catch (error) { 
-      console.error("Kalkulasi cerdas gagal:", error); 
-    } finally { 
-      setIsLoading(false); 
+      setDomestikEstimate(result);
+    } catch (error) { console.error(error); } finally { setIsDomestikLoading(false); }
+  };
+
+  const handleCalculateGlobal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsGlobalLoading(true); setGlobalEstimate(null);
+    if (!globalData.origin || !globalData.destination || !globalData.weight) {
+      setIsGlobalLoading(false); return;
     }
+    try {
+      const result = await getDynamicPricingSimulation({
+        category: "internasional", weight: parseFloat(globalData.weight), length: parseFloat(globalData.length), width: parseFloat(globalData.width), height: parseFloat(globalData.height),
+        distanceKm: 0, vehicle: "auto", adminConfig: adminPricing
+      });
+      setGlobalEstimate(result);
+    } catch (error) { console.error(error); } finally { setIsGlobalLoading(false); }
   };
 
-  const formatRupiah = (number: number) => {
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
-  };
+  const formatRupiah = (number: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
 
-  const getNextRouteWithData = () => {
-    const params = new URLSearchParams({
-      origin: formData.origin, destination: formData.destination, weight: formData.weight.toString(),
-      l: formData.length.toString(), w: formData.width.toString(), h: formData.height.toString()
-    }).toString();
-    return activeTab === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`;
-  };
-
-  const handleProceed = () => {
+  const handleProceed = (type: "domestik" | "forwarding") => {
     if (!isHydrated) return;
     if (!user) { setShowAuthModal(true); return; }
-    router.push(getNextRouteWithData());
+    
+    const data = type === "domestik" ? domestikData : globalData;
+    const params = new URLSearchParams({
+      origin: data.origin, destination: data.destination, weight: data.weight,
+      l: data.length, w: data.width, h: data.height
+    }).toString();
+    
+    router.push(type === "domestik" ? `/delivery/booking?${params}` : `/forwarding/quote?${params}`);
   };
 
-  const handleSelectVehicleCard = (vehicleId: string) => {
-    setFormData(prev => ({ ...prev, vehicle: vehicleId }));
-    setActiveTab("domestik");
-    if (calculatorRef.current) {
-      calculatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  // Helper local function for class string builder because cn is removed
+  const cls = (...classes: (string | boolean | undefined | null)[]) => {
+    return classes.filter(Boolean).join(" ");
   };
-
-  const dropsArrayForMap = destCoords ? [{
-    id: "dest-1", lng: destCoords.lng, lat: destCoords.lat, 
-    address: formData.destination, detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: []
-  }] : [];
 
   return (
-    <main className="flex-grow relative overflow-x-hidden min-h-screen bg-slate-50 pt-24 pb-16">
+    <main className="relative min-h-screen bg-[#f8fafc] text-slate-900 font-sans overflow-x-hidden pb-32">
       
-      {/* BACKGROUND ELEMENTS */}
-      <div className="absolute top-0 right-0 w-[60%] h-[60%] bg-[#7A171D]/5 rounded-full blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[40%] h-[50%] bg-[#C5A059]/10 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="max-w-[1440px] mx-auto px-6 md:px-8 lg:px-12 relative z-10">
-        
-        {/* ============================================================== */}
-        {/* DASHBOARD HEADER - FUNCTIONAL & TO THE POINT */}
-        {/* ============================================================== */}
-        <div className="mb-10 border-b border-slate-200/60 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <Calculator className="w-8 h-8 text-[#7A171D]" /> Simulasi & Pemesanan
-            </h1>
-            <p className="text-slate-500 font-medium mt-2 text-sm max-w-2xl">
-              Tentukan titik penjemputan, lokasi tujuan, dan spesifikasi kargo untuk melihat rute interaktif dan estimasi biaya secara otomatis.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto shrink-0">
-            <Button onClick={() => {
-               if(!user) setShowAuthModal(true); else router.push("/delivery/booking");
-            }} variant="primary" className="shadow-md h-11 text-xs px-5 w-full sm:w-auto flex-1">
-              <Truck className="w-4 h-4 mr-1.5"/> Booking Langsung
-            </Button>
-            
-            {/* TOMBOL FORWARDING DIKEMBALIKAN */}
-            <Button onClick={() => {
-               if(!user) setShowAuthModal(true); else router.push("/forwarding/quote");
-            }} variant="outline" className="border-slate-200 shadow-sm h-11 text-xs px-5 w-full sm:w-auto flex-1">
-              <Globe2 className="w-4 h-4 mr-1.5 text-slate-500"/> Kargo Global
-            </Button>
-          </div>
-        </div>
-
-        {/* ============================================================== */}
-        {/* CALCULATOR & MAPBOX SECTION (NAIK KE ATAS) */}
-        {/* ============================================================== */}
-        <div ref={calculatorRef} className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch scroll-mt-24 mb-16">
-          
-          {/* KOLOM KIRI: KALKULATOR */}
-          <motion.div 
-            initial={{ opacity: 0, x: -30 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            transition={{ duration: 0.6, ease: "easeOut" }} 
-            className="lg:col-span-5 flex flex-col"
-          >
-            <div className="bg-white border border-slate-200 rounded-[2.5rem] p-6 lg:p-8 shadow-2xl shadow-slate-200/50 w-full h-full flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-full pointer-events-none"></div>
-
-              <div className="flex bg-slate-100 p-1.5 rounded-xl mb-8 relative border border-slate-200 shrink-0">
-                <button type="button" onClick={() => { setActiveTab("domestik"); setEstimateData(null); }} className={cn("flex-1 py-3.5 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "domestik" ? "text-[#7A171D]" : "text-slate-500 hover:text-slate-700")}>
-                  <Truck className="w-4 h-4"/> Domestik
-                </button>
-                <button type="button" onClick={() => { setActiveTab("internasional"); setEstimateData(null); }} className={cn("flex-1 py-3.5 text-sm font-bold transition-all rounded-lg relative z-10 flex items-center justify-center gap-2", activeTab === "internasional" ? "text-[#C5A059]" : "text-slate-500 hover:text-slate-700")}>
-                  <Globe2 className="w-4 h-4"/> Internasional
-                </button>
-                <div className={cn("absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white rounded-lg shadow-sm transition-all duration-300 ease-out", activeTab === "domestik" ? "left-1.5" : "left-[calc(50%+4px)]")}></div>
-              </div>
-
-              <form onSubmit={handleCalculate} className="space-y-6 flex-grow flex flex-col justify-between z-10">
-                
-                <div className="space-y-5">
-                  <div className="space-y-3 relative">
-                    <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 z-0"></div>
-                    
-                    <div className="relative z-10 flex items-center gap-4">
-                      <div className={cn("w-3 h-3 rounded-full outline outline-4 shrink-0", activeTab === "domestik" ? "bg-white outline-[#7A171D] border-2 border-[#7A171D]" : "bg-white outline-[#C5A059] border-2 border-[#C5A059]")}></div>
-                      <div className={cn("flex-1 border border-slate-200 focus-within:ring-4 rounded-xl transition-all bg-white overflow-hidden h-[52px] shadow-sm", activeTab === "domestik" ? "focus-within:border-[#7A171D] focus-within:ring-[#7A171D]/10" : "focus-within:border-[#C5A059] focus-within:ring-[#C5A059]/10")}>
-                        <SearchBox
-                          accessToken={MAPBOX_TOKEN}
-                          options={{ language: 'id', country: 'ID' }}
-                          value={formData.origin}
-                          placeholder="Titik Penjemputan..."
-                          onRetrieve={(res) => {
-                            const feature = res.features[0];
-                            handleSmartMapChange("origin", feature.properties.full_address || feature.properties.name);
-                            setOriginCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
-                          }}
-                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '15px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '600' } }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="relative z-10 flex items-center gap-4">
-                      <div className={cn("w-3 h-3 rounded-full outline outline-4 shrink-0", activeTab === "domestik" ? "bg-[#7A171D] outline-slate-100" : "bg-[#C5A059] outline-slate-100")}></div>
-                      <div className={cn("flex-1 border border-slate-200 focus-within:ring-4 rounded-xl transition-all bg-white overflow-hidden h-[52px] shadow-sm", activeTab === "domestik" ? "focus-within:border-[#7A171D] focus-within:ring-[#7A171D]/10" : "focus-within:border-[#C5A059] focus-within:ring-[#C5A059]/10")}>
-                        <SearchBox
-                          accessToken={MAPBOX_TOKEN}
-                          options={{ language: 'id', country: 'ID' }}
-                          value={formData.destination}
-                          placeholder="Lokasi Pengiriman..."
-                          onRetrieve={(res) => {
-                            const feature = res.features[0];
-                            handleSmartMapChange("destination", feature.properties.full_address || feature.properties.name);
-                            setDestCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
-                          }}
-                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '15px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '600' } }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Box className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Berat (Kg)</label>
-                      <Input type="number" name="weight" min="1" value={formData.weight} onChange={handleInputChange} placeholder="Cth: 5" className={cn("h-[52px] font-bold border-slate-200 bg-slate-50 text-base", activeTab === "domestik" ? "focus-visible:border-[#7A171D]" : "focus-visible:border-[#C5A059]")} required />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Maximize className={cn("w-3.5 h-3.5", activeTab === "domestik" ? "text-[#7A171D]" : "text-[#C5A059]")}/> Dimensi (cm)</label>
-                      <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden h-[52px] focus-within:ring-4 transition-all">
-                        <input type="number" name="length" placeholder="P" value={formData.length} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
-                        <input type="number" name="width" placeholder="L" value={formData.width} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
-                        <input type="number" name="height" placeholder="T" value={formData.height} onChange={handleInputChange} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
-                      </div>
-                    </div>
-                    
-                    {/* DROPDOWN ARMADA */}
-                    {activeTab === "domestik" && (
-                      <div className="col-span-2 space-y-2 mt-2">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                          <Truck className="w-3.5 h-3.5 text-[#7A171D]"/> Pilihan Armada
-                        </label>
-                        <div className="relative">
-                          <select 
-                            name="vehicle" 
-                            value={formData.vehicle} 
-                            onChange={handleInputChange}
-                            className="w-full h-[52px] px-4 text-sm font-bold border border-slate-200 bg-slate-50 rounded-xl focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none appearance-none transition-all cursor-pointer"
-                          >
-                            <option value="auto">Otomatis (AI Rekomendasi)</option>
-                            {availableVehicles.map(v => (
-                              <option key={v.id} value={v.id}>{v.name} (Maks {v.maxWeight} Kg)</option>
-                            ))}
-                          </select>
-                          <ChevronRight className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-4">
-                    {!estimateData ? (
-                      <Button type="submit" isLoading={isLoading} variant={activeTab === "domestik" ? "primary" : "gold"} className="w-full h-14 text-base font-black shadow-lg shadow-black/10">
-                        Kalkulasi AI Logistics <Calculator className="w-5 h-5 ml-2 opacity-70"/>
-                      </Button>
-                    ) : (
-                      <div className="bg-slate-900 rounded-[1.5rem] p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-2xl shadow-slate-900/20">
-                        
-                        <div className="flex justify-between items-start border-b border-slate-700/50 pb-4">
-                          <div>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{activeTab === "domestik" ? "Tarif Live Ekspedisi" : "Estimasi Kargo Global"}</p>
-                            <h3 className={cn("text-3xl font-black tracking-tight", activeTab === "domestik" ? "text-white" : "text-[#C5A059]")}>{formatRupiah(estimateData.finalEstimate)}</h3>
-                          </div>
-                          <div className={cn("text-sm font-black px-2 py-1 rounded-lg", activeTab === "domestik" ? "bg-[#7A171D] text-white" : "bg-[#C5A059] text-slate-900")}>
-                            {estimateData.chargeableWeight} Kg
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center justify-between text-sm text-slate-400 gap-y-3">
-                          <div className="flex items-center gap-1.5"><Scale className="w-4 h-4 opacity-70"/> <span className="font-medium">Berat: <b className="text-white">{estimateData.parameters.actualWeight} Kg</b></span></div>
-                          <div className="flex items-center gap-1.5"><Navigation className="w-4 h-4 opacity-70"/> <span className="font-medium">Jarak: <b className="text-white">{routeDistanceKm > 0 ? `${routeDistanceKm} Km` : "Global"}</b></span></div>
-                          
-                          {activeTab === "domestik" && (
-                            <div className="flex items-center gap-1.5 w-full mt-1 pt-3 border-t border-slate-700/50">
-                              <Truck className="w-4 h-4 opacity-70 text-[#C5A059]"/> 
-                              <span className="font-medium">Armada Terpilih: <b className="text-[#C5A059]">{estimateData.parameters.vehicleName}</b></span>
-                            </div>
-                          )}
-                        </div>
-
-                        <button type="button" onClick={handleProceed} className="w-full mt-2 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors">
-                          Lanjutkan Pemesanan <ChevronRight className="w-4 h-4"/>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-              </form>
-            </div>
-          </motion.div>
-
-          {/* KOLOM KANAN: LIVE MAPBOX RADAR */}
-          <motion.div 
-            initial={{ opacity: 0, x: 30 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-            className="lg:col-span-7 h-[500px] lg:h-auto relative"
-          >
-            <div className="w-full h-full bg-white rounded-[2.5rem] p-2 shadow-2xl shadow-slate-200/50 border border-slate-200 relative overflow-hidden group">
-              
-              <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-3 rounded-2xl border border-slate-200 z-20 flex items-center gap-3 shadow-sm pointer-events-none">
-                <div className="relative flex items-center justify-center">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute"></div>
-                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full relative z-10"></div>
-                </div>
-                <div>
-                  <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest leading-none mb-1">Radar Aktif</p>
-                  <p className="text-slate-500 text-[9px] font-bold uppercase leading-none">{routeDistanceKm > 0 ? `Jarak: ${routeDistanceKm} KM` : "Menunggu Koordinat"}</p>
-                </div>
-              </div>
-
-              <div className="w-full h-full rounded-[2rem] relative overflow-hidden bg-slate-100 border border-slate-200/50">
-                <MapBase
-                  longitude={mapViewState.longitude} 
-                  latitude={mapViewState.latitude}
-                  zoom={mapViewState.zoom}
-                  interactive={true}
-                  className="w-full h-full"
-                  originCoords={originCoords}
-                  drops={dropsArrayForMap}
-                  routeData={routeData}
-                />
-
-                {!originCoords && !destCoords && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-sm z-10 pointer-events-none">
-                    <div className="bg-white p-4 rounded-3xl shadow-xl border border-slate-100 flex flex-col items-center">
-                      <MapPin className="w-8 h-8 text-[#7A171D] mb-3 animate-bounce" />
-                      <p className="text-slate-700 text-sm font-bold tracking-wide">Pilih lokasi pada form kalkulator</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="absolute bottom-6 right-6 z-20">
-                <button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/tracking"); }} className="bg-white/95 backdrop-blur-md hover:bg-white border border-slate-200 px-5 py-3.5 rounded-2xl flex items-center gap-3 transition-colors shadow-lg group">
-                  <div className="bg-[#7A171D]/10 p-2 rounded-xl text-[#7A171D] group-hover:scale-110 transition-transform"><PackageSearch className="w-4 h-4"/></div>
-                  <span className="text-slate-800 text-xs font-bold tracking-wide">Cek Pengiriman</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-
-        </div>
-
-        {/* ============================================================== */}
-        {/* SHOWCASE ARMADA (3D CARDS DARI DATABASE) - PINDAH KE BAWAH */}
-        {/* ============================================================== */}
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }} 
-          whileInView={{ opacity: 1, y: 0 }} 
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              <Truck className="w-5 h-5 text-[#7A171D]" /> Katalog Kapasitas Armada
-            </h2>
-            <div className="h-[1px] flex-1 bg-slate-200/60 ml-6"></div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {availableVehicles.length > 0 ? (
-              // BUG FIX: Hapus argumen 'i' karena tidak lagi digunakan dalam render block
-              availableVehicles.map((vehicle) => {
-                const isMotor = vehicle.category === "Motor" || vehicle.isMotor;
-                const isMobil = vehicle.category === "Mobil";
-
-                return (
-                  <div 
-                    key={vehicle.id}
-                    onClick={() => handleSelectVehicleCard(vehicle.id)}
-                    className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-[#C5A059]/40 transition-all cursor-pointer group flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center mb-4",
-                        isMotor ? "bg-[#C5A059]/10 text-[#C5A059]" : isMobil ? "bg-blue-50 text-blue-600" : "bg-[#7A171D]/10 text-[#7A171D]"
-                      )}>
-                        {isMobil ? <Car className="w-6 h-6" /> : <Truck className="w-6 h-6" />}
-                      </div>
-                      <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-[#7A171D] transition-colors">{vehicle.name}</h3>
-                      <p className="text-slate-500 text-xs font-medium mb-6 leading-relaxed">Maksimal dimensi {vehicle.dimM?.p ?? 0}x{vehicle.dimM?.l ?? 0}x{vehicle.dimM?.t ?? 0} cm dengan berat <span className="font-bold text-slate-700">{vehicle.maxWeight} Kg</span>.</p>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Base Fare</span>
-                      <span className="font-black text-slate-900 text-sm">{formatRupiah(vehicle.baseFare)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              // SKELETON LOADING BILA DATA BELUM ADA (Di sini kita abaikan '_' dengan nama yang jelas 'index')
-              Array.from({length: 4}).map((_, index) => (
-                <div key={index} className="bg-slate-100 rounded-[2rem] h-48 border border-slate-200 animate-pulse"></div>
-              ))
-            )}
-          </div>
-        </motion.div>
-
+      {/* --- AMBIENT GLOWING BACKGROUND --- */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vh] rounded-full bg-rose-200/30 blur-[120px]" />
+        <div className="absolute top-[20%] right-[-10%] w-[50vw] h-[50vh] rounded-full bg-amber-100/40 blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[20%] w-[40vw] h-[40vh] rounded-full bg-blue-100/30 blur-[100px]" />
       </div>
 
-      {/* AUTH MODAL */}
-      <AnimatePresence>
-        {showAuthModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowAuthModal(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm cursor-pointer" />
-            
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl p-8 md:p-10 overflow-hidden border border-slate-200">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#7A171D] to-[#C5A059]" />
-              <button onClick={() => setShowAuthModal(false)} className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><X className="w-4 h-4" /></button>
+      <div className="relative z-10 max-w-[1440px] mx-auto px-4 md:px-8">
+        
+        {/* ============================================================== */}
+        {/* 📦 SECTION 1: PENGIRIMAN DOMESTIK (#domestik) */}
+        {/* ============================================================== */}
+        <section id="domestik" ref={domestikRef} className="pt-8 pb-16">
+          <div className="mb-8 px-2 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-[#7A171D]/10 text-[#7A171D] border border-[#7A171D]/20"><Truck className="w-7 h-7" /></div>
+                Kalkulator Domestik
+              </h1>
+              <p className="text-slate-500 font-medium mt-3 text-base max-w-xl">Simulasi otomatis tarif pengiriman ke seluruh Indonesia dengan integrasi pemetaan satelit.</p>
+            </div>
+            <Button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/delivery/booking"); }} variant="primary" className="shadow-md h-12">
+              <Calculator className="w-4 h-4 mr-2"/> Booking Domestik
+            </Button>
+          </div>
 
-              <div className="w-16 h-16 bg-[#7A171D]/10 rounded-2xl flex items-center justify-center mb-6 border border-[#7A171D]/20">
-                <Lock className="w-8 h-8 text-[#7A171D]" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch mb-16">
+            
+            {/* KIRI: MAPBOX */}
+            <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-7 h-[400px] lg:h-auto min-h-[500px] relative order-2 lg:order-1">
+              <div className="glass-card w-full h-full p-2 rounded-[2.5rem] relative overflow-hidden group">
+                <div className="absolute top-6 left-6 glass-panel px-4 py-3 rounded-2xl z-20 flex items-center gap-3 pointer-events-none">
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute"></div>
+                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full relative z-10"></div>
+                  </div>
+                  <div>
+                    <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest leading-none mb-1">Satelit Radar</p>
+                    <p className="text-slate-500 text-[9px] font-bold uppercase leading-none">{routeDistanceKm > 0 ? `Jarak Tempuh: ${routeDistanceKm} KM` : "Menunggu Koordinat"}</p>
+                  </div>
+                </div>
+
+                <div className="w-full h-full rounded-[2rem] relative overflow-hidden bg-slate-100 border border-white/50">
+                  <MapBase
+                    longitude={mapViewState.longitude} latitude={mapViewState.latitude} zoom={mapViewState.zoom}
+                    interactive={true} className="w-full h-full" originCoords={originCoords} 
+                    drops={destCoords ? [{ id: "d1", lng: destCoords.lng, lat: destCoords.lat, address: domestikData.destination, detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [] }] : []}
+                    routeData={routeData}
+                  />
+                  {!originCoords && !destCoords && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-md z-10 pointer-events-none">
+                      <div className="bg-white/90 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white flex flex-col items-center">
+                        <MapPin className="w-10 h-10 text-[#7A171D] mb-3 animate-bounce" />
+                        <p className="text-slate-800 text-sm font-black tracking-wide">Pilih lokasi pada form kalkulator</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              
-              <h3 className="text-2xl font-black text-slate-900 mb-2">Akses Terbatas</h3>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8">
-                Untuk menjaga keamanan data pengiriman, sistem mewajibkan Anda untuk masuk atau mendaftar akun sebelum membuat pesanan logistik baru.
-              </p>
-              
-              <div className="flex gap-4">
-                <Button onClick={() => setShowAuthModal(false)} variant="outline" className="flex-1 h-12 text-sm font-bold rounded-xl border-slate-300">
-                  Batal
-                </Button>
-                <Button onClick={() => router.push("/login")} variant="primary" className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2">
-                  <User className="w-4 h-4" /> Login Dulu
-                </Button>
+            </motion.div>
+
+            {/* KANAN: FORM DOMESTIK */}
+            <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-5 order-1 lg:order-2">
+              <div className="glass-card rounded-[2.5rem] p-6 lg:p-8 h-full flex flex-col">
+                <form onSubmit={handleCalculateDomestik} className="flex-grow flex flex-col justify-between space-y-6">
+                  <div className="space-y-5 relative z-10">
+                    <div className="space-y-4 relative">
+                      <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 z-0"></div>
+                      <div className="relative z-10 flex items-center gap-4">
+                        <div className="w-3 h-3 rounded-full bg-white outline outline-4 outline-[#7A171D] border-2 border-[#7A171D] shrink-0"></div>
+                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-white focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
+                          <SearchBox
+                            accessToken={MAPBOX_TOKEN} options={{ language: 'id', country: 'ID' }} value={domestikData.origin} placeholder="Titik Penjemputan..."
+                            onRetrieve={(res) => {
+                              const feature = res.features[0];
+                              setDomestikData(prev => ({ ...prev, origin: feature.properties.full_address || feature.properties.name }));
+                              setOriginCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
+                              setDomestikEstimate(null);
+                            }}
+                            theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                          />
+                        </div>
+                      </div>
+                      <div className="relative z-10 flex items-center gap-4">
+                        <div className="w-3 h-3 rounded-full bg-[#7A171D] outline outline-4 outline-slate-100 shrink-0"></div>
+                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-white focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
+                          <SearchBox
+                            accessToken={MAPBOX_TOKEN} options={{ language: 'id', country: 'ID' }} value={domestikData.destination} placeholder="Lokasi Pengiriman..."
+                            onRetrieve={(res) => {
+                              const feature = res.features[0];
+                              setDomestikData(prev => ({ ...prev, destination: feature.properties.full_address || feature.properties.name }));
+                              setDestCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
+                              setDomestikEstimate(null);
+                            }}
+                            theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Box className="w-3.5 h-3.5 text-[#7A171D]"/> Berat (Kg)</label>
+                        <Input type="number" name="weight" min="1" value={domestikData.weight} onChange={(e) => { setDomestikData(p => ({...p, weight: e.target.value})); setDomestikEstimate(null); }} placeholder="Cth: 5" required />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Maximize className="w-3.5 h-3.5 text-[#7A171D]"/> Dimensi (cm)</label>
+                        <div className={cls("flex bg-white/60 backdrop-blur-md rounded-2xl border border-white overflow-hidden h-[56px] focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white transition-all shadow-sm")}>
+                          <input type="number" placeholder="P" value={domestikData.length} onChange={(e) => { setDomestikData(p => ({...p, length: e.target.value})); setDomestikEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                          <input type="number" placeholder="L" value={domestikData.width} onChange={(e) => { setDomestikData(p => ({...p, width: e.target.value})); setDomestikEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                          <input type="number" placeholder="T" value={domestikData.height} onChange={(e) => { setDomestikData(p => ({...p, height: e.target.value})); setDomestikEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
+                        </div>
+                      </div>
+                      <div className="col-span-2 space-y-2 mt-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-[#7A171D]"/> Pilihan Armada</label>
+                        <div className="relative">
+                          <select value={domestikData.vehicle} onChange={(e) => { setDomestikData(p => ({...p, vehicle: e.target.value})); setDomestikEstimate(null); }} className="w-full h-[56px] px-5 text-sm font-bold border border-white bg-white/60 backdrop-blur-md rounded-2xl focus:border-[#7A171D]/50 focus:ring-[3px] focus:ring-[#7A171D]/15 focus:bg-white outline-none appearance-none transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer">
+                            <option value="auto">Otomatis (AI Rekomendasi)</option>
+                            {availableVehicles.map(v => <option key={v.id} value={v.id}>{v.name} (Maks {v.maxWeight} Kg)</option>)}
+                          </select>
+                          <ChevronRight className="w-4 h-4 text-slate-400 absolute right-5 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-6">
+                    {!domestikEstimate ? (
+                      <Button type="submit" isLoading={isDomestikLoading} variant="primary" className="w-full h-14 text-base rounded-[1.25rem]">
+                        Kalkulasi Jarak & Tarif <Calculator className="w-5 h-5 ml-2 opacity-70"/>
+                      </Button>
+                    ) : (
+                      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.5rem] p-6 flex flex-col gap-4 shadow-[0_8px_30px_rgba(15,23,42,0.3)] border border-slate-700 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-[50px] rounded-full pointer-events-none"></div>
+                        
+                        <div className="flex justify-between items-start border-b border-slate-700/50 pb-4 relative z-10">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tarif Live Ekspedisi</p>
+                            <h3 className="text-3xl font-black tracking-tight text-white">{formatRupiah(domestikEstimate.finalEstimate)}</h3>
+                          </div>
+                          <div className="text-xs font-black px-3 py-1.5 rounded-lg bg-[#7A171D] text-white border border-[#9A242B] shadow-inner">
+                            {domestikEstimate.chargeableWeight} Kg
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-2 text-sm text-slate-400 relative z-10">
+                          <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Scale className="w-4 h-4"/> Berat Dihitung:</span> <b className="text-white">{domestikEstimate.parameters.actualWeight} Kg</b></div>
+                          <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Navigation className="w-4 h-4"/> Jarak Tempuh:</span> <b className="text-white">{routeDistanceKm > 0 ? `${routeDistanceKm} Km` : "-"}</b></div>
+                          <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Car className="w-4 h-4 text-[#C5A059]"/> Armada:</span> <b className="text-[#C5A059]">{domestikEstimate.parameters.vehicleName}</b></div>
+                        </div>
+
+                        <Button type="button" onClick={() => handleProceed("domestik")} className="w-full mt-3 h-12 bg-white text-slate-900 hover:bg-slate-100 border-none relative z-10">
+                          Lanjutkan Pemesanan <ArrowRight className="w-4 h-4 ml-2"/>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </form>
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+          
+          {/* ============================================================== */}
+          {/* COMPONENT: INTERACTIVE VEHICLE SLIDER */}
+          {/* ============================================================== */}
+          <div className="mt-6">
+            <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
+              <ShieldCheck className="w-6 h-6 text-[#7A171D]" /> Katalog Kapasitas Armada
+            </h3>
+            
+            {availableVehicles.length > 0 ? (
+              <VehicleShowcase 
+                vehicles={availableVehicles}
+                selectedVehicleId={domestikData.vehicle}
+                onSelect={(id) => {
+                  setDomestikData(p => ({...p, vehicle: id})); 
+                  setDomestikEstimate(null);
+                }}
+              />
+            ) : (
+              <div className="w-full h-[400px] bg-slate-100 rounded-[3rem] animate-pulse"></div>
+            )}
+          </div>
+
+        </section>
+
+        <div className="w-full max-w-4xl mx-auto h-[1px] bg-gradient-to-r from-transparent via-slate-300 to-transparent my-10"></div>
+
+        {/* ============================================================== */}
+        {/* 🌍 SECTION 2: KARGO INTERNASIONAL (FORWARDING) (#forwarding) */}
+        {/* ============================================================== */}
+        <section id="forwarding" className="pt-8 pb-32 scroll-mt-24">
+          
+          <div className="mb-8 px-2 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-[#C5A059]/10 text-[#C5A059] border border-[#C5A059]/20"><Globe2 className="w-7 h-7" /></div>
+                Kalkulator Forwarding
+              </h2>
+              <p className="text-slate-500 font-medium mt-3 text-base max-w-xl">
+                Cek estimasi biaya kargo internasional secara instan.
+              </p>
+            </div>
+            <Button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/forwarding/quote"); }} variant="gold" className="shadow-md h-12">
+              <Calculator className="w-4 h-4 mr-2"/> Ajukan Penawaran
+            </Button>
+          </div>
+
+          <div className="glass-card rounded-[3rem] overflow-hidden bg-white/40 border border-white relative">
+            <div className="absolute top-0 right-0 w-[50%] h-[100%] bg-gradient-to-l from-[#C5A059]/10 to-transparent pointer-events-none"></div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 items-center">
+              <div className="p-8 lg:p-16 relative z-10">
+                <div className="w-14 h-14 bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg shadow-[#C5A059]/30 border border-[#A68345]">
+                  <Globe2 className="w-7 h-7" />
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 leading-tight mb-4 text-balance">
+                  Kargo Global, <br/><span className="text-[#C5A059]">Kini Lebih Cepat.</span>
+                </h2>
+                <p className="text-slate-500 font-medium text-lg mb-8 leading-relaxed max-w-md">
+                  Pengiriman ekspor-impor bebas hambatan. Sistem mengkalkulasi estimasi berdasarkan dimensi muatan dan regulasi Bea Cukai terbaru.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3"><Zap className="w-5 h-5 text-[#C5A059]" /> <span className="font-bold text-slate-700">Dukungan 200+ Negara & Teritori</span></div>
+                  <div className="flex items-center gap-3"><ShieldCheck className="w-5 h-5 text-[#C5A059]" /> <span className="font-bold text-slate-700">Asuransi Kargo Internasional Menyeluruh</span></div>
+                </div>
+              </div>
+
+              <div className="bg-white/80 backdrop-blur-xl p-8 lg:p-12 h-full border-l border-white/50 relative z-10 flex flex-col justify-center">
+                <form onSubmit={handleCalculateGlobal} className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Negara Asal</label>
+                      <Input name="origin" value={globalData.origin} onChange={(e) => { setGlobalData(p => ({...p, origin: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: Indonesia" required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Negara Tujuan</label>
+                      <Input name="destination" value={globalData.destination} onChange={(e) => { setGlobalData(p => ({...p, destination: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: Singapore" required />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Berat (Kg)</label>
+                      <Input type="number" name="weight" min="1" value={globalData.weight} onChange={(e) => { setGlobalData(p => ({...p, weight: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: 15" required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Dimensi (cm)</label>
+                      <div className={cls("flex bg-white/60 backdrop-blur-md rounded-2xl border border-white overflow-hidden h-[56px] focus-within:ring-[3px] focus-within:ring-[#C5A059]/20 focus-within:bg-white transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]")}>
+                        <input type="number" placeholder="P" value={globalData.length} onChange={(e) => { setGlobalData(p => ({...p, length: e.target.value})); setGlobalEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                        <input type="number" placeholder="L" value={globalData.width} onChange={(e) => { setGlobalData(p => ({...p, width: e.target.value})); setGlobalEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none border-r border-slate-200" required />
+                        <input type="number" placeholder="T" value={globalData.height} onChange={(e) => { setGlobalData(p => ({...p, height: e.target.value})); setGlobalEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    {!globalEstimate ? (
+                      <Button type="submit" isLoading={isGlobalLoading} variant="gold" className="w-full h-14 text-base rounded-[1.25rem]">
+                        Cek Estimasi Global <Globe2 className="w-5 h-5 ml-2 opacity-70"/>
+                      </Button>
+                    ) : (
+                      <div className="bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] rounded-[1.5rem] p-6 flex flex-col gap-4 shadow-[0_8px_30px_rgba(197,160,89,0.3)] border border-[#A68345] animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex justify-between items-start border-b border-white/20 pb-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-1">Estimasi Kargo Global</p>
+                            <h3 className="text-3xl font-black tracking-tight text-white">{formatRupiah(globalEstimate.finalEstimate)}</h3>
+                          </div>
+                          <div className="text-xs font-black px-3 py-1.5 rounded-lg bg-white text-[#C5A059] shadow-sm">
+                            {globalEstimate.chargeableWeight} Kg
+                          </div>
+                        </div>
+                        <Button type="button" onClick={() => handleProceed("forwarding")} className="w-full mt-2 h-12 bg-slate-900 text-white hover:bg-slate-800 border-none shadow-xl">
+                          Buat Penawaran Quote <ArrowRight className="w-4 h-4 ml-2"/>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      {/* COMPONENT: MODAL AUTH */}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+
     </main>
   );
 }

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { 
   CheckCircle2, Truck, Box, Scale, AlertCircle, 
-  Plus, Trash2, Search, Filter, ArrowUpDown, ShieldAlert, Activity, ArrowRight, Car
+  Plus, Trash2, Search, Filter, ArrowUpDown, ShieldAlert, Activity, ArrowRight, Car, ImageIcon
 } from "lucide-react";
 
 // --- IMPORT FIREBASE CORE ---
@@ -22,6 +22,9 @@ import { cn } from "@/lib/utils";
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
 
+// EXTEND TYPE UNTUK MENGAKOMODASI imageUrl TANPA ERROR 'any'
+type ExtendedVehicle = DynamicVehicle & { imageUrl?: string };
+
 export default function AdminVehiclesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -32,12 +35,8 @@ export default function AdminVehiclesPage() {
   const [filterType, setFilterType] = useState("all"); 
   const [sortBy, setSortBy] = useState("weight_asc"); 
 
-  // Data Global Pricing Config 
   const [pricingConfig, setPricingConfig] = useState<PricingConfig>({ customVehicles: [], b2bDiscount: 15, tarifPorter: 50000 });
 
-  // =========================================================================
-  // CUSTOM STYLES: APPLE GLASSMORPHISM
-  // =========================================================================
   const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
   useEffect(() => {
@@ -83,20 +82,19 @@ export default function AdminVehiclesPage() {
   const vehiclesArray = pricingConfig.customVehicles || [];
 
   const processedData = vehiclesArray
-    .filter((v: DynamicVehicle) => {
+    .filter((v: ExtendedVehicle) => {
       const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase()) || v.id.toLowerCase().includes(searchQuery.toLowerCase());
       const vCat = v.category || (v.isMotor ? "Motor" : "Mobil");
       const matchType = filterType === "all" ? true : vCat.toLowerCase() === filterType.toLowerCase();
       return matchSearch && matchType;
     })
-    .sort((a: DynamicVehicle, b: DynamicVehicle) => {
+    .sort((a: ExtendedVehicle, b: ExtendedVehicle) => {
       if (sortBy === "weight_asc") return a.maxWeight - b.maxWeight;
       if (sortBy === "weight_desc") return b.maxWeight - a.maxWeight;
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
       return 0;
     });
 
-  // Statistik Dinamis
   const totalVehicles = vehiclesArray.length;
   const totalMotor = vehiclesArray.filter((v: DynamicVehicle) => (v.category || (v.isMotor ? "Motor" : "Mobil")) === "Motor").length;
   const totalMobil = vehiclesArray.filter((v: DynamicVehicle) => (v.category || (v.isMotor ? "Motor" : "Mobil")) === "Mobil").length;
@@ -136,7 +134,7 @@ export default function AdminVehiclesPage() {
             Master Data Kendaraan
           </h1>
           <p className="text-slate-500 text-sm mt-2 max-w-2xl font-medium">
-            Kelola spesifikasi, kapasitas beban, dan dimensi untuk seluruh jenis armada di dalam ekosistem Flash Global.
+            Kelola spesifikasi, kapasitas beban, dimensi, dan foto untuk seluruh jenis armada di dalam ekosistem Flash Global.
           </p>
         </div>
         
@@ -236,7 +234,7 @@ export default function AdminVehiclesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <AnimatePresence>
-                {processedData.map((vehicle: DynamicVehicle) => (
+                {processedData.map((vehicle: ExtendedVehicle) => (
                   <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                     <VehicleCard 
                       data={vehicle} 
@@ -256,31 +254,28 @@ export default function AdminVehiclesPage() {
 }
 
 // ======================================================================
-// KOMPONEN CARD ARMADA 3D APPLE STYLE
+// KOMPONEN CARD ARMADA DENGAN DUKUNGAN GAMBAR
 // ======================================================================
-function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router: AppRouterInstance; onDelete: () => void }) {
+function VehicleCard({ data, router, onDelete }: { data: ExtendedVehicle; router: AppRouterInstance; onDelete: () => void }) {
   const vCat = data.category || (data.isMotor ? "Motor" : "Mobil");
   
-  // Custom 3D Icon styling berdasarkan kategori
+  // Custom 3D Icon styling berdasarkan kategori (Digunakan jika tidak ada gambar)
   let icon3DClass = "";
   let icon = <Car className="w-7 h-7 text-white drop-shadow-md" />;
   let badgeLabel = "";
   let tagColor = "";
 
   if (vCat === "Motor") {
-    // Gold 3D Icon
     icon3DClass = "bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] shadow-[inset_0_2px_4px_rgba(255,255,255,0.6),0_10px_20px_rgba(197,160,89,0.4)] border border-[#C5A059]";
     icon = <Truck className="w-7 h-7 text-white drop-shadow-md" />;
     badgeLabel = "Roda Dua";
     tagColor = "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20";
   } else if (vCat === "Mobil") {
-    // Blue 3D Icon
     icon3DClass = "bg-gradient-to-br from-blue-400 to-blue-600 shadow-[inset_0_2px_4px_rgba(255,255,255,0.6),0_10px_20px_rgba(37,99,235,0.4)] border border-blue-500";
     icon = <Car className="w-7 h-7 text-white drop-shadow-md" />;
     badgeLabel = "Roda Empat";
     tagColor = "bg-blue-50 text-blue-600 border-blue-200";
   } else {
-    // Dark/Maroon 3D Icon for Trucks
     icon3DClass = "bg-gradient-to-br from-slate-700 to-slate-900 shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_10px_20px_rgba(15,23,42,0.4)] border border-slate-950";
     icon = <Truck className="w-7 h-7 text-white drop-shadow-md" />;
     badgeLabel = "Heavy Duty";
@@ -288,17 +283,29 @@ function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router:
   }
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_15px_35px_rgba(0,0,0,0.1)] transition-all duration-300 rounded-[2rem] overflow-hidden group flex flex-col h-full">
+    <div className="bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_15px_35px_rgba(0,0,0,0.1)] transition-all duration-300 rounded-[2rem] overflow-hidden group flex flex-col h-full relative">
       
       {/* CARD HEADER */}
-      <div className="p-6 border-b border-white/60 bg-white/50 flex flex-row items-center justify-between gap-4">
+      <div className="p-6 border-b border-white/60 bg-white/50 flex flex-row items-center justify-between gap-4 relative z-10">
         <div className="flex items-center gap-4">
-          <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shrink-0", icon3DClass)}>
-            {icon}
-          </div>
+          
+          {/* Tampilkan Foto jika ada, jika tidak pakai 3D Icon */}
+          {data.imageUrl ? (
+            <div className="w-14 h-14 rounded-2xl shrink-0 overflow-hidden border-2 border-white shadow-[0_4px_10px_rgba(0,0,0,0.1)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={data.imageUrl} alt={data.name} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shrink-0", icon3DClass)}>
+              {icon}
+            </div>
+          )}
+
           <div className="overflow-hidden">
             <h2 className="text-lg font-black text-slate-900 truncate tracking-tight" title={data.name}>{data.name}</h2>
-            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest font-mono">ID: {data.id}</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest font-mono flex items-center gap-1">
+              {data.imageUrl && <ImageIcon className="w-3 h-3 text-emerald-500" />} ID: {data.id}
+            </p>
           </div>
         </div>
         
@@ -310,7 +317,7 @@ function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router:
       </div>
 
       {/* CARD BODY */}
-      <div className="p-6 space-y-5 flex-1 flex flex-col">
+      <div className="p-6 space-y-5 flex-1 flex flex-col relative z-10">
         
         <div className="flex justify-between items-center pb-4 border-b border-dashed border-slate-200">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Kategori Armada</span>

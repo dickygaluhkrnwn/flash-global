@@ -1,22 +1,22 @@
+"use client";
+
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRef } from "react";
-import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { FieldLabel } from "./FieldLabel";
+import { FieldLabel } from "./FieldLabel"; // Dipertahankan karena masih dipakai
 import { DropDestination, DynamicVehicle, DeliveryItem } from "@/types/order";
-import { cn } from "@/lib/utils";
-// DITAMBAHKAN: RefreshCw untuk icon Generate ID
+import { cn } from "@/lib/utils"; // Dipertahankan karena masih dipakai
 import { User, Phone, MapPin, PackageOpen, Plus, Trash2, MapPinned, ChevronDown, Download, Upload, Info, RefreshCw } from "lucide-react";
 
+// DYNAMIC IMPORT UNTUK MAPBOX
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
-  loading: () => <div className="h-[52px] w-full bg-slate-50 rounded-xl border border-slate-200 animate-pulse flex items-center px-4 text-xs font-semibold text-slate-400">Sinkronisasi satelit...</div> 
+  loading: () => <div className="h-[56px] w-full bg-white/60 rounded-2xl border border-white animate-pulse flex items-center px-4 text-xs font-bold text-slate-400">Menyinkronkan satelit...</div> 
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
-const inputGold = "focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/10";
+const inputFocus = "focus-within:ring-[3px] focus-within:ring-[#C5A059]/20 focus-within:border-[#C5A059]/50 focus-within:bg-white";
 
 interface MotorSettings {
   weightSmall?: number;
@@ -34,7 +34,7 @@ interface Props {
   setActiveDropId: (id: string | null) => void;
   activeDraggable: string | null;
   setActiveDraggable: (id: string | null) => void;
-  handleInfoClick: (t: string, text: string) => void;
+  handleInfoClick: (t: string, text: string) => void; // Dipertahankan karena dipakai di <FieldLabel onInfoClick={...} />
   setErrorMsg: (msg: string) => void;
 }
 
@@ -51,7 +51,7 @@ export default function DropsAccordion({
       return;
     }
     const newId = `DROP-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newItemId = `ITM-${Math.floor(10000 + Math.random() * 90000)}`; // Buat random sejak awal
+    const newItemId = `ITM-${Math.floor(10000 + Math.random() * 90000)}`; 
     setDrops(prev => [...prev, { id: newId, address: "", detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [{ id: newItemId, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }] }]);
     setExpandedDrop(newId);
   };
@@ -59,7 +59,6 @@ export default function DropsAccordion({
   const removeDrop = (index: number) => setDrops(prev => prev.filter((_, i) => i !== index));
   
   const updateDropField = (dIndex: number, field: keyof DropDestination, val: string) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], [field]: val }; return newDrops; });
-  
   const updateDropFieldsMulti = (dIndex: number, updates: Partial<DropDestination>) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex] = { ...newDrops[dIndex], ...updates }; return newDrops; });
   const addItemToDrop = (dIndex: number) => setDrops(prev => { const newDrops = [...prev]; newDrops[dIndex].items.push({ id: `ITM-${Math.floor(10000 + Math.random() * 90000)}`, name: "", weightType: "Kecil", dimType: "S", weightVal: 0, length: 0, width: 0, height: 0, value: 0 }); return newDrops; });
   const removeItemFromDrop = (dIndex: number, iIndex: number) => setDrops(prev => { const newDrops = [...prev]; if (newDrops[dIndex].items.length > 1) { newDrops[dIndex].items = newDrops[dIndex].items.filter((_, i) => i !== iIndex); } return newDrops; });
@@ -125,249 +124,261 @@ export default function DropsAccordion({
   };
 
   return (
-    <Card className="shadow-sm border-slate-200 relative overflow-hidden flex flex-col">
-      <div className="absolute top-0 left-0 w-1.5 h-full bg-[#C5A059]"></div>
-      
-      <CardHeader className="p-6 md:p-8 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-black text-sm">3</div>
-          <div>
-            <h3 className="text-xl font-bold text-slate-900">Tujuan & Paket</h3>
-            <p className="text-xs text-slate-500 mt-1">Total {drops.length} Lokasi Pengiriman</p>
-          </div>
+    <div className="w-full">
+      {/* 1. KONTROL ATAS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h3 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            Rute Pengiriman
+          </h3>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Total {drops.length} Lokasi Tujuan</p>
         </div>
-        
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {selectedService === "Sameday" && (
-            <>
-              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-              <Button type="button" variant="outline" size="sm" onClick={() => handleInfoClick("Cara Upload CSV", "Unduh template CSV, isi sesuai format (Alamat, Nama, NoHP, Patokan, NamaBarang, Berat, P, L, T, Nilai). Lalu klik Upload Bulk CSV.")} className="text-slate-400 border-transparent hover:bg-slate-100 h-9 w-9 p-0 rounded-lg">
-                <Info className="w-4 h-4" />
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={handleDownloadTemplate} className="text-xs h-9 hidden md:flex">
-                <Download className="w-3.5 h-3.5 mr-1.5" /> Template
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-9 border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-white">
-                <Upload className="w-3.5 h-3.5 mr-1.5" /> Bulk CSV
-              </Button>
-              <Button type="button" variant="gold" size="sm" onClick={addDrop} className="text-xs h-9">
-                <Plus className="w-3.5 h-3.5 mr-1.5" /> Tambah Rute
-              </Button>
-            </>
-          )}
-        </div>
-      </CardHeader>
 
-      <div className="max-h-[600px] overflow-y-auto custom-scrollbar p-6 md:p-8 bg-slate-50/30">
-        
-        {/* Warning Mapbox Limit Khusus Sameday/CSV */}
         {selectedService === "Sameday" && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 p-4 rounded-xl flex gap-3 items-start shadow-sm">
-              <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-              <div className="text-blue-800 text-xs leading-relaxed">
-                  <strong className="block mb-1 text-sm">Catatan Penting: Panduan Bulk CSV & Limit Peta Mapbox</strong>
-                  Format CSV: <b>Alamat Lengkap, Nama Penerima, No HP, Patokan, Nama Barang, Berat(Kg), P, L, T, Harga(Rp)</b> tanpa koma ekstra. Untuk kestabilan *routing* satelit Mapbox, sistem membatasi maksimal <b>24 rute tujuan</b> dalam satu order agar aplikasi tidak crash.
-              </div>
+          <div className="flex flex-wrap items-center gap-2 bg-white/60 p-2 rounded-2xl border border-white shadow-sm">
+            <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+            <Button type="button" variant="outline" size="sm" onClick={() => handleInfoClick("Cara Upload CSV", "Unduh template CSV, isi sesuai format (Alamat, Nama, NoHP, Patokan, NamaBarang, Berat, P, L, T, Nilai). Lalu klik Upload Bulk CSV.")} className="text-slate-400 border-transparent hover:bg-slate-100 h-9 w-9 p-0 rounded-xl">
+              <Info className="w-4 h-4" />
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleDownloadTemplate} className="text-xs h-9 rounded-xl hidden md:flex border-slate-200">
+              <Download className="w-3.5 h-3.5 mr-1.5" /> Template
+            </Button>
+            <Button type="button" variant="gold" size="sm" onClick={() => fileInputRef.current?.click()} className="text-xs h-9 rounded-xl shadow-none">
+              <Upload className="w-3.5 h-3.5 mr-1.5" /> Bulk CSV
+            </Button>
+            <Button type="button" variant="primary" size="sm" onClick={addDrop} className="text-xs h-9 rounded-xl shadow-none">
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Tambah Rute
+            </Button>
           </div>
         )}
-
-        <div className="relative">
-          {drops.length > 1 && <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 z-0 hidden lg:block"></div>}
-
-          <div className="space-y-4 relative z-10">
-            <AnimatePresence>
-              {drops.map((drop, dIndex) => {
-                const isExpanded = activeDropId === drop.id;
-
-                return (
-                  <motion.div key={drop.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative">
-                    
-                    <div className="absolute -left-[54px] top-4 w-8 h-8 rounded-full bg-white border-[3px] border-[#C5A059] hidden lg:flex items-center justify-center z-10 shadow-sm text-xs font-black text-[#A68345]">{dIndex + 1}</div>
-
-                    <div className={cn("bg-white border transition-colors shadow-sm rounded-2xl overflow-hidden", isExpanded ? "border-[#C5A059]/40" : "border-slate-200 hover:border-[#C5A059]/30 cursor-pointer")}>
-                      
-                      {/* Accordion Header */}
-                      <div 
-                        className="p-5 flex justify-between items-center select-none"
-                        onClick={() => setExpandedDrop(drop.id)}
-                      >
-                        <h4 className="font-bold text-slate-800 uppercase text-sm flex items-center gap-2 tracking-wider truncate pr-4">
-                          <span className="w-6 h-6 rounded-full bg-[#C5A059] text-white flex shrink-0 items-center justify-center text-[10px] lg:hidden">{dIndex + 1}</span>
-                          <span className="truncate">Rute {dIndex + 1} {drop.receiverName ? <span className="text-slate-400 capitalize normal-case font-semibold">- {drop.receiverName}</span> : ''}</span>
-                        </h4>
-                        
-                        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                          {isExpanded && drop.lng && drop.lat && (
-                            <Button 
-                              type="button" 
-                              variant={activeDraggable === drop.id ? "gold" : "outline"}
-                              size="sm"
-                              onClick={() => setActiveDraggable(activeDraggable === drop.id ? null : drop.id)}
-                              className={`h-8 text-xs ${activeDraggable === drop.id ? "animate-pulse border-none shadow-none" : "border-slate-200 text-slate-500 hover:text-[#C5A059] hover:bg-[#C5A059]/10"}`}
-                            >
-                              <MapPinned className="w-3.5 h-3.5 mr-1.5" />
-                              {activeDraggable === drop.id ? `Geser Pin` : "Edit Pin"}
-                            </Button>
-                          )}
-                          {drops.length > 1 && (
-                            <Button type="button" variant="ghost" size="icon" onClick={() => removeDrop(dIndex)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
-                          )}
-                          <div className="w-8 h-8 flex items-center justify-center bg-slate-50 rounded-lg text-slate-500 border border-slate-100 hover:bg-slate-100 transition-colors ml-1 cursor-pointer" onClick={() => setExpandedDrop(drop.id)}>
-                            <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isExpanded ? "rotate-180" : "")} />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Accordion Body */}
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }} 
-                            animate={{ height: "auto", opacity: 1 }} 
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="border-t border-slate-100"
-                          >
-                            <div className="p-5 md:p-6 space-y-6">
-                              <div className="space-y-5">
-                                <div>
-                                  <FieldLabel label="Pencarian Alamat Tujuan" infoTitle="Alamat Tujuan" infoText="Pastikan alamat lengkap. Ketik perlahan dan pilih alamat yang tepat dari saran yang muncul agar koordinat akurat." onInfoClick={handleInfoClick}/>
-                                  <div className={cn("border-2 border-transparent rounded-xl transition-all bg-slate-50 overflow-hidden h-12 w-full", inputGold)}>
-                                    <SearchBox
-                                      accessToken={MAPBOX_TOKEN}
-                                      options={{ language: 'id', country: 'ID' }}
-                                      value={drop.address}
-                                      placeholder="Ketik alamat pengiriman..."
-                                      onRetrieve={(res) => {
-                                        const feature = res.features[0];
-                                        updateDropFieldsMulti(dIndex, {
-                                          address: feature.properties.full_address || feature.properties.name,
-                                          lng: feature.geometry.coordinates[0],
-                                          lat: feature.geometry.coordinates[1]
-                                        });
-                                      }}
-                                      theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '10px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '500' } }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <FieldLabel label="Detail Patokan" />
-                                  <div className="relative">
-                                    <MapPin className="w-4 h-4 absolute left-4 top-[14px] text-slate-400" />
-                                    <textarea value={drop.detail} onChange={(e) => updateDropField(dIndex, "detail", e.target.value)} rows={2} placeholder="Cth: Pagar cat hitam..." className={cn("flex w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pl-11 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:bg-white transition-all resize-none shadow-sm", inputGold)} required></textarea>
-                                  </div>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                    <FieldLabel label="Nama Penerima" />
-                                    <div className="relative">
-                                      <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                      <Input value={drop.receiverName} onChange={(e) => updateDropField(dIndex, "receiverName", e.target.value)} placeholder="Nama" className={cn("pl-11", inputGold)} required />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <FieldLabel label="No. Handphone" />
-                                    <div className="relative">
-                                      <Phone className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                                      <Input type="tel" value={drop.receiverPhone} onChange={(e) => updateDropField(dIndex, "receiverPhone", e.target.value)} placeholder="08..." className={cn("pl-11", inputGold)} required />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* DATA BARANG PER DROP */}
-                              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 shadow-inner mt-6">
-                                <div className="flex justify-between items-center mb-4">
-                                  <h5 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2"><PackageOpen className="w-4 h-4 text-[#C5A059]"/> Detail Paket</h5>
-                                  <Button type="button" variant="outline" size="sm" onClick={() => addItemToDrop(dIndex)} className="h-7 px-3 text-[10px] text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-600 hover:text-white transition-colors">
-                                    <Plus className="w-3 h-3 mr-1"/> Tambah
-                                  </Button>
-                                </div>
-
-                                <div className="space-y-4">
-                                  {drop.items.map((item, iIndex) => (
-                                    // BUG FIX: Menggunakan index sebagai key agar kursor input tidak hilang fokus saat state item.id berubah
-                                    <div key={`item-${dIndex}-${iIndex}`} className="relative bg-white p-4 rounded-xl border border-slate-200 space-y-4 shadow-sm">
-                                      {drop.items.length > 1 && (
-                                        <button type="button" onClick={() => removeItemFromDrop(dIndex, iIndex)} className="absolute right-3 top-3 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                                      )}
-                                      
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {/* BAGIAN BARU: IDENTITAS KOLI / BARANG */}
-                                        <div className="md:col-span-1">
-                                          <FieldLabel label="ID / Kode Koli" infoTitle="Identifikasi Barang" infoText="Kode unik untuk pelacakan spesifik per koli/kardus. Sangat penting jika mengajukan klaim asuransi sebagian. Anda bisa mengubahnya manual atau klik tombol generate." onInfoClick={handleInfoClick}/>
-                                          <div className="flex gap-2">
-                                            <Input 
-                                              value={item.id} 
-                                              onChange={(e) => updateItemField(dIndex, iIndex, "id", e.target.value.toUpperCase())} 
-                                              placeholder="ITM-XXXX" 
-                                              className={cn("h-10 text-sm font-mono font-bold uppercase", inputGold)} 
-                                              required 
-                                            />
-                                            <Button 
-                                              type="button" 
-                                              variant="outline" 
-                                              className="h-10 px-3 text-slate-400 hover:text-[#C5A059] hover:bg-[#C5A059]/10 border-slate-200 shrink-0 shadow-sm" 
-                                              onClick={() => updateItemField(dIndex, iIndex, "id", `ITM-${Math.floor(10000 + Math.random() * 90000)}`)}
-                                              title="Generate ID Baru"
-                                            >
-                                              <RefreshCw className="w-4 h-4" />
-                                            </Button>
-                                          </div>
-                                        </div>
-
-                                        <div className="md:col-span-2">
-                                          <FieldLabel label="Isi Paket" infoTitle="Deskripsi Barang" infoText="Sebutkan isi paket agar kurir bisa berhati-hati. Contoh: 'Dokumen', 'Pecah Belah'." onInfoClick={handleInfoClick}/>
-                                          <Input value={item.name} onChange={(e) => updateItemField(dIndex, iIndex, "name", e.target.value)} placeholder="Cth: Baju / Dokumen" className={cn("h-10 text-sm", inputGold)} required />
-                                        </div>
-                                      </div>
-
-                                      <div>
-                                        <FieldLabel label="Spesifikasi & Asuransi" infoTitle="Spesifikasi" infoText="Isi nilai barang (Rp) untuk fitur asuransi." onInfoClick={handleInfoClick}/>
-                                        {selectedVehicle?.isMotor ? (
-                                          <div className="grid grid-cols-3 gap-3">
-                                            <select value={item.weightType} onChange={(e) => updateItemField(dIndex, iIndex, "weightType", e.target.value)} className={cn("flex h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:bg-white transition-all shadow-sm", inputGold)}>
-                                              <option value="Kecil">Kecil (&lt; {motorSettings?.weightSmall || 5}Kg)</option>
-                                              <option value="Sedang">Sedang (&lt; {motorSettings?.weightMedium || 20}Kg)</option>
-                                            </select>
-                                            <select value={item.dimType} onChange={(e) => updateItemField(dIndex, iIndex, "dimType", e.target.value)} className={cn("flex h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:bg-white transition-all shadow-sm", inputGold)}>
-                                              <option value="S">Size S</option>
-                                              <option value="M">Size M</option>
-                                              <option value="L">Size L</option>
-                                            </select>
-                                            <Input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="Nilai (Rp)" className={cn("h-10 text-xs font-mono font-bold", inputGold)} />
-                                          </div>
-                                        ) : (
-                                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                                            <Input type="number" value={item.weightVal || ""} onChange={(e) => updateItemField(dIndex, iIndex, "weightVal", Number(e.target.value))} placeholder="Berat (Kg)" className={cn("h-10 text-sm font-bold text-center", inputGold)} required />
-                                            <div className="sm:col-span-2 flex gap-1 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:ring-4 focus-within:border-[#C5A059]/50 focus-within:ring-[#C5A059]/10 transition-all shadow-sm">
-                                              <input type="number" value={item.length || ""} onChange={(e) => updateItemField(dIndex, iIndex, "length", Number(e.target.value))} placeholder="P" className="w-1/3 h-10 px-2 text-xs font-bold text-center border-r border-slate-200 bg-transparent outline-none" required/>
-                                              <input type="number" value={item.width || ""} onChange={(e) => updateItemField(dIndex, iIndex, "width", Number(e.target.value))} placeholder="L" className="w-1/3 h-10 px-2 text-xs font-bold text-center border-r border-slate-200 bg-transparent outline-none" required/>
-                                              <input type="number" value={item.height || ""} onChange={(e) => updateItemField(dIndex, iIndex, "height", Number(e.target.value))} placeholder="T" className="w-1/3 h-10 px-2 text-xs font-bold text-center bg-transparent outline-none" required/>
-                                            </div>
-                                            <Input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="Harga (Rp)" className={cn("h-10 text-xs font-mono font-bold", inputGold)} />
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        </div>
       </div>
-    </Card>
+
+      {/* Warning Mapbox Limit Khusus Sameday/CSV */}
+      {selectedService === "Sameday" && (
+        <div className="mb-6 bg-blue-50/80 backdrop-blur-sm border border-blue-100 p-4 rounded-2xl flex gap-3 items-start shadow-sm">
+            <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+            <div className="text-blue-800 text-xs leading-relaxed font-medium">
+                <strong className="block mb-1 text-sm text-blue-900">Panduan Bulk CSV & Limit Peta</strong>
+                Sistem membatasi maksimal <b>24 rute tujuan</b> dalam satu order agar pelacakan satelit tetap stabil dan akurat.
+            </div>
+        </div>
+      )}
+
+      {/* 2. DAFTAR LOKASI TUJUAN */}
+      <div className="space-y-4">
+        <AnimatePresence>
+          {drops.map((drop, dIndex) => {
+            const isExpanded = activeDropId === drop.id;
+
+            return (
+              <motion.div key={drop.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="relative">
+                
+                {/* Connector Line untuk visualisasi rute */}
+                {dIndex !== drops.length - 1 && <div className="absolute left-6 top-14 bottom-[-16px] w-[2px] bg-slate-200 z-0"></div>}
+
+                <div className={cn("relative z-10 bg-white/80 backdrop-blur-md border transition-all duration-300 shadow-sm rounded-3xl overflow-hidden", isExpanded ? "border-[#C5A059]/40 shadow-md bg-white" : "border-white hover:border-[#C5A059]/30 cursor-pointer")}>
+                  
+                  {/* ACCORDION HEADER */}
+                  <div 
+                    className="p-5 flex justify-between items-center select-none"
+                    onClick={() => setExpandedDrop(drop.id)}
+                  >
+                    <div className="flex items-center gap-4 truncate pr-4">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] text-white flex shrink-0 items-center justify-center text-xs font-black shadow-sm">
+                        {dIndex + 1}
+                      </div>
+                      <h4 className="font-bold text-slate-800 text-sm tracking-wide truncate">
+                        {drop.address ? drop.address.split(",")[0] : `Lokasi Tujuan ${dIndex + 1}`}
+                        {drop.receiverName && <span className="text-slate-400 font-semibold ml-2">- {drop.receiverName}</span>}
+                      </h4>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      {isExpanded && drop.lng && drop.lat && (
+                        <Button 
+                          type="button" 
+                          variant={activeDraggable === drop.id ? "gold" : "outline"}
+                          size="sm"
+                          onClick={() => setActiveDraggable(activeDraggable === drop.id ? null : drop.id)}
+                          className={cn("h-9 text-xs rounded-xl", activeDraggable === drop.id ? "shadow-[0_0_10px_rgba(197,160,89,0.5)]" : "border-slate-200 bg-white text-slate-600 hover:text-[#C5A059]")}
+                        >
+                          <MapPinned className="w-3.5 h-3.5 mr-1.5" />
+                          {activeDraggable === drop.id ? `Geser Pin` : "Edit Pin"}
+                        </Button>
+                      )}
+                      {drops.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeDrop(dIndex)} className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 className="w-4 h-4" /></Button>
+                      )}
+                      <div className="w-9 h-9 flex items-center justify-center bg-slate-50/80 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer border border-white shadow-sm" onClick={() => setExpandedDrop(drop.id)}>
+                        <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", isExpanded && "rotate-180")} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ACCORDION BODY */}
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }} 
+                        animate={{ height: "auto", opacity: 1 }} 
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="border-t border-slate-100/60 bg-slate-50/30"
+                      >
+                        <div className="p-6 md:p-8 space-y-8">
+                          
+                          {/* DETAIL LOKASI */}
+                          <div className="space-y-5">
+                            <div>
+                              <FieldLabel label="Pencarian Alamat Tujuan" infoTitle="Alamat Tujuan" infoText="Ketik perlahan dan pilih alamat dari saran yang muncul agar satelit bisa menangkap titik koordinatnya dengan presisi." onInfoClick={handleInfoClick}/>
+                              <div className={cn("relative group flex items-center bg-white border border-slate-200 rounded-2xl h-[56px] transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]", inputFocus)}>
+                                <div className="pl-4 flex items-center pointer-events-none">
+                                  <MapPin className="w-5 h-5 text-slate-400 group-focus-within:text-[#C5A059]" />
+                                </div>
+                                <div className="flex-1 overflow-hidden">
+                                  <SearchBox
+                                    accessToken={MAPBOX_TOKEN} options={{ language: 'id', country: 'ID' }} value={drop.address} placeholder="Ketik jalan, gedung, atau daerah..."
+                                    onRetrieve={(res) => {
+                                      const feature = res.features[0];
+                                      updateDropFieldsMulti(dIndex, {
+                                        address: feature.properties.full_address || feature.properties.name,
+                                        lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1]
+                                      });
+                                    }}
+                                    theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 16px', fontFamily: 'inherit', unit: '14px', fontWeight: '600' } }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <FieldLabel label="Detail Patokan Jalan" />
+                              <div className="relative group">
+                                <textarea 
+                                  value={drop.detail} 
+                                  onChange={(e) => updateDropField(dIndex, "detail", e.target.value)} 
+                                  rows={2} 
+                                  placeholder="Cth: Pagar cat hitam, depan masjid..." 
+                                  className={cn("w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none resize-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] transition-all", inputFocus)} 
+                                  required
+                                ></textarea>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <FieldLabel label="Nama Penerima" />
+                                <div className={cn("relative group flex items-center bg-white border border-slate-200 rounded-2xl h-[56px] transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]", inputFocus)}>
+                                  <div className="pl-4 flex items-center pointer-events-none"><User className="w-5 h-5 text-slate-400 group-focus-within:text-[#C5A059]" /></div>
+                                  <input type="text" value={drop.receiverName} onChange={(e) => updateDropField(dIndex, "receiverName", e.target.value)} placeholder="Nama Lengkap" className="w-full bg-transparent border-none outline-none px-4 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                                </div>
+                              </div>
+                              <div>
+                                <FieldLabel label="No. Handphone" />
+                                <div className={cn("relative group flex items-center bg-white border border-slate-200 rounded-2xl h-[56px] transition-all duration-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]", inputFocus)}>
+                                  <div className="pl-4 flex items-center pointer-events-none"><Phone className="w-5 h-5 text-slate-400 group-focus-within:text-[#C5A059]" /></div>
+                                  <input type="tel" value={drop.receiverPhone} onChange={(e) => updateDropField(dIndex, "receiverPhone", e.target.value)} placeholder="08..." className="w-full bg-transparent border-none outline-none px-4 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* DATA BARANG (KOLI) */}
+                          <div className="pt-8 border-t border-slate-200/60">
+                            <div className="flex justify-between items-center mb-6">
+                              <div>
+                                <h5 className="text-sm font-black text-slate-900 flex items-center gap-2"><PackageOpen className="w-5 h-5 text-[#C5A059]"/> Detail Kargo & Muatan</h5>
+                                <p className="text-xs text-slate-500 font-medium mt-1">Masukkan spesifikasi untuk perhitungan berat dan asuransi.</p>
+                              </div>
+                              <Button type="button" variant="outline" size="sm" onClick={() => addItemToDrop(dIndex)} className="h-10 px-4 rounded-xl border-[#C5A059] text-[#C5A059] hover:bg-[#C5A059] hover:text-white shadow-sm transition-colors hidden sm:flex">
+                                <Plus className="w-4 h-4 mr-1.5"/> Tambah Barang
+                              </Button>
+                            </div>
+
+                            <div className="space-y-4">
+                              {drop.items.map((item, iIndex) => (
+                                <div key={`item-${dIndex}-${iIndex}`} className="relative bg-white p-5 rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] group hover:border-[#C5A059]/30 transition-colors">
+                                  {drop.items.length > 1 && (
+                                    <button type="button" onClick={() => removeItemFromDrop(dIndex, iIndex)} className="absolute right-4 top-4 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                  )}
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                                    <div className="md:col-span-4">
+                                      <FieldLabel label="ID / Kode Koli" infoTitle="Identifikasi Barang" infoText="Kode unik untuk pelacakan spesifik per koli/kardus. Sangat penting jika mengajukan klaim asuransi." onInfoClick={handleInfoClick}/>
+                                      <div className={cn("relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-11 transition-all shadow-inner", inputFocus)}>
+                                        <input value={item.id} onChange={(e) => updateItemField(dIndex, iIndex, "id", e.target.value.toUpperCase())} placeholder="ITM-XXXX" className="w-full bg-transparent border-none outline-none px-3 text-xs font-mono font-bold uppercase text-slate-700" required />
+                                        <button type="button" onClick={() => updateItemField(dIndex, iIndex, "id", `ITM-${Math.floor(10000 + Math.random() * 90000)}`)} className="h-full px-3 text-slate-400 hover:text-[#C5A059] border-l border-slate-200 shrink-0" title="Generate ID Baru">
+                                          <RefreshCw className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="md:col-span-8 pr-8 md:pr-0">
+                                      <FieldLabel label="Nama Barang" infoTitle="Deskripsi Barang" infoText="Sebutkan isi paket agar kurir bisa berhati-hati. Contoh: 'Dokumen', 'Pecah Belah'." onInfoClick={handleInfoClick}/>
+                                      <div className={cn("relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-11 transition-all shadow-inner", inputFocus)}>
+                                        <input value={item.name} onChange={(e) => updateItemField(dIndex, iIndex, "name", e.target.value)} placeholder="Cth: Dokumen / Pecah Belah" className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" required />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-4 pt-4 border-t border-slate-100">
+                                    <FieldLabel label="Spesifikasi (Dimensi & Harga)" infoTitle="Spesifikasi" infoText="Isi nilai barang (Rp) secara akurat untuk fitur asuransi premium." onInfoClick={handleInfoClick}/>
+                                    
+                                    {selectedVehicle?.isMotor ? (
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div className={cn("bg-slate-50 border border-slate-200 rounded-xl h-11 px-3 shadow-inner", inputFocus)}>
+                                          <select value={item.weightType} onChange={(e) => updateItemField(dIndex, iIndex, "weightType", e.target.value)} className="w-full h-full bg-transparent border-none outline-none text-xs font-bold text-slate-700 appearance-none cursor-pointer">
+                                            <option value="Kecil">Kecil (&lt; {motorSettings?.weightSmall || 5}Kg)</option>
+                                            <option value="Sedang">Sedang (&lt; {motorSettings?.weightMedium || 20}Kg)</option>
+                                          </select>
+                                        </div>
+                                        <div className={cn("bg-slate-50 border border-slate-200 rounded-xl h-11 px-3 shadow-inner", inputFocus)}>
+                                          <select value={item.dimType} onChange={(e) => updateItemField(dIndex, iIndex, "dimType", e.target.value)} className="w-full h-full bg-transparent border-none outline-none text-xs font-bold text-slate-700 appearance-none cursor-pointer">
+                                            <option value="S">Dimensi (Size S)</option>
+                                            <option value="M">Dimensi (Size M)</option>
+                                            <option value="L">Dimensi (Size L)</option>
+                                          </select>
+                                        </div>
+                                        <div className={cn("bg-slate-50 border border-slate-200 rounded-xl h-11 px-3 shadow-inner", inputFocus)}>
+                                          <input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="Nilai Barang (Rp)" className="w-full h-full bg-transparent border-none outline-none text-xs font-mono font-bold text-[#C5A059] placeholder:text-slate-400" />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                        <div className={cn("bg-slate-50 border border-slate-200 rounded-xl h-11 px-3 shadow-inner", inputFocus)}>
+                                          <input type="number" value={item.weightVal || ""} onChange={(e) => updateItemField(dIndex, iIndex, "weightVal", Number(e.target.value))} placeholder="Berat Akt. (Kg)" className="w-full h-full bg-transparent border-none outline-none text-xs font-bold text-slate-900 placeholder:text-slate-400 text-center" required />
+                                        </div>
+                                        <div className={cn("sm:col-span-2 flex bg-slate-50 border border-slate-200 rounded-xl h-11 overflow-hidden shadow-inner", inputFocus)}>
+                                          <input type="number" value={item.length || ""} onChange={(e) => updateItemField(dIndex, iIndex, "length", Number(e.target.value))} placeholder="P" className="w-1/3 h-full px-2 text-xs font-bold text-center border-r border-slate-200 bg-transparent outline-none" required/>
+                                          <input type="number" value={item.width || ""} onChange={(e) => updateItemField(dIndex, iIndex, "width", Number(e.target.value))} placeholder="L" className="w-1/3 h-full px-2 text-xs font-bold text-center border-r border-slate-200 bg-transparent outline-none" required/>
+                                          <input type="number" value={item.height || ""} onChange={(e) => updateItemField(dIndex, iIndex, "height", Number(e.target.value))} placeholder="T" className="w-1/3 h-full px-2 text-xs font-bold text-center bg-transparent outline-none" required/>
+                                        </div>
+                                        <div className={cn("bg-slate-50 border border-slate-200 rounded-xl h-11 px-3 shadow-inner", inputFocus)}>
+                                          <input type="number" value={item.value || ""} onChange={(e) => updateItemField(dIndex, iIndex, "value", Number(e.target.value))} placeholder="Harga (Rp)" className="w-full h-full bg-transparent border-none outline-none text-xs font-mono font-bold text-[#C5A059] placeholder:text-slate-400" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              
+                              {/* Tombol Tambah Barang Khusus Mobile */}
+                              <Button type="button" variant="outline" size="sm" onClick={() => addItemToDrop(dIndex)} className="w-full h-11 rounded-xl border-dashed border-slate-300 text-slate-500 hover:border-[#C5A059] hover:text-[#C5A059] hover:bg-[#C5A059]/5 shadow-none transition-colors sm:hidden">
+                                <Plus className="w-4 h-4 mr-1.5"/> Tambah Barang Lain
+                              </Button>
+                            </div>
+                          </div>
+
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 }
