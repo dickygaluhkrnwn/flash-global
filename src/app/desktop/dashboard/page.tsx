@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, Package, AlertCircle, CreditCard, ArrowRight } from "lucide-react";
+import { Search, SlidersHorizontal, Package, AlertCircle, CreditCard, ArrowRight, Activity } from "lucide-react";
 import Link from "next/link"; 
 import { useRouter } from "next/navigation";
 
 // --- IMPORT BACKEND CORE ---
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, DocumentData } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
+import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
 import { DashboardOrder, FirebaseTimestamp } from "@/types/order";
@@ -56,7 +57,7 @@ export default function DesktopDashboardPage() {
     if (isHydrated && !user) router.push("/login");
   }, [user, isHydrated, router]);
 
-  // REAL-TIME SYNCHRONIZATION MAPPING SUPER LENGKAP
+  // REAL-TIME SYNCHRONIZATION MAPPING
   useEffect(() => {
     if (!user?.uid) {
       setIsLoading(false);
@@ -80,10 +81,10 @@ export default function DesktopDashboardPage() {
     };
 
     unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
-      let currentB2BDebt = 0; // Kalkulator piutang berjalan B2B
+      let currentB2BDebt = 0; 
 
       localOrders = snapshot.docs.map((doc) => {
-        const data = doc.data();
+        const data = doc.data() as DocumentData;
         const rawDate = (typeof data.createdAt === 'object' && data.createdAt?.toDate) ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
         
         let primaryDest = "Multi Tujuan";
@@ -138,7 +139,7 @@ export default function DesktopDashboardPage() {
 
     unsubscribeQuotes = onSnapshot(quotesQuery, (snapshot) => {
       localQuotes = snapshot.docs.map((doc) => {
-        const data = doc.data();
+        const data = doc.data() as DocumentData;
         const rawDate = (typeof data.createdAt === 'object' && data.createdAt?.toDate) ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
 
         return {
@@ -185,10 +186,8 @@ export default function DesktopDashboardPage() {
       if (activeTab === "Sedang Diproses") {
         if (!["Sedang Diproses", "Menunggu Pembayaran", "Menunggu Verifikasi Finance", "Menunggu Follow Up", "Menunggu Kurir", "Menuju Lokasi Jemput"].includes(order.status)) return false;
       } else if (activeTab === "Dibatalkan") {
-        // Hanya tampilkan yang batal murni (tanpa embel-embel refund)
         if (!order.status.includes("Batal") || order.statusSub?.includes("Refund") || order.paymentStatus?.includes("Refund")) return false;
       } else if (activeTab === "Pengembalian") {
-        // Tampilkan semua yang berkaitan dengan Refund
         if (!order.paymentStatus?.includes("Refund") && !order.statusSub?.includes("Refund")) return false;
       } else {
         if (order.status !== activeTab) return false;
@@ -258,41 +257,48 @@ export default function DesktopDashboardPage() {
     return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
   };
 
-  // TAMBAHAN TAB DIBATALKAN DAN PENGEMBALIAN
   const tabs = ["Semua", "Sedang Diproses", "Dikirim", "Selesai", "Dibatalkan", "Pengembalian"];
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8 lg:p-10 relative overflow-hidden font-sans pb-20">
-      {/* Background Ornamen */}
-      <div className="absolute top-0 right-0 w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[30%] h-[30%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
+    <main className="min-h-screen bg-[#f8fafc] p-4 md:p-8 lg:p-10 relative overflow-hidden font-sans pb-32 z-0">
+      
+      {/* --- AMBIENT GLOWING BACKGROUND --- */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-5%] w-[50vw] h-[50vh] rounded-full bg-rose-200/30 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[50vh] rounded-full bg-amber-100/40 blur-[120px]" />
+        <div className="absolute top-[40%] left-[30%] w-[30vw] h-[30vh] rounded-full bg-blue-100/20 blur-[100px]" />
+      </div>
 
-      <div className="max-w-[1000px] mx-auto relative z-10 space-y-6">
+      <div className="max-w-[1200px] mx-auto relative z-10 space-y-6">
         
-        {/* BANNER TAGIHAN PROAKTIF */}
+        {/* ============================================================== */}
+        {/* BANNER TAGIHAN PROAKTIF B2B (GLASS RED) */}
+        {/* ============================================================== */}
         <AnimatePresence>
           {user?.role === 'b2b' && b2bOutstanding > 0 && (
             <motion.div 
               initial={{ opacity: 0, y: -20, height: 0 }} 
               animate={{ opacity: 1, y: 0, height: "auto" }} 
               exit={{ opacity: 0, y: -20, height: 0 }}
-              className="bg-red-50 border border-red-200 p-5 md:p-6 rounded-[2rem] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 overflow-hidden"
+              className="bg-red-500/10 backdrop-blur-xl border border-red-500/30 p-5 md:p-6 rounded-[2.5rem] shadow-[0_10px_30px_rgba(239,68,68,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-5 overflow-hidden relative"
             >
-              <div className="flex items-start md:items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200 shadow-sm">
-                  <CreditCard className="w-6 h-6" />
+              <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-red-500/20 rounded-full blur-[60px] pointer-events-none"></div>
+              
+              <div className="flex items-start md:items-center gap-5 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white flex items-center justify-center shrink-0 shadow-[inset_0_2px_4px_rgba(255,255,255,0.4)] border border-red-800">
+                  <CreditCard className="w-7 h-7 drop-shadow-sm" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-red-800">Peringatan Tagihan Piutang (Net 30)</h3>
-                  <p className="text-xs md:text-sm text-red-700/90 font-medium mt-1">
-                    Anda memiliki total piutang berjalan sebesar <b className="text-red-800 text-sm md:text-base bg-red-100 px-2 py-0.5 rounded ml-1">{formatIDR(b2bOutstanding)}</b>. 
+                  <h3 className="text-lg font-black text-red-900 tracking-tight">Peringatan Tagihan Piutang (Net 30)</h3>
+                  <p className="text-xs md:text-sm text-red-800/80 font-medium mt-1.5 leading-relaxed">
+                    Anda memiliki total piutang berjalan sebesar <b className="text-white text-sm bg-red-600 px-2 py-0.5 rounded-lg ml-1 shadow-sm border border-red-700">{formatIDR(b2bOutstanding)}</b>. 
                     Segera lakukan pelunasan agar plafon kredit Anda kembali penuh.
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => router.push("/finance")}
-                className="w-full md:w-auto px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0"
+                className="w-full md:w-auto px-8 py-4 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white text-sm font-black rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_8px_16px_rgba(220,38,38,0.3)] transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0 border border-red-900 relative z-10"
               >
                 Lunasi Tagihan <ArrowRight className="w-4 h-4" />
               </button>
@@ -300,36 +306,45 @@ export default function DesktopDashboardPage() {
           )}
         </AnimatePresence>
 
-        {/* Atasan Dasbor */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm">
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Pesanan Saya</h1>
-            <p className="text-slate-500 mt-1.5 text-sm max-w-lg font-medium">Pantau dan kelola seluruh riwayat distribusi logistik Anda.</p>
+        {/* ============================================================== */}
+        {/* BENTO HEADER & CONTROLS */}
+        {/* ============================================================== */}
+        <div className="glass-card flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 p-6 md:p-8 rounded-[2.5rem] relative overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.03)]">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/40 rounded-full blur-[40px] pointer-events-none"></div>
+          
+          <div className="relative z-10">
+            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Control Center</h1>
+            <p className="text-slate-500 mt-2 text-sm max-w-lg font-medium">Pantau dan kelola seluruh riwayat distribusi logistik domestik dan global Anda.</p>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-            {/* Search Bar */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto relative z-10">
+            {/* Search Bar ala Apple Spotlight */}
             <div className="relative w-full sm:w-72 group">
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="w-5 h-5 text-slate-400 group-focus-within:text-[#7A171D] transition-colors" />
+              </div>
               <input 
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari ID, Resi, Nama..." 
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none text-sm transition-all bg-slate-50 font-medium text-slate-900"
+                className="w-full bg-white/60 backdrop-blur-md pl-12 pr-4 h-14 rounded-2xl border border-white focus:bg-white focus:border-[#7A171D]/50 focus:ring-[3px] focus:ring-[#7A171D]/15 outline-none text-sm font-bold text-slate-900 placeholder:text-slate-400 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
               />
             </div>
 
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex gap-3 w-full sm:w-auto">
               <button 
                 onClick={() => setShowFilters(!showFilters)} 
-                className={`flex-1 sm:flex-none px-4 py-3 rounded-xl border flex items-center justify-center gap-2 transition-all shadow-sm text-sm font-bold outline-none ${showFilters ? 'bg-slate-900 text-white border-slate-900' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'}`}
+                className={cn(
+                  "flex-1 sm:flex-none px-5 h-14 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm text-sm font-bold outline-none border",
+                  showFilters ? "bg-slate-900 text-white border-slate-900 shadow-[0_8px_16px_rgba(15,23,42,0.3)]" : "bg-white/80 backdrop-blur-md hover:bg-white text-slate-700 border-white hover:border-slate-200"
+                )}
               >
-                <SlidersHorizontal className="w-4 h-4" /> <span className="hidden sm:inline">Filter</span>
+                <SlidersHorizontal className="w-5 h-5" /> <span className="hidden sm:inline">Filter</span>
               </button>
               
-              <Link href="/delivery/booking" className="flex-1 sm:flex-none bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold px-5 py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#7A171D]/20 active:scale-[0.98] text-sm whitespace-nowrap">
-                <Package className="w-4 h-4" /> Pesan
+              <Link href="/delivery/booking" className="flex-1 sm:flex-none bg-gradient-to-b from-[#9A242B] to-[#7A171D] hover:from-[#A82B33] hover:to-[#8B1A21] text-white font-black px-6 h-14 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),0_8px_16px_rgba(122,23,29,0.25)] border border-[#5A0E13] active:scale-[0.96] text-sm whitespace-nowrap">
+                <Package className="w-5 h-5" /> Buat Order
               </Link>
             </div>
           </div>
@@ -349,27 +364,47 @@ export default function DesktopDashboardPage() {
           )}
         </AnimatePresence>
 
-        {/* Kotak Statistik Component */}
+        {/* ============================================================== */}
+        {/* DASHBOARD STATS */}
+        {/* ============================================================== */}
         <DashboardStats orders={orders} />
 
-        {/* Navigasi Filter Status Tab */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 min-w-[140px] text-center py-4 text-sm font-bold transition-all relative outline-none ${activeTab === tab ? "text-[#7A171D] bg-slate-50/50" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50/50"}`}>
-              {tab}
-              {activeTab === tab && (
-                <motion.div layoutId="activeTabBorder" className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#7A171D]" transition={{ type: "spring", stiffness: 380, damping: 30 }} />
-              )}
-            </button>
-          ))}
+        {/* ============================================================== */}
+        {/* FLOATING TABS (Apple Glass Pills) */}
+        {/* ============================================================== */}
+        <div className="glass-panel p-2 rounded-[2rem] flex overflow-x-auto no-scrollbar shadow-sm border border-white relative z-20">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)} 
+                className={cn(
+                  "flex-1 min-w-[120px] md:min-w-[140px] text-center py-3.5 px-4 text-xs font-bold transition-all relative outline-none rounded-2xl whitespace-nowrap z-10",
+                  isActive ? "text-white" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                )}
+              >
+                {isActive && (
+                  <motion.div 
+                    layoutId="activeTabBackground" 
+                    className="absolute inset-0 bg-slate-900 rounded-2xl shadow-md border border-slate-800 -z-10" 
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }} 
+                  />
+                )}
+                {tab}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Daftar Kartu Pesanan Berdasarkan Filter */}
-        <div className="space-y-4">
+        {/* ============================================================== */}
+        {/* ORDER LIST / EMPTY STATE */}
+        {/* ============================================================== */}
+        <div className="space-y-5">
           {isLoading ? (
-            <div className="min-h-[300px] flex flex-col items-center justify-center bg-white rounded-[2rem] border border-slate-200 shadow-sm">
-              <div className="w-10 h-10 border-4 border-slate-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest animate-pulse">Menyelaraskan Data Kargo...</p>
+            <div className="min-h-[300px] flex flex-col items-center justify-center glass-card rounded-[2.5rem] relative overflow-hidden">
+              <Activity className="w-12 h-12 text-[#7A171D] animate-pulse mb-4" />
+              <p className="text-slate-400 text-xs font-black uppercase tracking-widest animate-pulse">Menyelaraskan Data Kargo...</p>
             </div>
           ) : filteredOrders.length > 0 ? (
             <AnimatePresence mode="popLayout">
@@ -383,26 +418,30 @@ export default function DesktopDashboardPage() {
               ))}
             </AnimatePresence>
           ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[2rem] border border-dashed border-slate-300 p-16 md:p-20 flex flex-col items-center justify-center text-center shadow-sm">
-              <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-6 shadow-sm">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card bg-white/40 rounded-[3rem] border border-dashed border-white p-16 md:p-24 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
+              <div className="w-24 h-24 bg-white/80 backdrop-blur-md border border-white rounded-[2rem] flex items-center justify-center mb-6 shadow-sm rotate-3">
                 {(searchQuery || filterCategory !== "Semua" || filterService !== "Semua" || dateStart) 
-                  ? <Search className="w-10 h-10 text-slate-300" /> 
-                  : <AlertCircle className="w-10 h-10 text-slate-300" />}
+                  ? <Search className="w-10 h-10 text-slate-400" /> 
+                  : <AlertCircle className="w-10 h-10 text-slate-400" />}
               </div>
-              <h3 className="text-xl font-black text-slate-900 mb-2">
+              <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">
                 {(searchQuery || filterCategory !== "Semua" || filterService !== "Semua" || dateStart) 
-                  ? "Hasil Filter Tidak Ditemukan" 
-                  : "Belum Ada Riwayat Pesanan"}
+                  ? "Tidak Ada Hasil Filter" 
+                  : "Belum Ada Riwayat Kargo"}
               </h3>
-              <p className="text-slate-500 text-sm font-medium max-w-md mb-6 leading-relaxed">
+              <p className="text-slate-500 text-sm font-medium max-w-md mb-8 leading-relaxed">
                 {(searchQuery || filterCategory !== "Semua" || filterService !== "Semua" || dateStart) 
                   ? "Tidak ada manifes kargo yang cocok dengan kriteria pencarian Anda. Silakan atur ulang pengaturan filter."
                   : `Anda belum memiliki riwayat pesanan dengan status "${activeTab}". Silakan buat pesanan baru untuk memulai pengiriman.`}
               </p>
-              {(searchQuery || filterCategory !== "Semua" || filterService !== "Semua" || dateStart) && (
-                <button onClick={resetFilters} className="text-[#7A171D] text-sm font-bold bg-[#7A171D]/10 hover:bg-[#7A171D]/20 px-6 py-3 rounded-xl transition-colors active:scale-95">
+              {(searchQuery || filterCategory !== "Semua" || filterService !== "Semua" || dateStart) ? (
+                <button onClick={resetFilters} className="bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold px-8 py-4 rounded-2xl transition-all active:scale-95 shadow-md">
                   Reset Semua Filter
                 </button>
+              ) : (
+                <Link href="/delivery/booking" className="bg-gradient-to-b from-[#9A242B] to-[#7A171D] hover:from-[#A82B33] hover:to-[#8B1A21] border border-[#5A0E13] text-white text-sm font-black px-8 py-4 rounded-2xl transition-all active:scale-95 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_8px_20px_rgba(122,23,29,0.3)]">
+                  Buat Pesanan Baru
+                </Link>
               )}
             </motion.div>
           )}
