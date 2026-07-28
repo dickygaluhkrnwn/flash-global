@@ -14,6 +14,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
 import { Promo } from "@/types/finance";
@@ -103,77 +104,103 @@ export default function ClientPromoPage() {
   if (isHydrated && !user) return null; // Mencegah kedipan UI sebelum redirect
 
   return (
-    <main className="min-h-screen bg-slate-50 flex flex-col pt-24 pb-20 px-6 relative overflow-hidden font-sans">
-      {/* Background Ornamen */}
-      <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
+    <main className="min-h-screen bg-[#f8fafc] flex flex-col py-16 px-6 relative overflow-hidden font-sans z-0 pb-32">
+      
+      {/* === AMBIENT GLOWING BACKGROUND === */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+        <div className="absolute top-[0%] left-[-10%] w-[50vw] h-[50vh] bg-[#C5A059]/15 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[50vh] bg-[#7A171D]/10 rounded-full blur-[120px]" />
+      </div>
 
       <div className="max-w-[1200px] w-full mx-auto relative z-10">
         
-        {/* HERO SECTION */}
-        <div className="mb-12 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <Badge variant="gold" className="mb-4 shadow-sm inline-flex items-center gap-1.5 px-3 py-1 text-[10px]">
+        {/* ==========================================
+            HERO SECTION (GLASS PANEL)
+            ========================================== */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="glass-panel p-8 md:p-10 rounded-[2.5rem] mb-12 flex flex-col md:flex-row md:items-center justify-between gap-8 relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-white/40 to-transparent pointer-events-none" />
+          
+          <div className="relative z-10">
+            <Badge variant="gold" className="mb-4 shadow-sm inline-flex items-center gap-1.5 px-4 py-1.5">
               <TicketPercent className="w-3.5 h-3.5" /> Rewards & Offers
             </Badge>
-            <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-              Voucher <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C5A059] to-[#A68345]">Eksklusif Anda</span>
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter leading-tight mb-3">
+              Voucher <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#A68345]">Eksklusif Anda</span>
             </h1>
-            <p className="text-slate-500 mt-3 text-sm md:text-base font-medium max-w-xl">
-              Klaim dan gunakan kode voucher di bawah ini pada saat proses pembayaran untuk mendapatkan potongan harga spesial.
+            <p className="text-slate-500 text-sm md:text-base font-medium max-w-xl leading-relaxed">
+              Klaim dan gunakan kode voucher di bawah ini pada saat proses pembayaran untuk mendapatkan potongan harga spesial pada pengiriman Anda berikutnya.
             </p>
           </div>
-        </div>
+          
+          {/* Decorative Icon */}
+          <div className="hidden md:flex w-24 h-24 bg-white/60 backdrop-blur-md rounded-[2rem] items-center justify-center border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8),0_8px_16px_rgba(0,0,0,0.05)] shrink-0 relative z-10 rotate-3">
+             <TicketPercent className="w-10 h-10 text-[#C5A059]" />
+          </div>
+        </motion.div>
 
-        {/* TABS FILTER */}
-        <div className="flex bg-white p-1.5 rounded-2xl mb-8 shadow-sm border border-slate-200 w-full max-w-lg relative">
+        {/* ==========================================
+            TABS FILTER (APPLE PILL STYLE)
+            ========================================== */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="flex bg-white/60 backdrop-blur-md p-1.5 rounded-[1.5rem] mb-10 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] border border-white w-full max-w-lg relative z-20 mx-auto lg:mx-0"
+        >
           <button 
             onClick={() => setActiveTab("all")} 
-            className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "all" ? "text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+            className={cn("flex-1 py-3 text-sm font-black transition-all rounded-[1.25rem] relative z-10 flex items-center justify-center gap-2", activeTab === "all" ? "text-slate-900" : "text-slate-500 hover:text-slate-700")}
           >
             Semua
           </button>
           <button 
             onClick={() => setActiveTab("domestik")} 
-            className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "domestik" ? "text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+            className={cn("flex-1 py-3 text-sm font-black transition-all rounded-[1.25rem] relative z-10 flex items-center justify-center gap-2", activeTab === "domestik" ? "text-slate-900" : "text-slate-500 hover:text-slate-700")}
           >
             Domestik
           </button>
           <button 
             onClick={() => setActiveTab("forwarding")} 
-            className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "forwarding" ? "text-slate-900" : "text-slate-500 hover:text-slate-700"}`}
+            className={cn("flex-1 py-3 text-sm font-black transition-all rounded-[1.25rem] relative z-10 flex items-center justify-center gap-2", activeTab === "forwarding" ? "text-slate-900" : "text-slate-500 hover:text-slate-700")}
           >
             Global
           </button>
-          <div className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-slate-100 rounded-xl shadow-sm transition-all duration-300 ease-out border border-slate-200 ${
+          <div className={cn("absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-white rounded-[1.25rem] shadow-sm transition-all duration-300 ease-out border border-slate-100 z-0",
             activeTab === "all" ? "left-1.5" : 
             activeTab === "domestik" ? "left-[calc(33.33%+2px)]" : 
             "left-[calc(66.66%-1.5px)]"
-          }`}></div>
-        </div>
+          )}></div>
+        </motion.div>
 
-        {/* VOUCHER GRID */}
+        {/* ==========================================
+            VOUCHER GRID
+            ========================================== */}
         {isLoading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 border-4 border-slate-200 border-t-[#C5A059] rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs animate-pulse">Menarik Data Voucher...</p>
+          <div className="py-24 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 border-4 border-white border-t-[#C5A059] rounded-full animate-spin mb-4 shadow-sm"></div>
+            <p className="text-slate-500 font-black uppercase tracking-widest text-xs animate-pulse">Menarik Data Voucher...</p>
           </div>
         ) : filteredPromos.length === 0 ? (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="py-24 bg-white rounded-[2rem] border border-dashed border-slate-300 flex flex-col items-center text-center shadow-sm">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="py-24 glass-card rounded-[3rem] border border-dashed border-white flex flex-col items-center text-center shadow-sm">
+            <div className="w-20 h-20 bg-white/50 backdrop-blur-md rounded-[2rem] flex items-center justify-center mb-6 border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,1)]">
               <TicketPercent className="w-10 h-10 text-slate-300" />
             </div>
-            <h3 className="text-xl font-black text-slate-900 mb-2">Belum Ada Voucher Tersedia</h3>
-            <p className="text-slate-500 text-sm max-w-md">Saat ini tidak ada promo aktif untuk kategori yang dipilih. Cek kembali nanti untuk penawaran menarik!</p>
+            <h3 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">Belum Ada Voucher</h3>
+            <p className="text-slate-500 text-sm max-w-md font-medium leading-relaxed">Saat ini tidak ada promo aktif untuk kategori yang dipilih. Cek kembali nanti untuk penawaran menarik!</p>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
             <AnimatePresence>
-              {filteredPromos.map((promo) => {
+              {filteredPromos.map((promo, index) => {
                 const isVIP = promo.targetUser && promo.targetUser !== "all";
                 const isDomestik = (promo.targetService || "all") === "domestik";
                 const isGlobal = (promo.targetService || "all") === "forwarding";
-                const badgeColor = isVIP ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent" : "bg-slate-100 text-slate-600 border-slate-200";
+                const badgeColor = isVIP ? "bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-transparent" : "bg-white/60 text-slate-600 border-white";
                 
                 // Konversi tanggal menggunakan helper aman
                 const promoDate = parsePromoDate(promo.expiresAt);
@@ -184,53 +211,62 @@ export default function ClientPromoPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-xl hover:shadow-slate-200/60 hover:-translate-y-1 transition-all duration-300 group"
+                    transition={{ duration: 0.4, delay: index * 0.05 }}
+                    className="flex glass-card rounded-[2rem] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_20px_rgba(0,0,0,0.03)] overflow-hidden hover:shadow-[0_15px_30px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 group"
                   >
-                    {/* Sisi Kiri (Stub Tiket) */}
-                    <div className={`w-[35%] p-5 flex flex-col items-center justify-center text-center relative ${isVIP ? 'bg-slate-900 text-white' : 'bg-gradient-to-br from-[#C5A059] to-[#A68345] text-white'}`}>
-                      {/* Dotted border pemisah */}
-                      <div className="absolute right-0 top-0 bottom-0 w-px border-r-2 border-dashed border-white/40"></div>
-                      {/* Cutouts (Setengah Lingkaran) */}
-                      <div className="absolute -right-3 -top-3 w-6 h-6 bg-slate-50 rounded-full border-b border-l border-slate-200 z-10"></div>
-                      <div className="absolute -right-3 -bottom-3 w-6 h-6 bg-slate-50 rounded-full border-t border-l border-slate-200 z-10"></div>
+                    {/* Sisi Kiri (Stub Tiket Premium) */}
+                    <div className={cn("w-[35%] p-6 flex flex-col items-center justify-center text-center relative overflow-hidden", isVIP ? 'bg-slate-900 text-white' : 'bg-gradient-to-b from-[#DFBE7B] to-[#C5A059] text-white')}>
+                      {/* Dotted border pemisah (Efek Sobekan) */}
+                      <div className="absolute right-0 top-0 bottom-0 w-px border-r-2 border-dashed border-white/40 z-20"></div>
                       
-                      <div className="bg-white/20 p-2.5 rounded-xl mb-3 backdrop-blur-sm border border-white/30">
-                        {promo.type === "percentage" ? <Percent className="w-6 h-6 text-white" /> : <DollarSign className="w-6 h-6 text-white" />}
+                      {/* Cutouts (Setengah Lingkaran ala Tiket Nyata) */}
+                      <div className="absolute -right-3 -top-3 w-6 h-6 bg-[#f8fafc] rounded-full shadow-[inset_1px_-1px_3px_rgba(0,0,0,0.1)] z-20"></div>
+                      <div className="absolute -right-3 -bottom-3 w-6 h-6 bg-[#f8fafc] rounded-full shadow-[inset_1px_1px_3px_rgba(0,0,0,0.1)] z-20"></div>
+                      
+                      {/* Inner Glow */}
+                      <div className="absolute top-0 right-0 w-full h-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                      <div className="bg-white/20 p-3 rounded-2xl mb-4 backdrop-blur-md border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)] relative z-10">
+                        {promo.type === "percentage" ? <Percent className="w-6 h-6 text-white drop-shadow-sm" /> : <DollarSign className="w-6 h-6 text-white drop-shadow-sm" />}
                       </div>
-                      <h3 className="text-2xl lg:text-3xl font-black tracking-tight leading-none mb-1">
+                      <h3 className="text-3xl font-black tracking-tighter leading-none mb-1 relative z-10 drop-shadow-sm">
                         {promo.type === 'percentage' ? `${promo.value}%` : `${promo.value/1000}K`}
                       </h3>
-                      <span className="text-[9px] uppercase tracking-widest font-bold opacity-90">Diskon</span>
+                      <span className="text-[9px] uppercase tracking-widest font-black opacity-90 relative z-10">Diskon</span>
                     </div>
 
-                    {/* Sisi Kanan (Detail Info) */}
-                    <div className="w-[65%] p-5 flex flex-col justify-between bg-white relative">
+                    {/* Sisi Kanan (Detail Info Glass) */}
+                    <div className="w-[65%] p-6 flex flex-col justify-between bg-white/40 relative">
                       {isVIP && (
-                        <div className="absolute top-0 right-0 bg-purple-100 text-purple-700 text-[9px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest">Khusus Anda</div>
+                        <div className="absolute top-0 right-0 bg-purple-100 text-purple-700 text-[9px] font-black px-3 py-1 rounded-bl-[1rem] uppercase tracking-widest shadow-sm">Khusus Anda</div>
                       )}
                       <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border flex items-center gap-1 ${badgeColor}`}>
-                            {isVIP ? <ShieldAlert className="w-3 h-3" /> : (isDomestik ? <Truck className="w-3 h-3"/> : isGlobal ? <Globe2 className="w-3 h-3"/> : <TicketPercent className="w-3 h-3"/>)}
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={cn("px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border flex items-center gap-1.5 shadow-sm backdrop-blur-sm", badgeColor)}>
+                            {isVIP ? <ShieldAlert className="w-3.5 h-3.5" /> : (isDomestik ? <Truck className="w-3.5 h-3.5"/> : isGlobal ? <Globe2 className="w-3.5 h-3.5"/> : <TicketPercent className="w-3.5 h-3.5"/>)}
                             {isVIP ? "VIP REWARD" : (isDomestik ? "DOMESTIK" : isGlobal ? "GLOBAL" : "SEMUA LAYANAN")}
                           </span>
                         </div>
-                        <h4 className="font-black text-slate-900 text-lg tracking-wide uppercase font-mono bg-slate-50 w-fit px-2 py-1 rounded-lg border border-slate-100">{promo.id}</h4>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mt-2">
+                        <h4 className="font-black text-slate-900 text-lg tracking-wider uppercase font-mono bg-white w-fit px-3 py-1.5 rounded-xl border border-slate-100 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">{promo.id}</h4>
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold mt-3">
                           <Clock className="w-3.5 h-3.5" /> Berlaku s/d {promoDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </div>
                       </div>
                       
-                      <div className="mt-5 pt-4 border-t border-dashed border-slate-100">
+                      <div className="mt-6 pt-4 border-t border-white">
                         <Button 
                           onClick={() => handleCopyCode(promo.id)}
-                          variant={copiedCode === promo.id ? "primary" : "outline"} 
-                          className={`w-full h-10 text-xs font-bold transition-all shadow-sm ${copiedCode === promo.id ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-600' : 'border-slate-200 text-slate-700 hover:text-[#C5A059] hover:border-[#C5A059]'}`}
+                          variant={copiedCode === promo.id ? "primary" : "glass"} 
+                          className={cn("w-full h-12 text-xs font-black transition-all shadow-sm active:scale-95", 
+                            copiedCode === promo.id 
+                              ? '!bg-gradient-to-b !from-emerald-500 !to-emerald-600 !border-emerald-700 text-white' 
+                              : 'bg-white hover:bg-[#C5A059]/10 text-slate-700 hover:text-[#C5A059] border border-white hover:border-[#C5A059]/30'
+                          )}
                         >
                           {copiedCode === promo.id ? (
-                            <><CheckCircle2 className="w-4 h-4 mr-1.5" /> Disalin!</>
+                            <><CheckCircle2 className="w-4 h-4 mr-1.5" /> Berhasil Disalin</>
                           ) : (
-                            <><Copy className="w-4 h-4 mr-1.5" /> Salin Kode</>
+                            <><Copy className="w-4 h-4 mr-1.5" /> Salin Kode Voucher</>
                           )}
                         </Button>
                       </div>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, Clock, MapPin, Plane, 
-  Package, ArrowLeft, Ship, Truck, AlertCircle, MapPinned, User, Banknote, Camera, X
+  Package, Ship, Truck, AlertCircle, MapPinned, User, Banknote, Camera, X
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -13,7 +13,6 @@ import dynamic from "next/dynamic";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, getDoc, getDocs, collection } from "firebase/firestore";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +23,7 @@ import {
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
-  loading: () => <div className="w-full h-full bg-slate-100 animate-pulse flex flex-col items-center justify-center text-slate-500 text-xs font-semibold rounded-[2rem]"><div className="w-8 h-8 border-4 border-slate-300 border-t-[#7A171D] rounded-full animate-spin mb-3"></div>Mengambil koordinat satelit...</div> 
+  loading: () => <div className="w-full h-full bg-slate-100/50 backdrop-blur-md animate-pulse flex flex-col items-center justify-center text-slate-500 text-xs font-black uppercase tracking-widest"><div className="w-10 h-10 border-4 border-slate-200 border-t-[#7A171D] rounded-full animate-spin mb-4 shadow-sm"></div>Menghubungkan Satelit...</div> 
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
@@ -237,7 +236,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
         setLiveDriverCoords({ lng: lastDrop.lng!, lat: lastDrop.lat! });
       }
     } else if (actualDriverCoords) {
-       // Prioritaskan Live GPS dari Firebase
        setLiveDriverCoords(actualDriverCoords);
     } else if (isActiveStatus && routeData && typeof routeData === "object" && "coordinates" in routeData) {
       const geometry = routeData as { coordinates: [number, number][] };
@@ -286,7 +284,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
     if (!trackingData) return [];
     
     if (trackingData.trackingHistory && Array.isArray(trackingData.trackingHistory) && trackingData.trackingHistory.length > 0) {
-      // 🚀 Definisikan Record<string, unknown> agar aman dari linter
       return [...trackingData.trackingHistory].reverse().map((item: Record<string, unknown>, idx) => {
         const rawLocation = (item.location as string) || "Pusat Logistik";
         const isGeotagged = rawLocation.includes("(Geotagged)");
@@ -294,7 +291,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
         return {
           ...item,
-          id: (item.id as string) || `log-${idx}`, // 🚀 PERBAIKAN: Pastikan ID Selalu Ada
+          id: (item.id as string) || `log-${idx}`, 
           status: (item.status as string) || "",
           date: (item.date as string) || "",
           description: (item.description as string) || "",
@@ -328,21 +325,25 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   const isUsingLiveGPS = !!getCoords(trackingData?.driverCoords) && !trackingData?.status?.includes("Selesai");
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12 lg:py-16 px-6 relative overflow-hidden font-sans pb-20">
-      <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.04] pointer-events-none" />
+    <main className="min-h-screen bg-[#f8fafc] py-12 lg:py-20 px-6 relative overflow-hidden font-sans pb-32 z-0">
+      
+      {/* === AMBIENT GLOWING BACKGROUND === */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vh] bg-[#7A171D]/15 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40vw] h-[50vh] bg-[#C5A059]/15 rounded-full blur-[120px]" />
+      </div>
 
-      {/* 🚀 MODAL PREVIEW BUKTI TRANSFER / PoD (FULLSCREEN) */}
+      {/* 🚀 MODAL PREVIEW BUKTI TRANSFER / PoD (FULLSCREEN GLASS) */}
       <AnimatePresence>
         {proofModalUrl && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onClick={() => setProofModalUrl(null)}></motion.div>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative z-10 max-w-2xl w-full flex flex-col items-center">
-              <button onClick={() => setProofModalUrl(null)} className="absolute -top-12 right-0 bg-white/20 text-white rounded-full p-2 hover:bg-white/40 transition-colors">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-xl" onClick={() => setProofModalUrl(null)}></motion.div>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative z-10 max-w-3xl w-full flex flex-col items-center">
+              <button onClick={() => setProofModalUrl(null)} className="absolute -top-16 right-0 bg-white/20 text-white rounded-full p-3 hover:bg-white/40 transition-colors border border-white/30 shadow-lg active:scale-95">
                 <X className="w-6 h-6" />
               </button>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={proofModalUrl} alt="Bukti Foto" className="rounded-2xl max-h-[85vh] w-auto shadow-2xl border border-white/20" />
+              <img src={proofModalUrl} alt="Bukti Foto" className="rounded-[2rem] max-h-[80vh] w-auto shadow-[0_20px_60px_rgba(0,0,0,0.4)] border border-white/20 object-contain bg-slate-900" />
             </motion.div>
           </div>
         )}
@@ -350,70 +351,75 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
       <div className="max-w-[1300px] mx-auto relative z-10">
         
-        <div className="mb-8">
-          <Link href="/desktop/tracking" className="text-xs font-bold text-slate-500 hover:text-[#7A171D] transition-all flex items-center gap-2 w-fit bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
-            <ArrowLeft className="w-4 h-4" /> Kembali ke Pencarian
-          </Link>
-        </div>
+        {/* Tombol Back Dihapus Sesuai Permintaan */}
 
         {isLoading ? (
-          <div className="min-h-[500px] flex flex-col items-center justify-center bg-white rounded-[2rem] border border-slate-200 shadow-sm">
-            <div className="w-12 h-12 border-4 border-slate-100 border-t-[#7A171D] rounded-full animate-spin mb-5 shadow-sm"></div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Menyinkronkan Manifes</h2>
-            <p className="text-slate-500 text-sm font-medium animate-pulse mt-1.5">Menghubungkan ke satelit pelacakan armada...</p>
+          <div className="min-h-[500px] flex flex-col items-center justify-center glass-card rounded-[3rem] border border-white shadow-sm relative overflow-hidden mt-10">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-[#7A171D]/5 rounded-full blur-[80px] pointer-events-none" />
+             <div className="w-16 h-16 border-[5px] border-white border-t-[#7A171D] rounded-full animate-spin mb-6 shadow-sm"></div>
+             <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">Menyinkronkan Manifes</h2>
+             <p className="text-slate-500 text-sm font-bold tracking-widest uppercase animate-pulse mt-3">Menghubungkan ke satelit pelacakan armada...</p>
           </div>
         ) : isNotFound || !trackingData ? (
-          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="min-h-[500px] flex flex-col items-center justify-center bg-white rounded-[2rem] border border-dashed border-slate-300 p-8 text-center shadow-sm">
-            <div className="w-20 h-20 bg-red-50 rounded-[1.5rem] flex items-center justify-center mb-6 border border-red-100">
-              <AlertCircle className="w-10 h-10 text-red-500" />
+          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="min-h-[500px] flex flex-col items-center justify-center glass-card rounded-[3rem] border border-white p-8 text-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative overflow-hidden mt-10">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-[80px] pointer-events-none" />
+            
+            <div className="w-24 h-24 bg-gradient-to-br from-red-50 to-red-100 rounded-[2rem] flex items-center justify-center mb-8 border border-red-200 shadow-sm relative z-10">
+              <AlertCircle className="w-12 h-12 text-red-500 drop-shadow-sm" />
             </div>
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Nomor Resi Tidak Ditemukan</h2>
-            <p className="text-slate-500 mt-3 text-sm font-medium max-w-md leading-relaxed">Sistem tidak mendeteksi kode AWB/Resi <b className="text-slate-800">{awbNumber}</b>. Periksa kembali penulisan karakter atau hubungi CS Flash Global.</p>
-            <Link href="/desktop/tracking" className="mt-8 bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-3.5 px-8 rounded-xl transition-colors shadow-lg shadow-[#7A171D]/20 active:scale-95">
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter relative z-10">Nomor Resi Tidak Ditemukan</h2>
+            <p className="text-slate-500 mt-4 text-base font-medium max-w-lg leading-relaxed relative z-10">Sistem tidak mendeteksi kode AWB/Resi <b className="text-slate-800 bg-white/60 px-2 py-0.5 rounded-md border border-slate-200">{awbNumber}</b>. Periksa kembali penulisan karakter atau hubungi CS Flash Global.</p>
+            <Link href="/tracking" className="mt-10 bg-gradient-to-b from-[#7A171D] to-[#5A0E13] hover:from-[#9A242B] hover:to-[#7A171D] text-white font-black text-sm uppercase tracking-widest py-4 px-10 rounded-[1.25rem] transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_8px_20px_rgba(122,23,29,0.3)] border border-[#4A0A10] active:scale-95 relative z-10">
               Cari Ulang Resi
             </Link>
           </motion.div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-8 items-start">
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-10 items-start mt-6">
             
-            {/* PANEL KIRI: LIVE MAP & OVERVIEW */}
-            <div className="w-full lg:w-[55%] xl:w-[60%] space-y-6 lg:sticky lg:top-28">
+            {/* ======================================================== */}
+            {/* PANEL KIRI: LIVE MAP & OVERVIEW (BENTO STYLE) */}
+            {/* ======================================================== */}
+            <div className="w-full lg:w-[55%] xl:w-[60%] space-y-8 lg:sticky lg:top-10 z-20">
               
-              <Card className="shadow-sm border-slate-200">
-                <CardContent className="p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                  <div>
-                    <Badge variant="brand" className={cn("mb-3 px-3 py-1 shadow-sm text-[10px]", trackingData.category === "Internasional" ? "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/20" : "")}>
-                      Kargo {trackingData.category}
-                    </Badge>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                      AWB <span className="text-[#7A171D] font-mono select-all">#{trackingData.id}</span>
-                    </h2>
-                  </div>
-
-                  <div className="flex items-center gap-4 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-200 shadow-inner">
-                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center text-[#7A171D] border border-slate-100 shrink-0">
-                      {trackingData.status?.includes("Selesai") ? <CheckCircle2 className="w-6 h-6 text-emerald-500" /> : <Package className="w-6 h-6" />}
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Status Terkini</p>
-                      <p className="text-sm font-black text-slate-800 leading-tight">{trackingData.status || "In Transit"}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="bg-white rounded-[2rem] p-2 shadow-xl shadow-slate-200/50 border border-slate-200 relative group overflow-hidden">
-                <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl border border-slate-200 z-20 flex flex-col gap-1 shadow-sm pointer-events-none">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <div className={`w-2 h-2 rounded-full animate-pulse shadow-sm ${isUsingLiveGPS ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-blue-500 shadow-blue-500/80'}`}></div>
-                    <span className="text-slate-900 text-[10px] font-black uppercase tracking-widest">
-                      {isUsingLiveGPS ? 'GPS Aktual Kurir' : 'Radar Armada Live'}
-                    </span>
-                  </div>
-                  <p className="text-slate-500 text-[9px] font-bold uppercase">{routeDistanceKm > 0 ? `Jarak: ${routeDistanceKm} KM` : "Menghitung Rute"}</p>
+              {/* --- KARTU IDENTITAS RESI --- */}
+              <div className="glass-card rounded-[2.5rem] p-6 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 relative overflow-hidden border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03)]">
+                <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-slate-200/50 rounded-full blur-[80px] pointer-events-none" />
+                
+                <div className="relative z-10">
+                  <Badge variant="glass" className={cn("mb-3 px-3.5 py-1.5 shadow-sm text-[10px] font-black tracking-widest uppercase", trackingData.category === "Internasional" ? "bg-[#C5A059]/10 text-[#A68345] border-[#C5A059]/30" : "bg-[#7A171D]/5 text-[#7A171D] border-[#7A171D]/20")}>
+                    Kargo {trackingData.category}
+                  </Badge>
+                  <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter flex items-center gap-2">
+                    AWB <span className="text-[#7A171D] font-mono tracking-tight select-all">#{trackingData.id}</span>
+                  </h2>
                 </div>
 
-                <div className="w-full h-[350px] md:h-[450px] rounded-[1.5rem] relative overflow-hidden bg-slate-100 border border-slate-200/50">
+                <div className="flex items-center gap-4 bg-white/60 backdrop-blur-md px-6 py-4 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] relative z-10 w-full sm:w-auto">
+                  <div className="w-14 h-14 rounded-[1.25rem] bg-gradient-to-br from-[#7A171D] to-[#5A0E13] shadow-[inset_0_2px_4px_rgba(255,255,255,0.3),0_4px_10px_rgba(122,23,29,0.3)] flex items-center justify-center text-white border border-[#4A0A10] shrink-0">
+                    {trackingData.status?.includes("Selesai") ? <CheckCircle2 className="w-7 h-7 drop-shadow-sm" /> : <Package className="w-7 h-7 drop-shadow-sm" />}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Terkini</p>
+                    <p className="text-base font-black text-slate-900 leading-tight">{trackingData.status || "In Transit"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* --- KARTU PETA LIVE SATELIT --- */}
+              <div className="glass-card rounded-[2.5rem] p-2 shadow-[0_15px_40px_rgba(0,0,0,0.06)] border border-white relative group overflow-hidden bg-white/40">
+                
+                {/* Floating GPS Info */}
+                <div className="absolute top-6 left-6 bg-white/80 backdrop-blur-xl px-5 py-3 rounded-[1.25rem] border border-white z-20 flex flex-col gap-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] pointer-events-none">
+                  <div className="flex items-center gap-2.5 mb-1">
+                    <div className={cn("w-2.5 h-2.5 rounded-full animate-pulse shadow-sm", isUsingLiveGPS ? 'bg-emerald-500 shadow-emerald-500/80' : 'bg-blue-500 shadow-blue-500/80')}></div>
+                    <span className="text-slate-900 text-[10px] font-black uppercase tracking-widest">
+                      {isUsingLiveGPS ? 'Sinyal GPS Aktual' : 'Radar Armada Live'}
+                    </span>
+                  </div>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{routeDistanceKm > 0 ? `Jarak Est: ${routeDistanceKm} KM` : "Menghitung Rute..."}</p>
+                </div>
+
+                <div className="w-full h-[400px] md:h-[500px] rounded-[2rem] relative overflow-hidden bg-slate-100/50 border border-white/60">
                   <MapBase
                     longitude={mapViewState.longitude}
                     latitude={mapViewState.latitude}
@@ -426,115 +432,133 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                   />
 
                   {!originLatLng && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-sm z-10 pointer-events-none">
-                      <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center">
-                        <MapPinned className="w-8 h-8 text-slate-400 mb-3" />
-                        <p className="text-slate-600 text-xs font-bold tracking-wide">Data koordinat belum disinkronkan</p>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-md z-10 pointer-events-none">
+                      <div className="bg-white/80 p-6 rounded-[1.5rem] shadow-xl border border-white flex flex-col items-center">
+                        <MapPinned className="w-10 h-10 text-slate-400 mb-3" />
+                        <p className="text-slate-600 text-xs font-black uppercase tracking-widest">Data koordinat belum sinkron</p>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              <Card className="shadow-sm border-slate-200">
-                <CardContent className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-200 text-slate-500 shrink-0 mt-1">
-                      <MapPin className="w-5 h-5"/>
-                    </div>
-                    <div className="overflow-hidden">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Asal Pengirim</p>
-                      <p className="text-sm font-black text-slate-900 truncate" title={typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "Titik Koordinat Asal")}>
-                        {typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "Titik Koordinat Asal")}
-                      </p>
-                      {typeof trackingData.origin === 'object' && trackingData.origin?.senderName && (
-                        <p className="text-xs text-slate-500 font-medium mt-1 flex items-center gap-1.5"><User className="w-3 h-3"/> {trackingData.origin.senderName}</p>
-                      )}
+              {/* --- KARTU DETAIL RUTE (ORIGIN -> DESTINATION) --- */}
+              <div className="glass-card rounded-[2.5rem] p-6 md:p-8 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 md:gap-8 items-center border border-white shadow-[0_8px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-[#C5A059]/5 rounded-full blur-[60px] pointer-events-none z-0" />
+                
+                {/* Asal */}
+                <div className="flex items-start gap-4 relative z-10 min-w-0 w-full">
+                  <div className="w-12 h-12 rounded-[1rem] bg-white flex items-center justify-center border border-slate-100 text-slate-400 shadow-sm shrink-0 mt-1">
+                    <MapPin className="w-6 h-6"/>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Asal Pengirim</p>
+                    <p className="text-sm md:text-base font-black text-slate-900 leading-snug break-words line-clamp-3">
+                      {typeof trackingData.origin === 'string' ? trackingData.origin : (trackingData.origin?.address || "Titik Koordinat Asal")}
+                    </p>
+                    {typeof trackingData.origin === 'object' && trackingData.origin?.senderName && (
+                      <p className="text-[11px] text-slate-500 font-bold mt-2 flex items-center gap-1.5"><User className="w-3.5 h-3.5"/> {trackingData.origin.senderName}</p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Panah Tengah */}
+                <div className="hidden md:flex flex-col items-center justify-center text-slate-300 px-4 w-32 relative z-10 shrink-0">
+                  <div className="w-full border-t-2 border-dashed border-slate-300 relative flex items-center justify-center">
+                    <div className="bg-[#f8fafc] p-2 rounded-full absolute">
+                       <Truck className="w-5 h-5 text-slate-400" />
                     </div>
                   </div>
-                  
-                  <div className="hidden md:flex flex-col items-center justify-center text-slate-300">
-                    <div className="w-full border-t-2 border-dashed border-slate-200 relative flex items-center justify-center">
-                      <Truck className="w-5 h-5 text-slate-400 absolute bg-white px-1" />
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-3 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{trackingData.vehicleName || trackingData.serviceType || "Kargo"}</span>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-6 bg-white px-2.5 py-1 rounded-md border border-slate-100 shadow-sm">{trackingData.vehicleName || trackingData.serviceType || "Kargo"}</span>
+                </div>
+                
+                {/* Tujuan */}
+                <div className="flex items-start gap-4 md:flex-row-reverse md:text-right relative z-10 min-w-0 w-full">
+                  <div className="w-12 h-12 rounded-[1rem] bg-gradient-to-br from-[#9A242B] to-[#7A171D] border border-[#5A0E13] flex items-center justify-center text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.3),0_4px_10px_rgba(122,23,29,0.2)] shrink-0 mt-1">
+                    <MapPin className="w-6 h-6 drop-shadow-sm"/>
                   </div>
-                  
-                  <div className="flex items-start gap-4 md:flex-row-reverse md:text-right">
-                    <div className="w-10 h-10 rounded-xl bg-[#7A171D]/10 border border-[#7A171D]/20 flex items-center justify-center text-[#7A171D] shrink-0 mt-1">
-                      <MapPin className="w-5 h-5"/>
-                    </div>
-                    <div className="overflow-hidden">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tujuan Akhir</p>
-                      <p className="text-sm font-black text-slate-900 truncate" title={dropsForMap.length > 1 ? "Multi-Drop Destinations" : (dropsForMap[0]?.address || "Tujuan")}>
-                        {dropsForMap.length > 1 ? `${dropsForMap.length} Titik Tujuan` : (dropsForMap[0]?.address || "Titik Koordinat Tujuan")}
-                      </p>
-                      {((trackingData.destinations && trackingData.destinations[0]?.receiverName) || (typeof trackingData.destination === 'object' && trackingData.destination?.receiverName)) && (
-                        <p className="text-xs text-slate-500 font-medium mt-1 flex items-center md:justify-end gap-1.5"><User className="w-3 h-3"/> {trackingData.destinations?.[0]?.receiverName || (typeof trackingData.destination === 'object' ? trackingData.destination?.receiverName : "")}</p>
-                      )}
-                    </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Tujuan Akhir</p>
+                    <p className="text-sm md:text-base font-black text-slate-900 leading-snug break-words line-clamp-3">
+                      {dropsForMap.length > 1 ? `${dropsForMap.length} Titik Tujuan` : (dropsForMap[0]?.address || "Titik Koordinat Tujuan")}
+                    </p>
+                    {((trackingData.destinations && trackingData.destinations[0]?.receiverName) || (typeof trackingData.destination === 'object' && trackingData.destination?.receiverName)) && (
+                      <p className="text-[11px] text-slate-500 font-bold mt-2 flex items-center md:justify-end gap-1.5"><User className="w-3.5 h-3.5"/> {trackingData.destinations?.[0]?.receiverName || (typeof trackingData.destination === 'object' ? trackingData.destination?.receiverName : "")}</p>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
 
-            {/* PANEL KANAN: TIMELINE MANIFES PROGRESS */}
-            <div className="w-full lg:w-[45%] xl:w-[40%]">
-              <Card className="shadow-xl shadow-slate-200/40 border-slate-200">
-                <CardHeader className="p-6 md:p-8 border-b border-slate-100 flex flex-row items-center gap-3 bg-slate-50/50">
-                  <Clock className="w-5 h-5 text-[#C5A059]" />
-                  <h3 className="text-lg font-black text-slate-900 m-0 tracking-tight">Log Riwayat Perjalanan</h3>
-                </CardHeader>
+            {/* ======================================================== */}
+            {/* PANEL KANAN: TIMELINE MANIFES PROGRESS (3D TIMELINE) */}
+            {/* ======================================================== */}
+            <div className="w-full lg:w-[45%] xl:w-[40%] relative z-10">
+              <div className="glass-card rounded-[2.5rem] overflow-hidden border border-white shadow-[0_15px_40px_rgba(0,0,0,0.05)]">
                 
-                <CardContent className="p-6 md:p-8">
-                  <div className="relative pl-2 md:pl-4">
+                <div className="p-6 md:p-8 border-b border-white/60 flex flex-row items-center gap-3 bg-white/40 backdrop-blur-md shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)]">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] flex items-center justify-center border border-[#A68345] shadow-sm">
+                     <Clock className="w-5 h-5 text-[#5A0E13]" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 m-0 tracking-tight">Log Riwayat Perjalanan</h3>
+                </div>
+                
+                <div className="p-6 md:p-8 bg-white/20">
+                  <div className="relative pl-3 md:pl-5">
+                    
                     {/* Vertical Timeline Rail Line */}
-                    <div className="absolute top-4 bottom-8 left-[23px] md:left-[31px] w-[2px] bg-slate-100"></div>
+                    <div className="absolute top-6 bottom-10 left-[31px] md:left-[39px] w-[2px] bg-gradient-to-b from-slate-300 via-slate-200 to-transparent"></div>
 
-                    <div className="space-y-8 relative">
+                    <div className="space-y-10 relative">
                       <AnimatePresence>
                         {timelineData.map((item, index) => {
                           const NodeIcon = item.icon;
                           return (
                             <motion.div 
                               key={item.id || index}
-                              initial={{ opacity: 0, x: 20, filter: "blur(4px)" }}
+                              initial={{ opacity: 0, x: 20, filter: "blur(5px)" }}
                               animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                              transition={{ duration: 0.4, delay: index * 0.15, ease: "easeOut" }}
-                              className="flex gap-4 md:gap-6 relative items-start group"
+                              transition={{ duration: 0.5, delay: index * 0.1, type: "spring", stiffness: 300, damping: 24 }}
+                              className="flex gap-5 md:gap-6 relative items-start group"
                             >
-                              <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shrink-0 z-10 border-[3px] shadow-sm transition-all duration-300 ${
+                              {/* 3D Timeline Dot */}
+                              <div className={cn(
+                                "w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center shrink-0 z-10 border-4 transition-all duration-500",
                                 item.isCurrent 
-                                  ? "bg-[#7A171D] text-white border-white shadow-lg shadow-[#7A171D]/30 scale-110" 
-                                  : "bg-slate-50 text-slate-400 border-white group-hover:border-slate-200 group-hover:bg-slate-100"
-                              }`}>
-                                <NodeIcon className="w-4 h-4 md:w-5 md:h-5" />
+                                  ? "bg-gradient-to-br from-[#9A242B] to-[#7A171D] text-white border-white shadow-[0_0_20px_rgba(122,23,29,0.4)] scale-110" 
+                                  : "bg-white text-slate-400 border-slate-100 shadow-sm group-hover:border-slate-300 group-hover:text-slate-600"
+                              )}>
+                                <NodeIcon className="w-5 h-5 md:w-6 md:h-6 drop-shadow-sm" />
                               </div>
 
-                              <div className={`flex-1 p-5 rounded-2xl transition-all duration-300 ${
+                              {/* Timeline Content Card */}
+                              <div className={cn(
+                                "flex-1 p-5 md:p-6 rounded-[1.5rem] transition-all duration-300 border backdrop-blur-md",
                                 item.isCurrent
-                                  ? "bg-white border-2 border-slate-200 shadow-md"
-                                  : "bg-slate-50/50 border border-slate-100 group-hover:bg-slate-50"
-                              }`}>
-                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
-                                  <h4 className={`text-sm font-black tracking-wide ${item.isCurrent ? "text-slate-900" : "text-slate-700"}`}>
+                                  ? "bg-white/90 border-white shadow-[0_10px_30px_rgba(0,0,0,0.06)] scale-100"
+                                  : "bg-white/40 border-white/60 hover:bg-white/80 hover:shadow-md hover:-translate-y-1"
+                              )}>
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
+                                  <h4 className={cn("text-base font-black tracking-tight", item.isCurrent ? "text-slate-900" : "text-slate-700")}>
                                     {item.status}
                                   </h4>
-                                  <span className={`text-[10px] font-bold whitespace-nowrap px-2.5 py-1 rounded-md border w-fit ${
-                                    item.isCurrent ? "bg-red-50 text-red-600 border-red-100" : "bg-white text-slate-500 border-slate-200"
-                                  }`}>
+                                  <span className={cn(
+                                    "text-[10px] font-black uppercase tracking-widest whitespace-nowrap px-3 py-1.5 rounded-lg border w-fit shadow-sm",
+                                    item.isCurrent ? "bg-red-50/80 text-red-600 border-red-200" : "bg-white text-slate-500 border-slate-200"
+                                  )}>
                                     {item.date}
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed mb-3">{item.description}</p>
+                                <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed mb-4">{item.description}</p>
                                 
-                                <div className="flex flex-wrap items-center gap-2 mt-3">
-                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 bg-white w-fit px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                                    <MapPin className="w-3.5 h-3.5 text-slate-400" /> {item.displayLocation}
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/80 backdrop-blur-sm w-fit px-3 py-2 rounded-[0.75rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+                                    <MapPin className="w-3.5 h-3.5 text-[#C5A059]" /> {item.displayLocation}
                                   </div>
+                                  
                                   {item.isGeotagged && (
-                                    <div className="flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 w-fit px-2 py-1.5 rounded-lg uppercase tracking-wider shadow-sm">
-                                      <CheckCircle2 className="w-3 h-3" /> GPS Verified
+                                    <div className="flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 w-fit px-2.5 py-1.5 rounded-[0.5rem] uppercase tracking-widest shadow-sm">
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> GPS Valid
                                     </div>
                                   )}
                                   
@@ -542,9 +566,9 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                                   {item.proofUrl && (
                                     <button 
                                       onClick={() => setProofModalUrl(item.proofUrl as string)}
-                                      className="flex items-center gap-1 text-[9px] font-black text-blue-600 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors px-2 py-1.5 rounded-lg uppercase tracking-wider shadow-sm"
+                                      className="flex items-center gap-1.5 text-[9px] font-black text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border border-blue-800 transition-all px-3 py-2 rounded-[0.75rem] uppercase tracking-widest shadow-[0_4px_10px_rgba(37,99,235,0.3)] active:scale-95"
                                     >
-                                      <Camera className="w-3 h-3" /> Lihat Bukti Foto
+                                      <Camera className="w-3.5 h-3.5" /> Lihat Bukti
                                     </button>
                                   )}
                                 </div>
@@ -556,8 +580,8 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                       </AnimatePresence>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
 
           </div>

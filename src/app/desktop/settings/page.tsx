@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  User, Building, Package, Globe, Bell, FileText, ChevronLeft, ShieldCheck
+  User, Building, Package, Globe, Bell, FileText, ShieldCheck
 } from "lucide-react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 // --- IMPORT KOMPONEN TABS ---
@@ -28,33 +27,42 @@ export default function DesktopSettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
 
   return (
-    <main className="min-h-screen bg-slate-50 py-12 lg:py-16 px-6 relative overflow-hidden font-sans pb-24">
-      {/* Ornamen Background Premium */}
-      <div className="absolute top-[-5%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
+    <main className="min-h-screen bg-[#f8fafc] py-12 lg:py-20 px-6 relative overflow-hidden font-sans pb-32 z-0">
+      
+      {/* === AMBIENT GLOWING BACKGROUND === */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vh] bg-[#7A171D]/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[40vw] h-[50vh] bg-[#C5A059]/15 rounded-full blur-[120px]" />
+      </div>
 
       <div className="max-w-[1200px] mx-auto z-10 relative">
-        {/* Header */}
-        <div className="mb-8 md:mb-10">
-          <Link href="/dashboard" className="text-xs font-bold text-slate-500 hover:text-[#7A171D] transition-all flex items-center gap-2 mb-4 w-fit bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
-            <ChevronLeft className="w-4 h-4" /> Kembali ke Dasbor
-          </Link>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+        
+        {/* ==========================================
+            HEADER SECTIONS (Tanpa Tombol Back)
+            ========================================== */}
+        <div className="mb-12 relative z-10">
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter flex items-center gap-3 mb-3">
              Pengaturan Akun
           </h1>
-          <p className="text-slate-500 mt-2 text-sm font-medium">Kelola profil pribadi, keamanan akses, dan preferensi operasional Anda.</p>
+          <p className="text-slate-500 text-base font-medium max-w-xl leading-relaxed">
+            Kelola profil pribadi, keamanan akses, serta preferensi operasional dan pengiriman Anda di satu tempat terpusat.
+          </p>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-10 items-start">
+        {/* ==========================================
+            MAIN GRID (SIDEBAR + DYNAMIC CONTENT)
+            ========================================== */}
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-10 items-start">
           
-          {/* SIDEBAR NAVIGATION (SHOPEE/LALAMOVE STYLE) */}
-          <div className="w-full lg:w-[28%] shrink-0 lg:sticky lg:top-28 space-y-6">
-            <div className="bg-white rounded-[2rem] shadow-sm shadow-slate-200/50 py-6 border border-slate-200 overflow-hidden">
+          {/* --- SIDEBAR NAVIGATION (GLASSMORPHISM STYLE) --- */}
+          <div className="w-full lg:w-[30%] shrink-0 lg:sticky lg:top-28 space-y-6 z-20">
+            <div className="glass-card rounded-[2.5rem] py-8 border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_30px_rgba(0,0,0,0.03)] overflow-hidden relative">
               
-              <div className="px-6 mb-3">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personal & Operasional</p>
+              {/* Seksi 1: Personal & Operasional */}
+              <div className="px-8 mb-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pribadi & Operasional</p>
               </div>
-              <div className="flex flex-col space-y-1 px-3 relative">
+              <div className="flex flex-col space-y-1.5 px-4 relative">
                 <SidebarButton icon={User} label="Profil & Keamanan" isActive={activeTab === "profile"} onClick={() => setActiveTab("profile")} />
                 <SidebarButton icon={Building} label="Akun Korporat (B2B)" isActive={activeTab === "business"} onClick={() => setActiveTab("business")} />
                 <SidebarButton icon={Package} label="Preferensi Pesanan" isActive={activeTab === "orders"} onClick={() => setActiveTab("orders")} />
@@ -62,34 +70,38 @@ export default function DesktopSettingsPage() {
                 <SidebarButton icon={Bell} label="Notifikasi Sistem" isActive={activeTab === "notifications"} onClick={() => setActiveTab("notifications")} />
               </div>
 
-              <div className="px-6 mb-3 mt-8">
+              {/* Seksi 2: Informasi Legal */}
+              <div className="px-8 mb-4 mt-8 pt-6 border-t border-white/60">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Informasi Legal</p>
               </div>
-              <div className="flex flex-col space-y-1 px-3">
+              <div className="flex flex-col space-y-1.5 px-4">
                 <SidebarButton icon={FileText} label="Syarat & Kebijakan Privasi" isActive={activeTab === "terms"} onClick={() => setActiveTab("terms")} />
               </div>
 
             </div>
 
-            {/* Banner Security */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-[1.5rem] p-5 flex items-start gap-3 shadow-sm hidden lg:flex">
-               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-               <div>
-                  <h4 className="text-xs font-black text-emerald-800 uppercase tracking-wide">Data Terenkripsi</h4>
-                  <p className="text-[10px] font-medium text-emerald-700 mt-1 leading-relaxed">Flash Global melindungi informasi privasi Anda menggunakan standar keamanan AES-256 tingkat enterprise.</p>
+            {/* --- BANNER KEAMANAN (3D EMERALD) --- */}
+            <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-[2rem] p-6 shadow-[inset_0_2px_4px_rgba(255,255,255,0.3),0_10px_20px_rgba(16,185,129,0.2)] border border-emerald-400 hidden lg:flex items-start gap-4 relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-[40px] pointer-events-none group-hover:bg-white/30 transition-colors" />
+               <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-[1rem] flex items-center justify-center shrink-0 border border-white/30 shadow-sm relative z-10">
+                 <ShieldCheck className="w-6 h-6 text-white drop-shadow-sm" />
+               </div>
+               <div className="relative z-10">
+                  <h4 className="text-sm font-black text-white uppercase tracking-wider mb-1">Data Terenkripsi</h4>
+                  <p className="text-[11px] font-medium text-emerald-50 leading-relaxed">Flash Global melindungi informasi privasi Anda menggunakan standar keamanan AES-256 tingkat enterprise.</p>
                </div>
             </div>
           </div>
 
-          {/* DYNAMIC CONTENT AREA */}
-          <div className="w-full lg:w-[72%]">
+          {/* --- DYNAMIC CONTENT AREA --- */}
+          <div className="w-full lg:w-[70%] z-10">
             <AnimatePresence mode="wait">
               <motion.div 
                 key={activeTab} 
-                initial={{ opacity: 0, y: 10, scale: 0.98 }} 
+                initial={{ opacity: 0, y: 15, scale: 0.98 }} 
                 animate={{ opacity: 1, y: 0, scale: 1 }} 
-                exit={{ opacity: 0, y: -10, scale: 0.98 }} 
-                transition={{ duration: 0.3, ease: "easeOut" }}
+                exit={{ opacity: 0, y: -15, scale: 0.98 }} 
+                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
               >
                 {activeTab === "profile" && <ProfileTab />}
                 {activeTab === "business" && <BusinessTab />}
@@ -106,27 +118,34 @@ export default function DesktopSettingsPage() {
   );
 }
 
-// Komponen Helper untuk Tombol Sidebar
+// ==========================================
+// KOMPONEN HELPER: TOMBOL SIDEBAR
+// ==========================================
 function SidebarButton({ icon: Icon, label, isActive, onClick }: SidebarButtonProps) {
   return (
     <button 
       onClick={onClick} 
       className={cn(
-        "relative flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all w-full text-left overflow-hidden group outline-none z-10",
-        isActive ? "text-[#7A171D]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        "relative flex items-center gap-3.5 px-5 py-3.5 rounded-[1.25rem] text-sm font-bold transition-all w-full text-left overflow-hidden group outline-none z-10",
+        isActive ? "text-[#7A171D]" : "text-slate-500 hover:text-slate-800"
       )}
     >
-      {/* Animasi Gliding Block untuk Menu Aktif */}
+      {/* Animasi Gliding Block ala iOS / macOS */}
       {isActive && (
         <motion.div 
           layoutId="activeTabSettings" 
-          className="absolute inset-0 bg-[#7A171D]/10 z-0 border-l-4 border-[#7A171D] rounded-xl" 
+          className="absolute inset-0 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-slate-100 z-0 rounded-[1.25rem]" 
           initial={false}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          transition={{ type: "spring", stiffness: 400, damping: 35 }}
         />
       )}
-      <Icon className={cn("w-5 h-5 shrink-0 relative z-10 transition-colors", isActive ? "text-[#7A171D]" : "text-slate-400 group-hover:text-slate-600")} /> 
-      <span className="relative z-10">{label}</span>
+      
+      <Icon className={cn(
+        "w-5 h-5 shrink-0 relative z-10 transition-colors duration-300", 
+        isActive ? "text-[#7A171D]" : "text-slate-400 group-hover:text-slate-600"
+      )} /> 
+      
+      <span className="relative z-10 tracking-wide">{label}</span>
     </button>
   );
 }

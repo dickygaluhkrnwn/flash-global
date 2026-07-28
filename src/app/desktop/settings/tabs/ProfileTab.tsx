@@ -7,6 +7,8 @@ import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { useAuthStore } from "@/store/useAuthStore";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 export default function ProfileTab() {
   const { user, login } = useAuthStore();
@@ -137,53 +139,63 @@ export default function ProfileTab() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 bg-white/80 backdrop-blur-xl sticky top-0 z-20">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      className="glass-card rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white overflow-hidden font-sans relative transition-all duration-300"
+    >
+      {/* --- Background Ambient Glow --- */}
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-[#7A171D]/10 rounded-full blur-[80px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-[#C5A059]/10 rounded-full blur-[80px] pointer-events-none z-0" />
+
+      {/* --- HEADER STICKY --- */}
+      <div className="p-6 md:p-8 border-b border-white/60 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-5 bg-white/40 backdrop-blur-xl sticky top-0 z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)]">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Profile Settings</h2>
-          <p className="text-slate-500 text-sm mt-1">Manage your personal information and security.</p>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Profil & Keamanan</h2>
+          <p className="text-slate-500 text-sm mt-1.5 font-medium leading-relaxed">Kelola informasi pribadi dan tingkatkan keamanan akun Anda.</p>
         </div>
-        <button 
+        <Button 
           onClick={handleSaveProfile} 
           disabled={isLoading} 
-          className="bg-[#7A171D] hover:bg-[#5A0E13] text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-md shadow-[#7A171D]/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          variant="primary"
+          className="w-full sm:w-auto h-12 px-8 shadow-[0_8px_20px_rgba(122,23,29,0.2)] active:scale-95"
         >
-          {isLoading ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <><Save className="w-4 h-4"/> Save Changes</>
-          )}
-        </button>
+          {isLoading ? "Menyimpan..." : <><Save className="w-4 h-4 mr-2" /> Simpan Perubahan</>}
+        </Button>
       </div>
 
-      <div className="p-6 md:p-8 space-y-10">
+      <div className="p-6 md:p-8 space-y-10 relative z-10">
+        
+        {/* --- TOAST NOTIFICATIONS (IN-CARD) --- */}
         <AnimatePresence>
           {isSuccess && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="p-4 bg-emerald-50 text-emerald-700 rounded-xl font-medium text-sm border border-emerald-100 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 shrink-0"/> Profile updated successfully!
+            <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
+              <div className="p-4 bg-emerald-50/80 backdrop-blur-md text-emerald-700 rounded-[1.25rem] font-bold text-sm border border-emerald-200 shadow-sm flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500"/> Profil berhasil diperbarui!
               </div>
             </motion.div>
           )}
           {isPasswordSent && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="p-4 bg-blue-50 text-blue-700 rounded-xl font-medium text-sm border border-blue-100 flex items-center gap-3">
-                <MailCheck className="w-5 h-5 shrink-0"/> Link pembuatan/reset password telah dikirim ke email Anda!
+            <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
+              <div className="p-4 bg-blue-50/80 backdrop-blur-md text-blue-700 rounded-[1.25rem] font-bold text-sm border border-blue-200 shadow-sm flex items-center gap-3">
+                <MailCheck className="w-5 h-5 shrink-0 text-blue-500"/> Tautan pembuatan/reset kata sandi telah dikirim ke email Anda!
               </div>
             </motion.div>
           )}
           {errorMsg && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <div className="p-4 bg-red-50 text-red-600 rounded-xl font-medium text-sm border border-red-100 flex items-center gap-3">
-                <Shield className="w-5 h-5 shrink-0"/> {errorMsg}
+            <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
+              <div className="p-4 bg-red-50/80 backdrop-blur-md text-red-600 rounded-[1.25rem] font-bold text-sm border border-red-200 shadow-sm flex items-center gap-3">
+                <Shield className="w-5 h-5 shrink-0 text-red-500"/> {errorMsg}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-2">
+        {/* --- FOTO PROFIL --- */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-4">
           <div className="relative group shrink-0">
-            <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden bg-slate-50 flex items-center justify-center">
+            {/* Foto Profil dengan Glass Frame */}
+            <div className="w-24 h-24 rounded-full border-4 border-white shadow-[0_8px_16px_rgba(0,0,0,0.08)] overflow-hidden bg-slate-50 flex items-center justify-center relative z-10">
               {avatarPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
@@ -191,10 +203,12 @@ export default function ProfileTab() {
                 <User className="w-10 h-10 text-slate-300" />
               )}
             </div>
+            
+            {/* Tombol Kamera Mengambang */}
             <button 
               onClick={() => fileInputRef.current?.click()} 
-              className="absolute bottom-0 right-0 w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-white hover:bg-[#7A171D] transition-colors shadow-md"
-              title="Change Photo"
+              className="absolute bottom-0 right-0 w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-white hover:bg-[#7A171D] hover:scale-110 transition-all shadow-md z-20"
+              title="Ubah Foto Profil"
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -203,17 +217,18 @@ export default function ProfileTab() {
           
           <div className="flex flex-col gap-2">
             <div>
-              <h4 className="font-bold text-slate-900 text-lg">Profile Photo</h4>
-              <p className="text-sm text-slate-500">Recommended format: JPG, PNG. Max size 2MB.</p>
+              <h4 className="font-black text-slate-900 text-lg">Foto Profil</h4>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1">Format: JPG, PNG. Maksimal 2MB.</p>
             </div>
+            {/* Badge Role yang Modern */}
             {user?.role && (
-              <div className="flex items-center gap-1.5 w-max px-3 py-1 bg-slate-100 border border-slate-200 rounded-full">
+              <div className="flex items-center gap-1.5 w-max px-3.5 py-1.5 bg-white border border-slate-200 shadow-sm rounded-lg mt-1">
                 {user.role === 'b2b' ? (
                   <Building2 className="w-3.5 h-3.5 text-[#C5A059]" />
                 ) : (
                   <User className="w-3.5 h-3.5 text-slate-500" />
                 )}
-                <span className="text-xs font-semibold text-slate-700 capitalize">
+                <span className="text-[10px] font-black tracking-widest text-slate-700 uppercase">
                   {user.role === 'b2b' ? 'Corporate Partner' : 'Regular User'}
                 </span>
               </div>
@@ -221,92 +236,105 @@ export default function ProfileTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-100">
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">First Name</label>
-            <input 
+        {/* --- FORM IDENTITAS --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-8 border-t border-white/60">
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nama Depan</label>
+            <Input 
               type="text" 
               value={formData.firstName} 
               onChange={(e) => setFormData({...formData, firstName: e.target.value})} 
-              className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none font-medium text-slate-900 bg-slate-50/50 transition-all" 
-              placeholder="e.g. John"
+              className="h-14 font-black" 
+              placeholder="Cth: Budi"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Last Name</label>
-            <input 
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nama Belakang</label>
+            <Input 
               type="text" 
               value={formData.lastName} 
               onChange={(e) => setFormData({...formData, lastName: e.target.value})} 
-              className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none font-medium text-slate-900 bg-slate-50/50 transition-all" 
-              placeholder="e.g. Doe"
+              className="h-14 font-black" 
+              placeholder="Cth: Santoso"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 pt-6 border-t border-slate-100">
-          {/* BUG FIX: Membuka kunci (disabled dihilangkan) agar user bisa mengisi nomor HP */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Phone Number <span className="text-red-500">*</span></label>
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <input 
-                type="tel" 
-                value={formData.phone} 
-                onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-                className="w-full sm:w-1/2 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-[#7A171D] focus:ring-4 focus:ring-[#7A171D]/10 outline-none font-medium text-slate-900 bg-slate-50/50 transition-all" 
-                placeholder="Cth: 081234567890" 
-              />
-              <span className="text-xs text-slate-500 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <Phone className="w-3.5 h-3.5"/> Nomor HP wajib diisi untuk operasional & validasi B2B.
+        {/* --- KONTAK & EMAIL --- */}
+        <div className="grid grid-cols-1 gap-8 pt-8 border-t border-white/60">
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nomor Telepon <span className="text-red-500">*</span></label>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="relative w-full sm:w-1/2">
+                <Phone className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input 
+                  type="tel" 
+                  value={formData.phone} 
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                  className="pl-12 h-14 font-black" 
+                  placeholder="Cth: 081234567890" 
+                />
+              </div>
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-2 bg-white/60 backdrop-blur-md px-4 py-2.5 rounded-[1rem] border border-white shadow-sm">
+                <Shield className="w-4 h-4 text-emerald-500 shrink-0"/> Dibutuhkan untuk OTP & Info Kurir
               </span>
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Login Email</label>
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <input 
-                type="email" 
-                value={formData.email} 
-                disabled 
-                className="w-full sm:w-1/2 px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 font-medium cursor-not-allowed" 
-              />
-              <span className="text-xs text-amber-600 font-medium flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-                <Lock className="w-3.5 h-3.5"/> Contact support to change email.
+
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email Login</label>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="relative w-full sm:w-1/2 opacity-70">
+                <MailCheck className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input 
+                  type="email" 
+                  value={formData.email} 
+                  disabled 
+                  className="pl-12 h-14 font-black cursor-not-allowed bg-slate-50" 
+                />
+              </div>
+              <span className="text-[10px] text-amber-600 font-bold uppercase tracking-widest flex items-center gap-2 bg-amber-50/80 backdrop-blur-md px-4 py-2.5 rounded-[1rem] border border-amber-200 shadow-sm">
+                <Lock className="w-4 h-4 shrink-0"/> Hubungi Support untuk ubah
               </span>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* --- SECURITY / KATA SANDI --- */}
+        <div className="border-t border-white/60 pt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-slate-50/50 p-6 rounded-[2rem] border border-white mt-8 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
           <div>
-            <h4 className="font-bold text-slate-900">Account Password</h4>
-            <p className="text-sm text-slate-500 mt-1 max-w-sm">Secure your account or reset your password if you logged in via Google.</p>
+            <h4 className="font-black text-slate-900 text-lg tracking-tight">Kata Sandi Akun</h4>
+            <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed max-w-sm">Amankan akun Anda atau atur ulang kata sandi (terutama jika Anda mendaftar melalui Google).</p>
           </div>
-          <button 
+          <Button 
             onClick={handleSetPassword}
             disabled={isSendingPassword}
-            className="bg-white border border-slate-300 hover:border-slate-800 hover:bg-slate-50 text-slate-800 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 shrink-0"
+            variant="outline"
+            className="h-12 border-slate-300 text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 hover:border-slate-400 shadow-sm active:scale-95 shrink-0"
           >
-            <KeyRound className="w-4 h-4" /> 
-            {isSendingPassword ? "Mengirim Email..." : "Set / Reset Password"}
-          </button>
+            <KeyRound className="w-4 h-4 mr-2 text-slate-500" /> 
+            {isSendingPassword ? "Mengirim Tautan..." : "Atur / Reset Kata Sandi"}
+          </Button>
         </div>
 
-        <div className="border-t border-slate-100 pt-8 mt-4">
-          <div className="bg-red-50/50 p-6 md:p-8 rounded-2xl border border-red-100 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div>
-              <h4 className="font-bold text-red-700">Delete Account</h4>
-              <p className="text-sm text-red-600/80 mt-1 max-w-md leading-relaxed">
-                Once you delete your account, there is no going back. All your active tracking data and history will be permanently wiped.
+        {/* --- DANGER ZONE --- */}
+        <div className="pt-2">
+          <div className="bg-red-50/60 backdrop-blur-sm p-6 md:p-8 rounded-[2rem] border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-red-500/20 transition-colors" />
+            
+            <div className="relative z-10">
+              <h4 className="font-black text-red-700 text-lg tracking-tight">Hapus Akun</h4>
+              <p className="text-xs text-red-600/80 mt-1.5 font-bold leading-relaxed max-w-md">
+                Tindakan ini permanen. Semua data pelacakan, riwayat transaksi, dan saldo deposit Anda akan dihapus selamanya.
               </p>
             </div>
-            <button className="bg-white border border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 text-red-600 px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap shrink-0">
-              <Trash2 className="w-4 h-4" /> Delete Account
-            </button>
+            <Button variant="danger" className="h-12 bg-red-600 hover:bg-red-700 shadow-[0_8px_16px_rgba(220,38,38,0.2)] whitespace-nowrap shrink-0 relative z-10">
+              <Trash2 className="w-4 h-4 mr-2" /> Hapus Permanen
+            </Button>
           </div>
         </div>
 
       </div>
-    </div>
+    </motion.div>
   );
 }

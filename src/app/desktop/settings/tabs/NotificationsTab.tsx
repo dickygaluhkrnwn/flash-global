@@ -13,7 +13,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-// --- INTERFACE UNTUK PROPS TOGGLE ROW (Lokal UI) ---
+// --- INTERFACE UNTUK PROPS TOGGLE ROW ---
 interface ToggleRowProps {
   icon: React.ElementType;
   label: string;
@@ -90,27 +90,34 @@ export default function NotificationsTab() {
     }
   };
 
-  // Komponen Helper untuk Baris Toggle
+  // ====================================================================
+  // KOMPONEN HELPER: CUSTOM IOS TOGGLE SWITCH
+  // ====================================================================
   const ToggleRow = ({ icon: Icon, label, desc, isChecked, onChange, locked = false, maintenance = false }: ToggleRowProps) => (
-    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4", (locked || maintenance) && "opacity-60")}>
-      <div className="flex items-start gap-4">
-        <div className={cn("p-2.5 rounded-xl shrink-0 border shadow-sm", isChecked && !locked && !maintenance ? "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20" : "bg-slate-50 text-slate-400 border-slate-200")}>
-          <Icon className="w-5 h-5" />
+    <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-5 py-5", (locked || maintenance) && "opacity-60")}>
+      <div className="flex items-start gap-5">
+        <div className={cn(
+          "w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 border shadow-sm transition-all duration-300", 
+          isChecked && !locked && !maintenance 
+            ? "bg-gradient-to-br from-[#9A242B] to-[#7A171D] text-white border-[#5A0E13] shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_4px_10px_rgba(122,23,29,0.2)]" 
+            : "bg-slate-100 border-white text-slate-400"
+        )}>
+          <Icon className="w-5 h-5 drop-shadow-sm" />
         </div>
         <div>
-          <h5 className="font-black text-slate-900 text-sm flex items-center gap-2">
+          <h5 className="font-black text-slate-900 text-sm flex items-center gap-2 tracking-tight">
             {label} 
             
-            {/* MANUAL BADGE MAINTENANCE (Mencegah Error TS) */}
+            {/* BADGE MAINTENANCE */}
             {maintenance && (
-              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-md text-[9px] font-bold">
-                <Hammer className="w-2.5 h-2.5" /> Dev
+              <span className="inline-flex items-center gap-1.5 bg-amber-50/80 backdrop-blur-sm text-amber-700 border border-amber-200 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm">
+                <Hammer className="w-3 h-3" /> Dev
               </span>
             )}
             
-            {/* MANUAL BADGE Wajib */}
+            {/* BADGE WAJIB */}
             {locked && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200 shadow-sm">
                 Wajib
               </span>
             )}
@@ -118,55 +125,70 @@ export default function NotificationsTab() {
           <p className="text-xs text-slate-500 mt-1 max-w-[250px] sm:max-w-xs font-medium leading-relaxed">{desc}</p>
         </div>
       </div>
+      
+      {/* CUSTOM 3D TOGGLE BUTTON */}
       <button 
         type="button" 
         disabled={locked || maintenance}
         onClick={onChange} 
         className={cn(
-          "w-12 h-6 rounded-full flex items-center transition-colors p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-2 focus-visible:ring-[#7A171D]/50 border shadow-inner",
-          isChecked ? "bg-[#7A171D] border-[#5A0E13]" : "bg-slate-200 border-slate-300",
-          (locked || maintenance) ? "cursor-not-allowed" : "cursor-pointer"
+          "w-14 h-8 rounded-full flex items-center transition-all duration-300 p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-4 focus-visible:ring-[#7A171D]/20 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] border",
+          isChecked ? "bg-emerald-500 border-emerald-600" : "bg-slate-200 border-slate-300",
+          (locked || maintenance) ? "cursor-not-allowed" : "cursor-pointer active:scale-95"
         )}
       >
-        <div className={cn("w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform border border-slate-100", isChecked ? "translate-x-6" : "translate-x-0")} />
+        <motion.div 
+          layout
+          initial={false}
+          animate={{ x: isChecked ? 24 : 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          className="w-6 h-6 bg-white rounded-full shadow-md border border-slate-100" 
+        />
       </button>
     </div>
   );
 
   return (
-    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden font-sans">
-      
-      {/* Header Sticky */}
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-xl sticky top-0 z-20">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      className="glass-card rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white overflow-hidden font-sans relative"
+    >
+      {/* --- Ambient Glow --- */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-[#7A171D]/5 rounded-full blur-[80px] pointer-events-none z-0" />
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] pointer-events-none z-0" />
+
+      {/* --- HEADER STICKY --- */}
+      <div className="p-6 md:p-8 border-b border-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-5 bg-white/40 backdrop-blur-xl sticky top-0 z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)]">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pengaturan Notifikasi</h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Pilih jalur komunikasi yang paling nyaman untuk Anda.</p>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Notifikasi Sistem</h2>
+          <p className="text-slate-500 text-sm mt-1.5 font-medium leading-relaxed">Pilih jalur komunikasi yang paling nyaman untuk Anda.</p>
         </div>
         <Button 
           onClick={handleSaveNotifications} 
           disabled={isLoading} 
           variant="primary"
-          className="w-full sm:w-auto px-6 shadow-md"
+          className="w-full sm:w-auto h-12 px-8 shadow-[0_8px_20px_rgba(122,23,29,0.2)] active:scale-95"
         >
           {isLoading ? "Menyimpan..." : <><Save className="w-4 h-4 mr-2" /> Simpan Perubahan</>}
         </Button>
       </div>
 
-      <div className="p-6 md:p-8 space-y-8">
+      <div className="p-6 md:p-8 space-y-8 relative z-10">
         
-        {/* Notifikasi Status */}
+        {/* --- TOAST NOTIFICATIONS (IN-CARD) --- */}
         <AnimatePresence>
           {isSuccess && (
             <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
-              <div className="p-4 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-sm border border-emerald-100 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 shrink-0"/> Preferensi notifikasi berhasil diperbarui!
+              <div className="p-4 bg-emerald-50/80 backdrop-blur-md text-emerald-700 rounded-[1.25rem] font-bold text-sm border border-emerald-200 shadow-sm flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500"/> Preferensi notifikasi berhasil diperbarui!
               </div>
             </motion.div>
           )}
           {errorMsg && (
             <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
-              <div className="p-4 bg-red-50 text-red-600 rounded-xl font-bold text-sm border border-red-100 flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0"/> {errorMsg}
+              <div className="p-4 bg-red-50/80 backdrop-blur-md text-red-600 rounded-[1.25rem] font-bold text-sm border border-red-200 shadow-sm flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 text-red-500"/> {errorMsg}
               </div>
             </motion.div>
           )}
@@ -174,50 +196,58 @@ export default function NotificationsTab() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-10">
           
-          {/* SECTION 1: ORDER UPDATES */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest border-b border-slate-100 pb-3">
-              <Package className="w-4 h-4 text-[#7A171D]" /> Order & Tracking
+          {/* ========================================================= */}
+          {/* SECTION 1: ORDER UPDATES (Bento Card) */}
+          {/* ========================================================= */}
+          <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-[2rem] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5 uppercase tracking-widest border-b border-slate-200/60 pb-4 mb-4">
+              <div className="bg-[#7A171D]/10 p-1.5 rounded-lg border border-[#7A171D]/20"><Package className="w-4 h-4 text-[#7A171D]" /></div> Order & Tracking
             </h3>
-            <p className="text-xs font-semibold text-slate-500">Update status penjemputan, perjalanan manifes, hingga paket tiba.</p>
-            <div className="space-y-2 divide-y divide-slate-50 border border-slate-100 rounded-2xl px-5 bg-slate-50/30">
+            <p className="text-xs font-bold text-slate-500 mb-6 leading-relaxed">Update status penjemputan, perjalanan manifes, hingga paket tiba di tujuan akhir.</p>
+            <div className="space-y-1 divide-y divide-slate-100">
               <ToggleRow icon={MonitorDot} label="Push (Browser)" desc="Notifikasi langsung di layar perangkat Anda." isChecked={notifPrefs.orders.push} onChange={() => handleToggle('orders', 'push')} maintenance={true} />
               <ToggleRow icon={Mail} label="Email Alerts" desc="Rangkuman perjalanan logistik ke inbox utama." isChecked={notifPrefs.orders.email} onChange={() => handleToggle('orders', 'email')} />
               <ToggleRow icon={MessageCircle} label="WhatsApp Bot" desc="Laporan instan via WA (Disarankan untuk B2B)." isChecked={notifPrefs.orders.whatsapp} onChange={() => handleToggle('orders', 'whatsapp')} />
             </div>
           </div>
 
-          {/* SECTION 2: BILLING & FINANCE */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest border-b border-slate-100 pb-3">
-              <CreditCard className="w-4 h-4 text-[#C5A059]" /> Billing & Finance
+          {/* ========================================================= */}
+          {/* SECTION 2: BILLING & FINANCE (Bento Card) */}
+          {/* ========================================================= */}
+          <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-[2rem] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5 uppercase tracking-widest border-b border-slate-200/60 pb-4 mb-4">
+              <div className="bg-[#C5A059]/10 p-1.5 rounded-lg border border-[#C5A059]/20"><CreditCard className="w-4 h-4 text-[#A68345]" /></div> Billing & Finance
             </h3>
-            <p className="text-xs font-semibold text-slate-500">Informasi tagihan, e-receipt, dan konfirmasi pembayaran.</p>
-            <div className="space-y-2 divide-y divide-slate-50 border border-slate-100 rounded-2xl px-5 bg-slate-50/30">
+            <p className="text-xs font-bold text-slate-500 mb-6 leading-relaxed">Informasi rincian tagihan, e-receipt, dan konfirmasi validasi pembayaran Anda.</p>
+            <div className="space-y-1 divide-y divide-slate-100">
               <ToggleRow icon={Mail} label="Email Invoices" desc="Pengiriman dokumen tagihan & resi format PDF." isChecked={notifPrefs.billing.email} onChange={() => handleToggle('billing', 'email')} />
               <ToggleRow icon={MessageCircle} label="WhatsApp Reminders" desc="Peringatan jatuh tempo tagihan (Khusus Piutang B2B)." isChecked={notifPrefs.billing.whatsapp} onChange={() => handleToggle('billing', 'whatsapp')} />
             </div>
           </div>
 
-          {/* SECTION 3: OFFERS & PROMOTIONS */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest border-b border-slate-100 pb-3">
-              <Bell className="w-4 h-4 text-emerald-600" /> Offers & Promotions
+          {/* ========================================================= */}
+          {/* SECTION 3: OFFERS & PROMOTIONS (Bento Card) */}
+          {/* ========================================================= */}
+          <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-[2rem] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5 uppercase tracking-widest border-b border-slate-200/60 pb-4 mb-4">
+              <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20"><Bell className="w-4 h-4 text-emerald-600" /></div> Offers & Promos
             </h3>
-            <p className="text-xs font-semibold text-slate-500">Dapatkan informasi diskon kargo, voucher, dan rebate bulanan.</p>
-            <div className="space-y-2 divide-y divide-slate-50 border border-slate-100 rounded-2xl px-5 bg-slate-50/30">
+            <p className="text-xs font-bold text-slate-500 mb-6 leading-relaxed">Dapatkan informasi diskon rute kargo, kode voucher, dan rebate bulanan.</p>
+            <div className="space-y-1 divide-y divide-slate-100">
               <ToggleRow icon={Mail} label="Email Newsletters" desc="Katalog promo dan penawaran eksklusif per bulan." isChecked={notifPrefs.promos.email} onChange={() => handleToggle('promos', 'email')} />
               <ToggleRow icon={Smartphone} label="SMS Promos" desc="Kode voucher instan kilat langsung ke HP Anda." isChecked={notifPrefs.promos.sms} onChange={() => handleToggle('promos', 'sms')} maintenance={true} />
             </div>
           </div>
 
-          {/* SECTION 4: SYSTEM & SECURITY */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 uppercase tracking-widest border-b border-slate-100 pb-3">
-              <ShieldAlert className="w-4 h-4 text-blue-600" /> System & Security
+          {/* ========================================================= */}
+          {/* SECTION 4: SYSTEM & SECURITY (Bento Card) */}
+          {/* ========================================================= */}
+          <div className="bg-white/60 backdrop-blur-md border border-white p-6 rounded-[2rem] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2.5 uppercase tracking-widest border-b border-slate-200/60 pb-4 mb-4">
+              <div className="bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20"><ShieldAlert className="w-4 h-4 text-blue-600" /></div> System & Security
             </h3>
-            <p className="text-xs font-semibold text-slate-500">Peringatan keamanan akun dan login dari perangkat baru.</p>
-            <div className="space-y-2 divide-y divide-slate-50 border border-slate-100 rounded-2xl px-5 bg-slate-50/30">
+            <p className="text-xs font-bold text-slate-500 mb-6 leading-relaxed">Peringatan keamanan akun, perubahan kata sandi, dan login dari perangkat baru.</p>
+            <div className="space-y-1 divide-y divide-slate-100">
               <ToggleRow icon={Mail} label="Security Emails" desc="Peringatan mutlak jika ada aktivitas mencurigakan pada akun." isChecked={true} onChange={() => {}} locked={true} />
               <ToggleRow icon={MonitorDot} label="Push (Browser)" desc="Peringatan langsung di layar saat sesi login aktif." isChecked={notifPrefs.security.push} onChange={() => handleToggle('security', 'push')} maintenance={true} />
             </div>
@@ -225,6 +255,6 @@ export default function NotificationsTab() {
 
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

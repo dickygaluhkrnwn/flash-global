@@ -7,7 +7,7 @@ import {
   MapPin, User, Briefcase, TrendingUp, 
   FileCheck, ShieldAlert, MessageCircle, 
   Clock, CreditCard, Mail, Phone,
-  CheckCircle2
+  CheckCircle2, ChevronDown, Check
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -41,20 +41,17 @@ export default function BusinessTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // LOGIKA BARU: Status kelengkapan profil (syarat daftar B2B)
   const [isProfileComplete, setIsProfileComplete] = useState(false);
-
-  // Status Kemitraan dari Database
   const [contractStatus, setContractStatus] = useState<"Pending" | "Approved" | "Rejected" | null>(null);
   const [b2bLimit, setB2bLimit] = useState<number>(0);
 
-  // State untuk Profil Bisnis Standar
+  // State Profil Standar
   const [formData, setFormData] = useState({ 
     companyName: "", 
     defaultAddress: "" 
   });
 
-  // State untuk Pengajuan B2B / Corporate (DITAMBAH EMAIL & PHONE)
+  // State Form B2B
   const [b2bData, setB2bData] = useState({
     picName: "",
     legalCompanyName: "",
@@ -64,6 +61,10 @@ export default function BusinessTab() {
     industry: "",
     volume: ""
   });
+
+  // State untuk Custom Dropdown
+  const [openIndustry, setOpenIndustry] = useState(false);
+  const [openVolume, setOpenVolume] = useState(false);
 
   useEffect(() => {
     if (user?.uid) {
@@ -75,7 +76,6 @@ export default function BusinessTab() {
           if (userDoc.exists()) {
             const data = userDoc.data();
             
-            // CEK PREREQUISITE: Apakah Nama dan No HP sudah diisi di tab Profile?
             const profileComplete = Boolean(data.displayName && data.phone);
             setIsProfileComplete(profileComplete);
 
@@ -87,15 +87,14 @@ export default function BusinessTab() {
               picName: data.picName || user.displayName || "",
               legalCompanyName: data.companyName || "",
               npwp: data.npwp || "",
-              companyPhone: data.companyPhone || "", // Load data jika sudah ada
-              companyEmail: data.companyEmail || "", // Load data jika sudah ada
+              companyPhone: data.companyPhone || "", 
+              companyEmail: data.companyEmail || "", 
               industry: data.industry || "",
               volume: data.monthlyVolume || ""
             });
             setContractStatus(data.contractStatus || null);
             setB2bLimit(data.b2bLimit || 0);
 
-            // Jika role di database sudah b2b tapi di zustand belum, update zustand otomatis
             if (data.role === "b2b" && user.role !== "b2b") {
               login({ ...user, role: "b2b" });
             }
@@ -108,7 +107,8 @@ export default function BusinessTab() {
       };
       fetchUserData();
     }
-  }, [user, login]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handleSaveCompany = async () => {
     if (!user?.uid) return;
@@ -127,14 +127,19 @@ export default function BusinessTab() {
     }
   };
 
-  // LOGIKA CERDAS: SINKRONISASI KE TABEL ADMIN B2B
   const handleSubmitB2B = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.uid) return;
+    
+    // Validasi Custom Select
+    if (!b2bData.industry || !b2bData.volume) {
+      alert("Harap pilih Industri dan Estimasi Volume.");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      // 1. Simpan langsung ke profil user agar terbaca oleh Admin B2B
       await setDoc(doc(db, "users", user.uid), {
         picName: b2bData.picName,
         companyName: b2bData.legalCompanyName, 
@@ -143,14 +148,13 @@ export default function BusinessTab() {
         companyEmail: b2bData.companyEmail,
         industry: b2bData.industry,
         monthlyVolume: b2bData.volume,
-        contractStatus: "Pending", // Status awal wajib Pending
+        contractStatus: "Pending", 
         b2bRequestedAt: serverTimestamp()
       }, { merge: true });
 
       setContractStatus("Pending");
       setShowB2BForm(false);
 
-      // 2. Generate Pesan WA ke Tim Sales/Kemitraan (Format Diperbarui)
       const adminWhatsApp = "6281234567890"; 
       const message = `Halo Tim Kemitraan Flash Global,\n\nSaya tertarik untuk *Upgrade Akun Corporate (B2B)*. Berikut profil bisnis saya:\n\n👤 *Nama PIC:* ${b2bData.picName}\n🏢 *Nama PT/Entitas:* ${b2bData.legalCompanyName}\n📞 *No. Telp Perusahaan:* ${b2bData.companyPhone}\n✉️ *Email Perusahaan:* ${b2bData.companyEmail}\n📄 *NPWP:* ${b2bData.npwp || "-"}\n🏭 *Industri:* ${b2bData.industry}\n📦 *Estimasi Volume:* ${b2bData.volume}\n\nMohon informasi terkait dokumen legalitas lanjutan dan penawaran harga grosirnya. Terima kasih.`;
       
@@ -166,55 +170,59 @@ export default function BusinessTab() {
   };
 
   if (isLoading) {
-    return <div className="h-64 flex items-center justify-center text-slate-400 font-bold text-sm animate-pulse">Memuat Profil Bisnis...</div>;
+    return <div className="h-64 flex flex-col items-center justify-center text-slate-400 font-black tracking-widest text-xs uppercase animate-pulse">Memuat Profil Bisnis...</div>;
   }
 
   return (
     <div className="space-y-6 font-sans">
       
-      {/* 1. PROFIL BISNIS STANDAR (Untuk Form Booking) */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden relative">
-        <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50">
+      {/* ====================================================== */}
+      {/* 1. PROFIL BISNIS STANDAR (GLASS CARD) */}
+      {/* ====================================================== */}
+      <div className="glass-card rounded-[2.5rem] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white overflow-hidden relative transition-all duration-300">
+        <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-slate-200/50 rounded-full blur-[80px] pointer-events-none" />
+        
+        <div className="p-6 md:p-8 border-b border-white/60 flex flex-col sm:flex-row justify-between sm:items-center gap-5 bg-white/40 backdrop-blur-md relative z-10 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)]">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Profil Cabang Gudang</h2>
-            <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium">Kelola nama entitas dan lokasi gudang default untuk mempercepat form penjemputan.</p>
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Profil Cabang & Gudang</h2>
+            <p className="text-slate-500 text-xs md:text-sm mt-1.5 font-medium leading-relaxed">Kelola identitas cabang dan titik penjemputan default untuk mempercepat proses pembuatan resi.</p>
           </div>
           {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)} variant="outline" className="h-10 text-xs font-bold w-full sm:w-auto border-slate-300">
+            <Button onClick={() => setIsEditing(true)} variant="glass" className="h-12 text-sm font-black w-full sm:w-auto shadow-sm active:scale-95 border border-white">
               Edit Data Cabang
             </Button>
           ) : (
-            <Button onClick={handleSaveCompany} disabled={isSaving} variant="primary" className="h-10 text-xs font-bold w-full sm:w-auto shadow-md">
+            <Button onClick={handleSaveCompany} disabled={isSaving} variant="primary" className="h-12 text-sm font-black w-full sm:w-auto shadow-md">
               {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
           )}
         </div>
 
-        <div className="p-6 md:p-8 space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nama Cabang / Toko</label>
+        <div className="p-6 md:p-8 space-y-6 relative z-10 bg-white/20">
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Nama Cabang / Toko</label>
             <div className="relative">
-              <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Building className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input 
                 type="text" 
                 disabled={!isEditing} 
                 value={formData.companyName} 
                 onChange={(e) => setFormData({...formData, companyName: e.target.value})} 
-                className="pl-11 disabled:bg-slate-50 disabled:text-slate-500 font-bold focus-visible:border-[#7A171D]" 
+                className={cn("pl-12 h-14 font-black transition-all", !isEditing && "opacity-70 bg-slate-50 cursor-not-allowed")} 
                 placeholder="Cth: Toko Flash Global Pusat" 
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Alamat Penjemputan Default</label>
+          <div className="space-y-2.5">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Alamat Penjemputan Default</label>
             <div className="relative">
-              <MapPin className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
+              <MapPin className="w-5 h-5 absolute left-4 top-4 text-slate-400" />
               <textarea 
                 disabled={!isEditing} 
                 value={formData.defaultAddress} 
                 onChange={(e) => setFormData({...formData, defaultAddress: e.target.value})} 
                 rows={3} 
-                className="flex w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pl-11 text-sm font-bold text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-4 focus-visible:border-[#7A171D] disabled:bg-slate-50 disabled:text-slate-500 resize-none shadow-sm" 
+                className={cn("flex w-full rounded-[1.25rem] border border-white bg-white/60 backdrop-blur-md px-5 py-4 pl-12 text-sm font-bold text-slate-900 transition-all focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[#7A171D]/15 focus-visible:border-[#7A171D]/50 resize-none shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]", !isEditing && "opacity-70 bg-slate-50 cursor-not-allowed")} 
                 placeholder="Alamat lengkap pergudangan..."
               ></textarea>
             </div>
@@ -222,202 +230,285 @@ export default function BusinessTab() {
         </div>
       </div>
 
-      {/* 2. CORPORATE B2B UPGRADE SECTION */}
+      {/* ====================================================== */}
+      {/* 2. CORPORATE B2B UPGRADE SECTION (3D PREMIUM CARDS) */}
+      {/* ====================================================== */}
       <div className={cn(
-        "rounded-[2rem] p-6 md:p-8 text-white relative overflow-hidden shadow-xl border transition-all",
+        "rounded-[2.5rem] p-8 md:p-10 text-white relative overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.2)] border transition-all duration-500",
         contractStatus === "Approved" 
-          ? "bg-gradient-to-br from-[#7A171D] via-[#5A0E13] to-[#4A0A10] border-red-500/20" 
-          : "bg-slate-900 border-slate-800"
+          ? "bg-gradient-to-br from-[#7A171D] via-[#5A0E13] to-[#3a060a] border-[#9A242B]/30" 
+          : "bg-gradient-to-b from-slate-900 to-slate-950 border-slate-800"
       )}>
         
-        {/* Dekorasi Background */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none" />
+        {/* Dekorasi Background 3D */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none z-0" />
         {contractStatus === "Approved" && (
-          <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-red-500 rounded-full blur-[100px] opacity-20 pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-red-500 rounded-full blur-[120px] opacity-30 pointer-events-none z-0" />
         )}
         
-        {/* Konten Tergantung Status */}
+        {/* --- STATUS: APPROVED (KARTU VIP) --- */}
         {contractStatus === "Approved" ? (
-          // UI JIKA SUDAH APPROVED (KARTU VIP B2B ENTERPRISE)
           <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg mb-5 border border-white/20">
-              <Crown className="w-8 h-8 text-[#7A171D]" />
+            <div className="w-20 h-20 bg-gradient-to-br from-[#EAD098] via-[#C5A059] to-[#A68345] rounded-[1.5rem] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.6),0_10px_20px_rgba(197,160,89,0.4)] mb-6 border border-white/40">
+              <Crown className="w-10 h-10 text-[#5A0E13] drop-shadow-sm" />
             </div>
-            <h2 className="text-2xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#C5A059]">Verified Corporate Partner</h2>
-            <p className="text-white/80 text-sm font-medium mb-8 max-w-md mx-auto">Akun bisnis Anda telah tervalidasi. Anda sekarang berhak mendapatkan diskon khusus dan fitur bypass pembayaran (Piutang Net 30).</p>
+            <h2 className="text-3xl font-black mb-3 tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] via-[#C5A059] to-[#DFBE7B]">Verified Corporate Partner</h2>
+            <p className="text-white/80 text-sm font-medium mb-10 max-w-md mx-auto leading-relaxed">Akun bisnis Anda telah tervalidasi. Anda sekarang berhak mendapatkan diskon khusus dan fitur bypass pembayaran (Piutang Net 30).</p>
             
-            <div className="w-full max-w-md bg-black/30 backdrop-blur-md rounded-2xl p-6 border border-white/10 text-left shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard className="w-16 h-16 text-white"/></div>
+            {/* Kartu Limit Kredit */}
+            <div className="w-full max-w-md bg-white/10 backdrop-blur-xl rounded-[2rem] p-8 border border-white/20 text-left shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_20px_40px_rgba(0,0,0,0.3)] relative overflow-hidden group hover:bg-white/15 transition-colors duration-300">
+              <div className="absolute top-[-20%] right-[-10%] p-6 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500"><CreditCard className="w-32 h-32 text-white"/></div>
               
               <div className="relative z-10">
-                <p className="text-[10px] text-[#DFBE7B] font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                  <ShieldAlert className="w-3.5 h-3.5" /> Plafon Kredit Tersedia
+                <p className="text-[10px] text-[#DFBE7B] font-black uppercase tracking-widest mb-2 flex items-center gap-2 drop-shadow-md">
+                  <ShieldAlert className="w-4 h-4" /> Plafon Kredit Tersedia
                 </p>
-                <p className="text-3xl md:text-4xl font-black text-white tracking-tight">Rp {(b2bLimit / 1000000).toLocaleString('id-ID')} Juta</p>
+                <p className="text-4xl md:text-5xl font-black text-white tracking-tighter drop-shadow-lg">Rp {(b2bLimit / 1000000).toLocaleString('id-ID')} Jt</p>
                 
-                <div className="mt-5 pt-5 border-t border-white/10 flex items-center justify-between text-xs text-white/70 font-medium">
-                  <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400"/> Status Kontrak Aktif</span>
-                  <span className="font-mono bg-white/10 px-2 py-1 rounded text-white">{b2bData.npwp || "B2B-VIP"}</span>
+                <div className="mt-8 pt-6 border-t border-white/20 flex items-center justify-between text-xs text-white/80 font-bold">
+                  <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400"/> Status Aktif</span>
+                  <span className="font-mono bg-black/40 px-3 py-1.5 rounded-lg text-[#DFBE7B] shadow-inner">{b2bData.npwp || "B2B-VIP"}</span>
                 </div>
               </div>
             </div>
             
-            <p className="text-[10px] text-white/50 mt-4 max-w-xs font-medium">Rincian penggunaan limit dan sisa saldo hutang (Outstanding) dapat dipantau melalui portal Finance bulanan Anda.</p>
+            <p className="text-[10px] text-white/50 mt-6 max-w-sm font-bold uppercase tracking-widest leading-relaxed">Rincian penggunaan limit dan sisa saldo hutang dapat dipantau melalui portal Finance Anda.</p>
           </div>
+
         ) : contractStatus === "Pending" ? (
-          // UI JIKA PENDING REVIEW (KUNCI UI AGAR TIDAK SPAM)
-          <div className="relative z-10 flex flex-col items-center text-center py-8">
-            <div className="w-20 h-20 bg-amber-500/20 rounded-[2rem] flex items-center justify-center shadow-lg mb-6 border border-amber-500/30">
-              <Clock className="w-10 h-10 text-amber-400" />
+          
+          /* --- STATUS: PENDING REVIEW --- */
+          <div className="relative z-10 flex flex-col items-center text-center py-10">
+            <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-[1.5rem] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_10px_20px_rgba(217,119,6,0.3)] mb-6 border border-amber-300">
+              <Clock className="w-10 h-10 text-white drop-shadow-sm" />
             </div>
-            <h2 className="text-2xl font-black mb-2 text-white">Pengajuan Sedang Ditinjau</h2>
-            <p className="text-slate-400 text-sm font-medium max-w-md mx-auto leading-relaxed">
+            <h2 className="text-3xl font-black mb-4 text-white tracking-tight">Pengajuan Sedang Ditinjau</h2>
+            <p className="text-slate-400 text-sm font-medium max-w-md mx-auto leading-relaxed mb-10">
               Tim Kemitraan kami sedang memvalidasi data perusahaan Anda. Proses ini biasanya memakan waktu 1-2 hari kerja. Tim kami akan segera menghubungi Anda via WhatsApp.
             </p>
-            <div className="mt-8 px-6 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-white/60 tracking-widest uppercase">
+            <div className="px-6 py-2.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] font-black text-amber-400 tracking-widest uppercase shadow-sm">
               Mohon Kesediaannya Menunggu
             </div>
           </div>
+
         ) : (
-          // UI AWAL (BELUM MENGAJUKAN ATAU REJECTED)
+          
+          /* --- STATUS: BELUM MENGAJUKAN ATAU REJECTED --- */
           <>
-            <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10 border-b border-slate-700/50 pb-6 mb-6">
+            <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10 border-b border-slate-700/50 pb-8 mb-8">
               <div className="flex items-center gap-5">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-[#C5A059] to-[#DFBE7B] rounded-2xl flex items-center justify-center shadow-lg shrink-0 border border-white/10">
-                  <Crown className="w-6 h-6 md:w-7 md:h-7 text-slate-900" />
+                <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-[#DFBE7B] to-[#A68345] rounded-[1.25rem] flex items-center justify-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.5),0_8px_16px_rgba(197,160,89,0.3)] shrink-0 border border-white/20">
+                  <Crown className="w-7 h-7 md:w-8 md:h-8 text-[#5A0E13] drop-shadow-sm" />
                 </div>
                 <div>
-                  <h2 className="text-xl md:text-2xl font-black mb-1">B2B Corporate Account</h2>
-                  <p className="text-slate-400 text-xs md:text-sm font-medium">Daftarkan entitas bisnis Anda untuk mendapatkan fitur pembayaran tempo (Net 30).</p>
+                  <h2 className="text-2xl md:text-3xl font-black mb-1 tracking-tight text-white">B2B Corporate Account</h2>
+                  <p className="text-slate-400 text-sm font-medium leading-relaxed">Daftarkan entitas bisnis Anda untuk mendapatkan fitur pembayaran tempo (Net 30).</p>
                 </div>
               </div>
               
-              {/* BUG FIX LOGIKA PREREQUISITE: Kunci tombol apply jika profil belum lengkap */}
               {!isProfileComplete ? (
-                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-start gap-3 w-full md:w-auto">
+                <div className="bg-amber-500/10 backdrop-blur-md border border-amber-500/30 p-4 rounded-[1.25rem] flex items-start gap-3 w-full md:w-auto shadow-sm">
                   <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-bold text-amber-400">Profil Belum Lengkap</p>
-                    <p className="text-xs text-amber-200 mt-1">Lengkapi Nama & No. HP di tab Profil sebelum mengajukan B2B.</p>
+                    <p className="text-sm font-black text-amber-400 tracking-tight">Profil Belum Lengkap</p>
+                    <p className="text-xs text-amber-200/80 mt-1 font-medium">Lengkapi Nama & No. HP di tab Profil sebelum mengajukan.</p>
                   </div>
                 </div>
               ) : (
                 !showB2BForm && (
-                  <Button onClick={() => setShowB2BForm(true)} variant="gold" className="w-full md:w-auto h-12 shadow-lg whitespace-nowrap px-6">
-                    Apply for Partnership <ArrowRight className="w-4 h-4 ml-2" />
+                  <Button onClick={() => setShowB2BForm(true)} variant="gold" className="w-full md:w-auto h-14 rounded-[1.25rem] shadow-[0_8px_20px_rgba(197,160,89,0.3)] whitespace-nowrap px-8 text-sm active:scale-95">
+                    Ajukan Kemitraan <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 )
               )}
             </div>
 
             {contractStatus === "Rejected" && !showB2BForm && (
-              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3 mb-6 relative z-10">
-                 <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 p-5 rounded-[1.5rem] flex items-start gap-4 mb-8 relative z-10 shadow-sm">
+                 <ShieldAlert className="w-6 h-6 text-red-400 shrink-0" />
                  <div>
-                   <p className="text-sm font-bold text-red-400">Pengajuan Sebelumnya Ditolak</p>
-                   <p className="text-xs text-red-200 mt-1">Dokumen atau legalitas perusahaan Anda mungkin tidak sesuai. Silakan ajukan ulang dengan data yang benar.</p>
+                   <p className="text-base font-black text-red-400 tracking-tight">Pengajuan Sebelumnya Ditolak</p>
+                   <p className="text-sm text-red-200/80 mt-1.5 font-medium leading-relaxed">Dokumen atau legalitas perusahaan Anda mungkin tidak sesuai. Silakan ajukan ulang dengan data yang benar.</p>
                  </div>
               </div>
             )}
 
             <AnimatePresence>
               {showB2BForm && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="relative z-10 overflow-hidden">
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="relative z-10 overflow-visible">
                   
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-2 backdrop-blur-sm">
-                    <h3 className="text-[#C5A059] font-bold text-base md:text-lg mb-5 flex items-center gap-2">
+                  <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-[2rem] p-6 md:p-8 mb-2 shadow-[inset_0_2px_4px_rgba(255,255,255,0.05)]">
+                    <h3 className="text-[#C5A059] font-black text-lg md:text-xl mb-8 flex items-center gap-2 tracking-tight">
                       <Briefcase className="w-5 h-5" /> Informasi Profil Bisnis
                     </h3>
                     
-                    <form onSubmit={handleSubmitB2B} className="space-y-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <form onSubmit={handleSubmitB2B} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
                         {/* Nama PIC */}
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Representative Name (PIC)</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Representative Name (PIC)</label>
                           <div className="relative">
-                            <User className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <Input type="text" value={b2bData.picName} onChange={(e) => setB2bData({...b2bData, picName: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="Full Name" required />
+                            <User className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.picName} onChange={(e) => setB2bData({...b2bData, picName: e.target.value})} className="pl-12 h-14 bg-slate-900/60 border-slate-700 text-white font-bold focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 shadow-inner" placeholder="Full Name" required />
                           </div>
                         </div>
 
                         {/* Legal Company Name */}
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Name (PT/CV)</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Company Name (PT/CV)</label>
                           <div className="relative">
-                            <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <Input type="text" value={b2bData.legalCompanyName} onChange={(e) => setB2bData({...b2bData, legalCompanyName: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="PT. Logistik Super Nusantara" required />
+                            <Building className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.legalCompanyName} onChange={(e) => setB2bData({...b2bData, legalCompanyName: e.target.value})} className="pl-12 h-14 bg-slate-900/60 border-slate-700 text-white font-bold focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 shadow-inner" placeholder="PT. Logistik Super Nusantara" required />
                           </div>
                         </div>
                         
-                        {/* BUG FIX: Field No HP Perusahaan */}
+                        {/* Company Phone */}
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Phone / No Telp</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Company Phone / No Telp</label>
                           <div className="relative">
-                            <Phone className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <Input type="tel" value={b2bData.companyPhone} onChange={(e) => setB2bData({...b2bData, companyPhone: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="+6281234567890" required />
+                            <Phone className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="tel" value={b2bData.companyPhone} onChange={(e) => setB2bData({...b2bData, companyPhone: e.target.value})} className="pl-12 h-14 bg-slate-900/60 border-slate-700 text-white font-bold focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 shadow-inner" placeholder="+6281234567890" required />
                           </div>
                         </div>
 
-                        {/* BUG FIX: Field Email Perusahaan */}
+                        {/* Company Email */}
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Email</label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Company Email</label>
                           <div className="relative">
-                            <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <Input type="email" value={b2bData.companyEmail} onChange={(e) => setB2bData({...b2bData, companyEmail: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20" placeholder="finance@perusahaan.com" required />
+                            <Mail className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="email" value={b2bData.companyEmail} onChange={(e) => setB2bData({...b2bData, companyEmail: e.target.value})} className="pl-12 h-14 bg-slate-900/60 border-slate-700 text-white font-bold focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 shadow-inner" placeholder="finance@perusahaan.com" required />
                           </div>
                         </div>
 
                         {/* Tax ID / NPWP */}
                         <div className="space-y-2 md:col-span-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tax ID / Nomor NPWP <span className="text-slate-500 normal-case font-medium">(Wajib)</span></label>
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Tax ID / Nomor NPWP <span className="text-slate-500 normal-case font-bold">(Wajib)</span></label>
                           <div className="relative">
-                            <FileCheck className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <Input type="text" value={b2bData.npwp} onChange={(e) => setB2bData({...b2bData, npwp: e.target.value})} className="pl-11 bg-slate-900/50 border-slate-700 text-white focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 font-mono tracking-wider" placeholder="00.000.000.0-000.000" required />
+                            <FileCheck className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <Input type="text" value={b2bData.npwp} onChange={(e) => setB2bData({...b2bData, npwp: e.target.value})} className="pl-12 h-14 bg-slate-900/60 border-slate-700 text-white font-bold focus-visible:border-[#C5A059] focus-visible:ring-[#C5A059]/20 font-mono tracking-wider shadow-inner" placeholder="00.000.000.0-000.000" required />
                           </div>
                         </div>
 
-                        {/* Industry Dropdown */}
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Industry</label>
-                          <div className="relative">
-                            <Building className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <select value={b2bData.industry} onChange={(e) => setB2bData({...b2bData, industry: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
-                              <option value="" disabled className="text-slate-500">Pilih sektor industri...</option>
-                              {industryOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
-                            </select>
+                        {/* ======================================================== */}
+                        {/* CUSTOM DROPDOWN: INDUSTRY */}
+                        {/* ======================================================== */}
+                        <div className="space-y-2 relative">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Industry</label>
+                          
+                          {/* Invisible Backdrop to close dropdown when clicking outside */}
+                          {openIndustry && <div className="fixed inset-0 z-30" onClick={() => setOpenIndustry(false)} />}
+                          
+                          <div className="relative z-40">
+                            <button 
+                              type="button" 
+                              onClick={() => { setOpenIndustry(!openIndustry); setOpenVolume(false); }}
+                              className={cn(
+                                "w-full flex items-center justify-between pl-12 pr-5 h-14 rounded-2xl border transition-all text-sm font-bold shadow-inner outline-none",
+                                openIndustry ? "border-[#C5A059] bg-slate-900 ring-4 ring-[#C5A059]/20 text-white" : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500"
+                              )}
+                            >
+                              <Building className="w-5 h-5 absolute left-4 text-slate-500" />
+                              <span className="truncate">{b2bData.industry || "Pilih sektor industri..."}</span>
+                              <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", openIndustry && "rotate-180")} />
+                            </button>
+
+                            <AnimatePresence>
+                              {openIndustry && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: -10, scale: 0.95 }} 
+                                  animate={{ opacity: 1, y: 0, scale: 1 }} 
+                                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="absolute top-[calc(100%+8px)] left-0 w-full bg-slate-800/90 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden py-2"
+                                >
+                                  {industryOptions.map(opt => (
+                                    <div 
+                                      key={opt} 
+                                      onClick={() => { setB2bData({...b2bData, industry: opt}); setOpenIndustry(false); }}
+                                      className={cn(
+                                        "px-5 py-3.5 text-sm font-bold cursor-pointer transition-colors flex items-center justify-between group",
+                                        b2bData.industry === opt ? "text-[#DFBE7B] bg-white/5" : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
+                                      )}
+                                    >
+                                      {opt}
+                                      {b2bData.industry === opt && <Check className="w-4 h-4 text-[#DFBE7B]" />}
+                                    </div>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </div>
 
-                        {/* Delivery Volume Dropdown */}
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Est. Monthly Delivery Volume</label>
-                          <div className="relative">
-                            <TrendingUp className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <select value={b2bData.volume} onChange={(e) => setB2bData({...b2bData, volume: e.target.value})} className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white outline-none focus:border-[#C5A059] focus:ring-4 focus:ring-[#C5A059]/20 transition-all font-semibold appearance-none" required>
-                              <option value="" disabled className="text-slate-500">Pilih estimasi volume...</option>
-                              {volumeOptions.map(opt => <option key={opt} value={opt} className="bg-slate-800 text-white">{opt}</option>)}
-                            </select>
+                        {/* ======================================================== */}
+                        {/* CUSTOM DROPDOWN: VOLUME */}
+                        {/* ======================================================== */}
+                        <div className="space-y-2 relative">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Est. Monthly Delivery Volume</label>
+                          
+                          {openVolume && <div className="fixed inset-0 z-30" onClick={() => setOpenVolume(false)} />}
+                          
+                          <div className="relative z-40">
+                            <button 
+                              type="button" 
+                              onClick={() => { setOpenVolume(!openVolume); setOpenIndustry(false); }}
+                              className={cn(
+                                "w-full flex items-center justify-between pl-12 pr-5 h-14 rounded-2xl border transition-all text-sm font-bold shadow-inner outline-none",
+                                openVolume ? "border-[#C5A059] bg-slate-900 ring-4 ring-[#C5A059]/20 text-white" : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500"
+                              )}
+                            >
+                              <TrendingUp className="w-5 h-5 absolute left-4 text-slate-500" />
+                              <span className="truncate">{b2bData.volume || "Pilih estimasi volume..."}</span>
+                              <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", openVolume && "rotate-180")} />
+                            </button>
+
+                            <AnimatePresence>
+                              {openVolume && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: -10, scale: 0.95 }} 
+                                  animate={{ opacity: 1, y: 0, scale: 1 }} 
+                                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="absolute top-[calc(100%+8px)] left-0 w-full bg-slate-800/90 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden py-2"
+                                >
+                                  {volumeOptions.map(opt => (
+                                    <div 
+                                      key={opt} 
+                                      onClick={() => { setB2bData({...b2bData, volume: opt}); setOpenVolume(false); }}
+                                      className={cn(
+                                        "px-5 py-3.5 text-sm font-bold cursor-pointer transition-colors flex items-center justify-between group",
+                                        b2bData.volume === opt ? "text-[#DFBE7B] bg-white/5" : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
+                                      )}
+                                    >
+                                      {opt}
+                                      {b2bData.volume === opt && <Check className="w-4 h-4 text-[#DFBE7B]" />}
+                                    </div>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </div>
 
                       </div>
 
-                      <div className="pt-6 flex flex-col-reverse md:flex-row items-center justify-end gap-3 border-t border-white/10 mt-6">
-                        <Button type="button" variant="ghost" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto h-12 text-slate-400 hover:text-white hover:bg-white/10 font-bold">
+                      {/* Form Actions */}
+                      <div className="pt-8 flex flex-col-reverse md:flex-row items-center justify-end gap-4 border-t border-slate-700/50 mt-8">
+                        <Button type="button" variant="ghost" onClick={() => setShowB2BForm(false)} className="w-full md:w-auto h-14 text-slate-400 hover:text-white hover:bg-slate-800 font-bold rounded-2xl">
                           Batalkan
                         </Button>
-                        <Button type="submit" disabled={isSaving} variant="gold" className="w-full md:w-auto h-12 px-8 shadow-lg font-bold">
-                          {isSaving ? "Memproses..." : <><MessageCircle className="w-4 h-4 mr-2" /> Ajukan Kemitraan B2B</>}
+                        <Button type="submit" disabled={isSaving} variant="gold" className="w-full md:w-auto h-14 px-10 shadow-[0_10px_20px_rgba(197,160,89,0.3)] font-black text-sm rounded-2xl active:scale-95">
+                          {isSaving ? "Memproses Data..." : <><MessageCircle className="w-5 h-5 mr-2" /> Ajukan Kemitraan B2B</>}
                         </Button>
                       </div>
                     </form>
 
                   </div>
                   
-                  <div className="flex gap-3 text-[11px] text-slate-400 bg-slate-950/50 p-4 rounded-xl border border-slate-800/50 mt-4 font-medium leading-relaxed shadow-inner">
-                    <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
-                    <p>Dokumen legalitas fisik (SIUP/NIB/KTP Direktur) akan diminta oleh tim representatif kami setelah validasi profil bisnis awal ini disetujui.</p>
+                  <div className="flex gap-4 text-xs text-slate-400 bg-slate-900/40 p-5 rounded-2xl border border-slate-800/50 mt-4 font-medium leading-relaxed shadow-inner">
+                    <ShieldAlert className="w-6 h-6 text-amber-500/70 shrink-0" />
+                    <p>Dokumen legalitas fisik (SIUP / NIB / KTP Direktur) akan diminta oleh tim representatif kami setelah validasi profil bisnis awal ini disetujui.</p>
                   </div>
 
                 </motion.div>

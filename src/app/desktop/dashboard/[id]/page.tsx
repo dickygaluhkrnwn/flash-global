@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import { 
-  ArrowLeft, MapPin, Package, Truck, ReceiptText, CalendarClock, User, Phone, 
+  ArrowLeft, MapPin, Truck, ReceiptText, CalendarClock, User, Phone, 
   CheckCircle2, Clock, Ban, TicketPercent, Building, CreditCard, AlertCircle, 
-  Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, Printer, FileText, Banknote, XCircle, Eye
+  Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, Printer, 
+  FileText, Banknote, XCircle, Eye, LifeBuoy, Map
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -14,6 +15,7 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion }
 import { useAuthStore } from "@/store/useAuthStore";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 // Modul Cetak & Template
 import { useReactToPrint } from "react-to-print";
@@ -26,6 +28,15 @@ import { ClaimModal, RefundModal } from "./components/OrderModals";
 
 // Global Types
 import { OrderDetail, FirebaseTimestamp, LocationDetail, DeliveryItem } from "@/types/order";
+
+// BUG FIX: Mengganti tipe 'any' menjadi interface yang terstruktur agar aman saat di-build
+interface RefundData {
+  id: string;
+  status: string;
+  nominal?: number;
+  proofUrl?: string;
+  [key: string]: unknown;
+}
 
 export default function OrderDetailPage() {
   const router = useRouter();
@@ -52,8 +63,7 @@ export default function OrderDetailPage() {
   
   // States Refund & Detail Data
   const [hasExistingRefund, setHasExistingRefund] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [refundRequestData, setRefundRequestData] = useState<any | null>(null);
+  const [refundRequestData, setRefundRequestData] = useState<RefundData | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
 
   // Print Refs
@@ -115,7 +125,7 @@ export default function OrderDetailPage() {
           
           if (!refundSnap.empty) {
             setHasExistingRefund(true);
-            setRefundRequestData({ id: refundSnap.docs[0].id, ...refundSnap.docs[0].data() });
+            setRefundRequestData({ id: refundSnap.docs[0].id, ...refundSnap.docs[0].data() } as RefundData);
           }
         } catch (err) { console.warn("Peringatan: Gagal mengecek status klaim/refund:", err); }
       }
@@ -172,7 +182,6 @@ export default function OrderDetailPage() {
     }
   };
 
-  // BUG FIX: Mengubah tipe kembalian fungsi menjadi TimelineItem[] yang tegas
   const renderTimeline = (): TimelineItem[] => {
     if (!order) return [];
     if (order.trackingHistory && Array.isArray(order.trackingHistory) && order.trackingHistory.length > 0) {
@@ -195,20 +204,25 @@ export default function OrderDetailPage() {
 
   if (isLoading || !isHydrated) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-widest animate-pulse">Menarik Rincian Manifes...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center font-sans bg-[#f8fafc] relative z-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30vw] h-[30vw] bg-[#7A171D]/10 rounded-full blur-[120px] -z-10" />
+        <div className="w-16 h-16 border-[5px] border-white border-t-[#7A171D] rounded-full animate-spin mb-6 shadow-sm"></div>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Menyinkronkan Data</h2>
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest animate-pulse mt-2">Menarik Rincian Manifes...</p>
       </div>
     );
   }
 
   if (errorMsg || !order) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans px-6 text-center">
-        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6 border border-red-100"><AlertCircle className="w-10 h-10" /></div>
-        <h2 className="text-2xl font-black text-slate-900 mb-2">Terjadi Kesalahan</h2>
-        <p className="text-slate-500 font-medium mb-8">{errorMsg}</p>
-        <Button onClick={() => router.push("/dashboard")} variant="outline" className="h-12 border-slate-300"><ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Dashboard</Button>
+      <div className="min-h-screen flex flex-col items-center justify-center font-sans px-6 text-center bg-[#f8fafc] relative z-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40vw] h-[40vw] bg-red-500/5 rounded-full blur-[120px] -z-10" />
+        <div className="glass-card p-10 md:p-12 rounded-[3rem] border border-white flex flex-col items-center max-w-lg shadow-[0_20px_60px_rgba(0,0,0,0.05)]">
+          <div className="w-24 h-24 bg-gradient-to-br from-red-50 to-red-100 text-red-500 rounded-[2rem] flex items-center justify-center mb-8 border border-red-200 shadow-sm"><AlertCircle className="w-12 h-12 drop-shadow-sm" /></div>
+          <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-4 tracking-tight">Terjadi Kesalahan</h2>
+          <p className="text-slate-500 font-medium mb-10 leading-relaxed max-w-md">{errorMsg}</p>
+          <Button onClick={() => router.push("/dashboard")} variant="outline" className="h-14 w-full rounded-[1.25rem] font-black shadow-sm"><ArrowLeft className="w-5 h-5 mr-2" /> Kembali ke Dasbor</Button>
+        </div>
       </div>
     );
   }
@@ -255,281 +269,346 @@ export default function OrderDetailPage() {
   const invoiceGrandTotal = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
 
   return (
-    <main className="min-h-screen bg-slate-50 py-10 px-4 md:px-8 relative overflow-hidden font-sans pb-24">
+    <main className="min-h-screen bg-[#f8fafc] py-12 lg:py-20 px-6 relative overflow-hidden font-sans pb-32 z-0">
+      
+      {/* === AMBIENT GLOWING BACKGROUND === */}
+      <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-5%] w-[40vw] h-[50vh] rounded-full bg-[#7A171D]/10 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[50vh] rounded-full bg-[#C5A059]/15 blur-[120px]" />
+      </div>
+
       {/* === UI TOAST NOTIFICATION === */}
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-10 right-10 z-[200] p-4 rounded-xl font-bold text-sm border flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+          <motion.div initial={{ opacity: 0, y: -20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.9 }} 
+            className={cn(
+              "fixed top-10 right-10 z-[200] p-4 rounded-[1.25rem] font-bold text-sm border flex items-center gap-3 shadow-[0_10px_40px_rgba(0,0,0,0.1)] backdrop-blur-md",
+              toast.type === 'success' ? 'bg-emerald-50/90 border-emerald-200 text-emerald-800' : 'bg-red-50/90 border-red-200 text-red-800'
+            )}>
             {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />} {toast.msg}
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-[#7A171D] rounded-full blur-[150px] opacity-[0.03] pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[-5%] w-[40%] h-[40%] bg-[#C5A059] rounded-full blur-[150px] opacity-[0.05] pointer-events-none" />
-
       <div className="max-w-[1200px] mx-auto relative z-10 space-y-6">
-        <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-slate-600 hover:text-[#7A171D] font-bold text-sm transition-colors w-fit mb-2 bg-white px-5 py-2.5 rounded-2xl border border-slate-200/60 shadow-sm">
-          <ArrowLeft className="w-4 h-4" /> Kembali ke Pesanan Saya
+        
+        {/* === BACK BUTTON === */}
+        <button onClick={() => router.push("/dashboard")} className="glass-card flex items-center gap-2 text-slate-600 hover:text-[#7A171D] hover:bg-white font-bold text-sm transition-all w-fit mb-4 px-5 py-3 rounded-[1.25rem] active:scale-95 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Dasbor
         </button>
 
-        {/* --- HEADER PESANAN ENTERPRISE --- */}
-        <div className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm p-6 md:p-8 flex flex-col md:flex-row justify-between md:items-center gap-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-slate-50 to-transparent pointer-events-none" />
+        {/* ==========================================
+            HEADER PESANAN (GLASS BENTO STYLE)
+            ========================================== */}
+        <div className="glass-card p-6 md:p-10 rounded-[2.5rem] flex flex-col md:flex-row justify-between md:items-center gap-8 relative overflow-hidden border border-white shadow-[0_15px_40px_rgba(0,0,0,0.04)]">
+          <div className="absolute top-[-50%] right-[-10%] w-64 h-64 bg-slate-200/50 rounded-full blur-[80px] pointer-events-none" />
+          
           <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-3">
-              <Badge variant={order.category === "internasional" ? "brand" : "gold"} className="uppercase text-[10px] px-3 py-1.5 shadow-sm rounded-lg">{order.serviceType || "Kargo Reguler"}</Badge>
-              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5"/> {formatFirebaseDate(order.createdAt)}</span>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <Badge variant={order.category === "internasional" ? "brand" : "gold"} className="shadow-sm px-3.5 py-1.5 text-[10px] uppercase tracking-widest font-black">{order.serviceType || "Kargo Reguler"}</Badge>
+              <span className="text-[10px] font-black text-slate-500 flex items-center gap-1.5 bg-white/60 backdrop-blur-md px-3.5 py-1.5 rounded-lg border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] uppercase tracking-widest">
+                <CalendarClock className="w-3.5 h-3.5"/> {formatFirebaseDate(order.createdAt)}
+              </span>
             </div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2 font-mono uppercase">#{resiNumber}</h1>
-              <button onClick={() => handleCopyResi(resiNumber)} className="text-slate-400 hover:text-[#C5A059] transition-colors p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200" title="Salin Resi">
-                {copiedResi ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter flex items-center gap-2 font-mono uppercase">#{resiNumber}</h1>
+              <button onClick={() => handleCopyResi(resiNumber)} className="bg-white/60 backdrop-blur-md text-slate-500 hover:text-[#7A171D] hover:bg-white transition-all p-3 rounded-xl border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] active:scale-95" title="Salin Resi">
+                {copiedResi ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5 drop-shadow-sm" />}
               </button>
             </div>
           </div>
+
           <div className="flex flex-col md:items-end z-10">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Status Pesanan</p>
-            <div className={`px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider border flex items-center gap-2 shadow-sm ${
-              order.status.includes("Selesai") ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-              order.status.includes("Batal") ? "bg-red-50 text-red-600 border-red-200" :
-              order.status.includes("Menunggu") ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200"
-            }`}>
-              {order.status.includes("Selesai") ? <CheckCircle2 className="w-4 h-4"/> : order.status.includes("Batal") ? <Ban className="w-4 h-4" /> : order.status === "Dikirim" ? <Navigation className="w-4 h-4" /> : <Clock className="w-4 h-4"/>}
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Status Pesanan</p>
+            <div className={cn("px-6 py-3.5 rounded-[1.25rem] text-sm font-black uppercase tracking-widest border flex items-center gap-2.5 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8),0_10px_20px_rgba(0,0,0,0.05)] backdrop-blur-md", 
+              order.status.includes("Selesai") ? "bg-emerald-50/80 text-emerald-700 border-emerald-200" :
+              order.status.includes("Batal") ? "bg-red-50/80 text-red-700 border-red-200" :
+              order.status.includes("Menunggu") ? "bg-amber-50/80 text-amber-700 border-amber-200" : "bg-blue-50/80 text-blue-700 border-blue-200"
+            )}>
+              {order.status.includes("Selesai") ? <CheckCircle2 className="w-5 h-5"/> : order.status.includes("Batal") ? <Ban className="w-5 h-5" /> : order.status === "Dikirim" ? <Navigation className="w-5 h-5" /> : <Clock className="w-5 h-5"/>}
               {order.status}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* KOLOM KIRI: Rute, Kurir & Timeline */}
-          <div className="lg:col-span-7 space-y-6">
-            {order.driverName && (
-              <div className="bg-white p-5 rounded-[24px] border border-slate-200/60 shadow-sm flex items-center justify-between group">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center border border-slate-200 group-hover:bg-[#7A171D]/5 group-hover:border-[#7A171D]/20 transition-colors">
-                    <Truck className="w-6 h-6 text-slate-400 group-hover:text-[#7A171D] transition-colors" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kurir Pengantar</p>
-                    <p className="text-sm font-black text-slate-900 mt-0.5">{order.driverName}</p>
-                    <p className="text-xs font-semibold text-slate-500 mt-0.5">{order.vehicleName || order.vehicle || "Armada Ekspedisi"}</p>
-                  </div>
-                </div>
-                <Button variant="outline" size="icon" className="rounded-full w-10 h-10 bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 shadow-sm" onClick={() => window.open(`tel:${order.driverPhone}`)} title="Hubungi Kurir"><Phone className="w-4 h-4" /></Button>
-              </div>
-            )}
+        {/* ==========================================
+            MAIN CONTENT GRID
+            ========================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+          
+          {/* --------------------------------------
+              KOLOM KIRI: Rute, Informasi Kargo, Timeline
+              -------------------------------------- */}
+          <div className="lg:col-span-7 space-y-6 lg:space-y-8">
+            
+            {/* KARTU RUTE & DETAIL PAKET */}
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 space-y-8 border border-white shadow-[0_15px_40px_rgba(0,0,0,0.03)] relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059]/10 rounded-full blur-[80px] pointer-events-none z-0" />
 
-            <OrderTimeline timelineData={timelineData} orderStatus={order.status} />
-          </div>
+              {/* Seksi Rute (Origin -> Destination) */}
+              <div className="relative z-10">
+                <h3 className="text-base font-black text-slate-900 mb-8 flex items-center gap-2.5 tracking-tight"><Map className="w-5 h-5 text-[#7A171D]" /> Peta Perjalanan Kargo</h3>
+                
+                <div className="relative pl-3">
+                  <div className="absolute left-[19px] top-8 bottom-8 w-[3px] bg-gradient-to-b from-slate-200 via-slate-200 to-[#7A171D]/20 z-0 rounded-full"></div>
+                  
+                  <div className="space-y-8 relative z-10">
+                    
+                    {/* ORIGIN */}
+                    <div className="flex items-start gap-5">
+                      <div className="mt-1 bg-white border-[3px] border-slate-200 p-2 rounded-full shadow-sm shrink-0 z-10"><MapPin className="w-4 h-4 text-slate-500 drop-shadow-sm" /></div>
+                      <div className="min-w-0 w-full">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Lokasi Pengirim</p>
+                        <div className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
+                          {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
+                          <p className="font-bold text-slate-900 text-sm leading-relaxed break-words line-clamp-2">{originAddress || "-"}</p>
+                          {originName && (
+                            <div className="mt-5 pt-4 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs font-black text-slate-500">
+                              <span className="flex items-center gap-2 min-w-0"><User className="w-4 h-4 shrink-0 text-slate-400"/> <span className="truncate">{originName}</span></span>
+                              <span className="flex items-center gap-2 shrink-0 bg-white px-3 py-1.5 rounded-lg border border-slate-100 shadow-sm"><Phone className="w-3.5 h-3.5 text-slate-400"/> {originPhone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-          {/* KOLOM KANAN: Alamat, Rincian Harga & Spesifikasi */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm p-6">
-              <h3 className="text-sm font-black text-slate-900 mb-6 flex items-center gap-2">Detail Rute</h3>
-              <div className="relative pl-1">
-                <div className="absolute left-[13px] top-6 bottom-6 w-0.5 bg-slate-100 border-dashed border-l-2 border-slate-200 z-0"></div>
-                <div className="space-y-6 relative z-10">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 bg-white p-1 rounded-full shrink-0"><MapPin className="w-4 h-4 text-slate-400" /></div>
-                    <div className="w-full">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Alamat Pengirim</p>
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <p className="font-bold text-slate-900 text-sm leading-relaxed">{originAddress || "-"}</p>
-                        {originName && (
-                          <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-semibold text-slate-600">
-                            <span className="flex items-center gap-1.5 truncate pr-2"><User className="w-3.5 h-3.5 shrink-0"/> <span className="truncate">{originName}</span></span>
-                            <span className="flex items-center gap-1.5 shrink-0"><Phone className="w-3.5 h-3.5"/> {originPhone}</span>
+                    {/* DESTINATIONS */}
+                    <div className="flex items-start gap-5">
+                      <div className="mt-1 bg-white border-[3px] border-[#7A171D]/30 p-2 rounded-full shadow-[0_4px_10px_rgba(122,23,29,0.2)] shrink-0 z-10"><MapPin className="w-4 h-4 text-[#7A171D] drop-shadow-sm" /></div>
+                      <div className="min-w-0 w-full">
+                        <p className="text-[10px] font-black text-[#7A171D]/60 uppercase tracking-widest mb-2">Titik Tujuan Akhir</p>
+                        {order.destinations ? order.destinations.map((dest: LocationDetail, idx: number) => (
+                          <div key={idx} className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] mb-4 last:mb-0 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#DFBE7B]/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-[#DFBE7B]/20 transition-colors" />
+                            
+                            <div className="flex justify-between items-start mb-2 relative z-10">
+                              {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
+                              <p className="font-bold text-slate-900 text-sm leading-relaxed pr-4 break-words line-clamp-2">{dest.address}</p>
+                              {order.destinations && order.destinations.length > 1 && <Badge variant="glass" className="shrink-0 shadow-sm px-3 py-1">Drop {idx + 1}</Badge>}
+                            </div>
+                            {dest.receiverName && (
+                              <div className="mt-5 pt-4 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs font-black text-slate-500 relative z-10">
+                                <span className="flex items-center gap-2 min-w-0"><User className="w-4 h-4 shrink-0 text-slate-400"/> <span className="truncate">{dest.receiverName}</span></span>
+                                <span className="flex items-center gap-2 shrink-0 bg-white px-3 py-1.5 rounded-lg border border-slate-100 shadow-sm"><Phone className="w-3.5 h-3.5 text-slate-400"/> {dest.receiverPhone}</span>
+                              </div>
+                            )}
+                          </div>
+                        )) : (
+                          <div className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative z-10">
+                             {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
+                             <p className="font-bold text-slate-900 text-sm leading-relaxed break-words line-clamp-2">{order.destination || "-"}</p>
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 bg-white p-1 rounded-full shrink-0"><MapPin className="w-4 h-4 text-[#7A171D]" /></div>
-                    <div className="w-full">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Alamat Penerima</p>
-                      {order.destinations ? order.destinations.map((dest: LocationDetail, idx: number) => (
-                        <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-3 last:mb-0">
-                          <div className="flex justify-between items-start mb-2">
-                            <p className="font-bold text-slate-900 text-sm leading-relaxed pr-4">{dest.address}</p>
-                            {order.destinations && order.destinations.length > 1 && <Badge className="shrink-0 text-[10px] bg-white">Drop {idx + 1}</Badge>}
-                          </div>
-                          {dest.receiverName && (
-                            <div className="mt-3 pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold text-slate-600">
-                              <span className="flex items-center gap-1.5 truncate"><User className="w-3.5 h-3.5 shrink-0"/> <span className="truncate">{dest.receiverName}</span></span>
-                              <span className="flex items-center gap-1.5 shrink-0"><Phone className="w-3.5 h-3.5"/> {dest.receiverPhone}</span>
-                            </div>
-                          )}
-                        </div>
-                      )) : (
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                           <p className="font-bold text-slate-900 text-sm leading-relaxed">{order.destination || "-"}</p>
-                        </div>
-                      )}
-                    </div>
+
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm p-6">
-              <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2"><Package className="w-4 h-4 text-slate-400" /> Informasi Kargo</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Berat</p>
-                  <p className="font-black text-slate-900 flex items-center gap-1.5 text-sm"><Scale className="w-3.5 h-3.5 text-slate-400"/> {order.totalWeight || order.weight || 0} Kg</p>
+              {/* Seksi Spesifikasi Kargo & Driver */}
+              <div className="pt-8 border-t border-slate-200/60 grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+                <div className="bg-white/60 backdrop-blur-md p-5 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] flex items-center gap-5 hover:bg-white transition-colors group">
+                  <div className="w-14 h-14 bg-white rounded-[1.25rem] flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300 shrink-0"><Scale className="w-6 h-6 text-slate-400 drop-shadow-sm" /></div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Berat Kargo</p>
+                    <p className="font-black text-slate-900 text-lg tracking-tight truncate">{order.totalWeight || order.weight || 0} Kg</p>
+                  </div>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Armada</p>
-                  <p className="font-black text-slate-900 flex items-center gap-1.5 text-sm truncate"><Truck className="w-3.5 h-3.5 text-slate-400 shrink-0"/> <span className="truncate">{order.vehicleName || order.vehicle || order.serviceType}</span></p>
+                <div className="bg-white/60 backdrop-blur-md p-5 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] flex items-center gap-5 hover:bg-white transition-colors group">
+                  <div className="w-14 h-14 bg-white rounded-[1.25rem] flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300 shrink-0"><Truck className="w-6 h-6 text-slate-400 drop-shadow-sm" /></div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tipe Armada</p>
+                    <p className="font-black text-slate-900 text-lg tracking-tight truncate">{order.vehicleName || order.vehicle || order.serviceType}</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            {/* --- BILLING CARD ENTERPRISE --- */}
-            <div className="bg-slate-900 text-white rounded-[24px] shadow-xl border border-slate-800 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-10 pointer-events-none"></div>
-              <div className="p-6 md:p-8">
-                <h3 className="text-base font-black mb-6 flex items-center gap-3"><ReceiptText className="w-5 h-5 text-[#C5A059]" /> Rincian Pembayaran</h3>
-                <div className="space-y-3 mb-6 text-sm font-medium">
-                  {order.breakdown ? (
-                    <>
-                      <div className="flex justify-between items-center text-slate-400"><span>Subtotal Produk/Jarak</span><span className="text-white">{formatIDR(order.breakdown.deliveryFee)}</span></div>
-                      {(order.breakdown.insuranceFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400"/> Asuransi Muatan</span><span className="text-white">{formatIDR(order.breakdown.insuranceFee)}</span></div>}
-                      {(order.breakdown.porterFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span>Jasa Porter</span><span className="text-white">{formatIDR(order.breakdown.porterFee)}</span></div>}
-                      {(order.breakdown.tollFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span>Deposit Tol/Parkir</span><span className="text-white">{formatIDR(order.breakdown.tollFee)}</span></div>}
-                      {(order.breakdown.b2bDiscount || 0) > 0 && <div className="flex justify-between items-center text-emerald-400"><span className="flex items-center gap-1.5"><Building className="w-3.5 h-3.5"/> Diskon Korporat</span><span>- {formatIDR(order.breakdown.b2bDiscount)}</span></div>}
-                      {order.appliedPromoCode && <div className="flex justify-between items-center text-pink-400 border-t border-slate-700/50 pt-3 mt-3"><span className="flex items-center gap-1.5"><TicketPercent className="w-3.5 h-3.5"/> Voucher ({order.appliedPromoCode})</span><span className="font-bold">- {formatIDR(order.discountPromoAmount)}</span></div>}
-                    </>
-                  ) : (
-                    <div className="flex justify-between items-center text-slate-400"><span>Harga Total (Subtotal)</span><span className="text-white">{formatIDR(order.totalCost || order.offeredPrice)}</span></div>
-                  )}
-                </div>
-                <div className="pt-5 border-t border-dashed border-slate-700">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Pesanan</p>
-                  <p className="text-3xl font-black text-[#C5A059] tracking-tight">{formatIDR(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || order.offeredPrice || 0)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* --- ACTION BUTTONS (REFACTOR FLUID LAYOUT) --- */}
-            <div className="flex flex-col gap-3 pt-3">
-              
-              {/* Baris Pertama: Hubungi CS dan Bayar (Fluid/Flex) */}
-              <div className="flex flex-col sm:flex-row w-full gap-3">
-                <Button 
-                  onClick={() => window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(`Halo Tim CS Flash Global,\nSaya menanyakan pesanan saya:\nID: ${resiNumber}\nMohon dibantu.`)}`, "_blank")} 
-                  variant="outline" 
-                  className="flex-1 bg-white border-slate-200 text-slate-700 hover:text-[#7A171D] hover:bg-slate-50 h-12 shadow-sm font-bold text-sm"
-                >
-                  <MessageCircle className="w-4 h-4 mr-2" /> Hubungi CS
-                </Button>
                 
-                {order.status === "Menunggu Pembayaran" && (
-                  <Button 
-                    onClick={() => router.push("/pembayaran")} 
-                    className="flex-1 bg-[#7A171D] hover:bg-[#5A0E13] text-white h-12 shadow-md shadow-[#7A171D]/20 font-bold text-sm"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" /> Bayar Sekarang
-                  </Button>
+                {order.driverName && (
+                  <div className="md:col-span-2 bg-gradient-to-r from-slate-800 to-slate-900 p-5 rounded-[1.5rem] border border-slate-700 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
+                    <div className="flex items-center gap-5 min-w-0">
+                      <div className="w-14 h-14 bg-slate-700/50 rounded-[1.25rem] flex items-center justify-center border border-slate-600 shrink-0">
+                        <User className="w-6 h-6 text-slate-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Kurir Pengantar</p>
+                        <p className="font-black text-white text-lg tracking-tight truncate">{order.driverName}</p>
+                      </div>
+                    </div>
+                    <Button variant="glass" className="w-full sm:w-auto rounded-xl h-12 px-6 bg-white/10 border-white/20 text-white hover:bg-white hover:text-slate-900 shadow-sm transition-all" onClick={() => window.open(`tel:${order.driverPhone}`)} title="Hubungi Kurir">
+                      <Phone className="w-4 h-4 mr-2" /> Hubungi Kurir
+                    </Button>
+                  </div>
                 )}
               </div>
 
-              {/* KLAIM ASURANSI */}
-              {canClaimInsurance && (
-                <Button onClick={() => setShowClaimModal(true)} className="w-full bg-amber-100 hover:bg-amber-200 text-amber-700 border border-amber-300 h-12 shadow-sm font-bold"><FileWarning className="w-4 h-4 mr-2" /> Ajukan Klaim Kerusakan</Button>
-              )}
-              {hasExistingClaim && <div className="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2"><Clock className="w-4 h-4" /> Klaim asuransi sedang ditinjau.</div>}
+            </div>
 
-              {/* BATALKAN & REFUND */}
-              {(!hasExistingRefund && !order.paymentStatus?.includes("Refund")) && (
-                <>
-                  {showDirectCancel && (
-                    <Button onClick={handleDirectCancel} variant="outline" className="w-full h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 shadow-sm font-bold"><Ban className="w-4 h-4 mr-2" /> Batalkan Pesanan</Button>
+            {/* KARTU TIMELINE */}
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 border border-white shadow-[0_15px_40px_rgba(0,0,0,0.03)]">
+               <OrderTimeline timelineData={timelineData} orderStatus={order.status} />
+            </div>
+            
+          </div>
+
+          {/* --------------------------------------
+              KOLOM KANAN: Billing, Actions & Support
+              -------------------------------------- */}
+          <div className="lg:col-span-5 space-y-6 lg:space-y-8 lg:sticky lg:top-10">
+            
+            {/* --- KARTU TAGIHAN (3D PREMIUM DARK BENTO) --- */}
+            <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-[2.5rem] shadow-[0_24px_50px_rgba(15,23,42,0.4)] border border-slate-800 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-15 pointer-events-none group-hover:opacity-25 transition-opacity duration-700"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#7A171D] rounded-full blur-[100px] opacity-20 pointer-events-none group-hover:opacity-30 transition-opacity duration-700"></div>
+              
+              <div className="p-8 md:p-10 relative z-10">
+                <h3 className="text-xl font-black mb-8 flex items-center gap-3 tracking-tight drop-shadow-md"><ReceiptText className="w-6 h-6 text-[#C5A059]" /> Rincian Transaksi</h3>
+                
+                <div className="space-y-5 mb-10 text-sm font-semibold">
+                  {order.breakdown ? (
+                    <>
+                      <div className="flex justify-between items-center text-slate-400"><span>Subtotal Tarif Dasar</span><span className="text-white">{formatIDR(order.breakdown.deliveryFee)}</span></div>
+                      {(order.breakdown.insuranceFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-400"/> Asuransi Muatan</span><span className="text-white">{formatIDR(order.breakdown.insuranceFee)}</span></div>}
+                      {(order.breakdown.porterFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span>Jasa Porter / Helper</span><span className="text-white">{formatIDR(order.breakdown.porterFee)}</span></div>}
+                      {(order.breakdown.tollFee || 0) > 0 && <div className="flex justify-between items-center text-slate-400"><span>Deposit Tol & Parkir</span><span className="text-white">{formatIDR(order.breakdown.tollFee)}</span></div>}
+                      {(order.breakdown.b2bDiscount || 0) > 0 && <div className="flex justify-between items-center text-emerald-400"><span className="flex items-center gap-2"><Building className="w-4 h-4"/> Diskon Corporate</span><span>- {formatIDR(order.breakdown.b2bDiscount)}</span></div>}
+                      {order.appliedPromoCode && <div className="flex justify-between items-center text-pink-400 border-t border-slate-700/50 pt-5 mt-5"><span className="flex items-center gap-2"><TicketPercent className="w-4 h-4"/> Kode Promo ({order.appliedPromoCode})</span><span className="font-bold">- {formatIDR(order.discountPromoAmount)}</span></div>}
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center text-slate-400"><span>Estimasi Total</span><span className="text-white">{formatIDR(order.totalCost || order.offeredPrice)}</span></div>
                   )}
-                  {showRefundButton && (
-                    <Button onClick={() => setShowRefundModal(true)} variant="outline" className="w-full h-12 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 shadow-sm font-bold"><Banknote className="w-4 h-4 mr-2" /> Batalkan & Ajukan Refund</Button>
-                  )}
-                </>
-              )}
+                </div>
+                
+                <div className="pt-8 border-t border-slate-800">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Keseluruhan</p>
+                  <p className="text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#A68345] tracking-tighter drop-shadow-sm">{formatIDR(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || order.offeredPrice || 0)}</p>
+                </div>
+              </div>
+
+              {/* AREA AKSI FINANSIAL (Didalam Kartu Billing agar Kontekstual) */}
+              <div className="px-8 md:px-10 py-8 bg-slate-900/60 border-t border-slate-800 backdrop-blur-md flex flex-col gap-4 relative z-10">
+                 {order.status === "Menunggu Pembayaran" && (
+                   <Button onClick={() => router.push("/pembayaran")} variant="primary" className="w-full h-14 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_10px_20px_rgba(122,23,29,0.3)] text-sm font-black active:scale-95">
+                     <CreditCard className="w-5 h-5 mr-2" /> Selesaikan Pembayaran
+                   </Button>
+                 )}
+                 {(order.paymentStatus === "Lunas" || order.paymentStatus === "Piutang B2B") && !order.status.includes("Batal") && (
+                   <div className="flex flex-col sm:flex-row gap-4">
+                     <Button onClick={handlePrintReceipt} variant="outline" className="flex-1 h-14 rounded-2xl border-slate-700 bg-slate-800 text-white hover:bg-slate-700 hover:border-slate-500 font-bold active:scale-95 transition-all">
+                       <Printer className="w-5 h-5 mr-2 text-slate-400" /> Cetak Resi
+                     </Button>
+                     <Button onClick={handlePrintInvoice} variant="outline" className="flex-1 h-14 rounded-2xl border-slate-700 bg-slate-800 text-white hover:bg-slate-700 hover:border-slate-500 font-bold active:scale-95 transition-all">
+                       <FileText className="w-5 h-5 mr-2 text-slate-400" /> Invoice A4
+                     </Button>
+                   </div>
+                 )}
+              </div>
+            </div>
+
+            {/* --- ACTION & SUPPORT CENTER (Glass Card Bento) --- */}
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 space-y-6 border border-white shadow-[0_15px_40px_rgba(0,0,0,0.03)]">
+              <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2.5 tracking-tight"><LifeBuoy className="w-5 h-5 text-[#7A171D]" /> Pusat Bantuan & Tindakan</h3>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <Button onClick={() => window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(`Halo Tim CS Flash Global,\nSaya menanyakan pesanan saya:\nID: ${resiNumber}\nMohon dibantu.`)}`, "_blank")} variant="outline" className="w-full h-14 justify-start text-slate-600 bg-white/60 hover:bg-white border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] font-bold rounded-2xl transition-all">
+                  <MessageCircle className="w-5 h-5 text-emerald-500 mr-2" /> Hubungi Layanan Pelanggan
+                </Button>
+
+                {/* KLAIM ASURANSI */}
+                {canClaimInsurance && (
+                  <Button onClick={() => setShowClaimModal(true)} variant="outline" className="w-full h-14 justify-start border-amber-200 text-amber-700 bg-amber-50/50 hover:bg-amber-100 hover:border-amber-300 font-bold rounded-2xl transition-all">
+                    <FileWarning className="w-5 h-5 mr-2" /> Ajukan Klaim Kerusakan
+                  </Button>
+                )}
+                {hasExistingClaim && (
+                  <div className="bg-amber-50/80 backdrop-blur-sm border border-amber-200 text-amber-700 p-5 rounded-2xl text-xs font-bold flex items-start gap-4 shadow-sm">
+                    <Clock className="w-6 h-6 shrink-0 mt-0.5" /> 
+                    <span className="leading-relaxed">Pengajuan klaim asuransi Anda sedang dalam peninjauan intensif oleh tim terkait.</span>
+                  </div>
+                )}
+
+                {/* BATALKAN & REFUND */}
+                {(!hasExistingRefund && !order.paymentStatus?.includes("Refund")) && (
+                  <>
+                    {showDirectCancel && (
+                      <Button onClick={handleDirectCancel} variant="outline" className="w-full h-14 justify-start border-red-200 text-red-600 bg-red-50/50 hover:bg-red-100 hover:border-red-300 font-bold rounded-2xl transition-all shadow-sm">
+                        <Ban className="w-5 h-5 mr-2" /> Batalkan Pesanan (Tanpa Biaya)
+                      </Button>
+                    )}
+                    {showRefundButton && (
+                      <Button onClick={() => setShowRefundModal(true)} variant="danger" className="w-full h-14 justify-start bg-red-600 hover:bg-red-700 shadow-[0_8px_16px_rgba(220,38,38,0.2)] font-bold rounded-2xl transition-all">
+                        <Banknote className="w-5 h-5 mr-2" /> Ajukan Pembatalan & Refund Dana
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
 
               {/* TAMPILAN STATUS REFUND & BUKTI TRANSFER ADMIN */}
               {(hasExistingRefund || order.paymentStatus?.includes("Refund")) && (
-                <div className={`border p-5 rounded-2xl shadow-sm mt-1 ${
-                  (refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? "bg-emerald-50 border-emerald-200" :
-                  (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? "bg-red-50 border-red-200" :
-                  "bg-amber-50 border-amber-200"
+                <div className={`p-6 md:p-8 rounded-[2rem] border shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] mt-6 ${
+                  (refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? "bg-emerald-50/80 border-emerald-200 backdrop-blur-sm" :
+                  (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? "bg-red-50/80 border-red-200 backdrop-blur-sm" :
+                  "bg-amber-50/80 border-amber-200 backdrop-blur-sm"
                 }`}>
-                  <div className={`flex items-center gap-2 font-black text-sm mb-1 ${
+                  <div className={`flex items-center gap-2.5 font-black text-base mb-3 tracking-tight ${
                     (refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? "text-emerald-700" :
                     (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? "text-red-700" :
                     "text-amber-700"
                   }`}>
-                    {(refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? <CheckCircle2 className="w-5 h-5" /> : 
-                     (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? <XCircle className="w-5 h-5" /> : 
-                     <Clock className="w-5 h-5" />}
+                    {(refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? <CheckCircle2 className="w-6 h-6 drop-shadow-sm" /> : 
+                     (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? <XCircle className="w-6 h-6 drop-shadow-sm" /> : 
+                     <Clock className="w-6 h-6 drop-shadow-sm" />}
                     
                     {(refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? "Dana Berhasil Dikembalikan" : 
                      (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? "Pengajuan Refund Ditolak" : 
-                     "Refund Sedang Diproses Finance"}
+                     "Refund Diproses Finance"}
                   </div>
                   
-                  <p className={`text-xs font-semibold ${(!refundRequestData || refundRequestData?.status === "Pending" || order.paymentStatus === "Menunggu Refund") ? "text-amber-600" : "text-slate-500"}`}>
+                  <p className={`text-sm font-semibold leading-relaxed ${(!refundRequestData || refundRequestData?.status === "Pending" || order.paymentStatus === "Menunggu Refund") ? "text-amber-600" : "text-slate-600"}`}>
                     {(!refundRequestData || refundRequestData?.status === "Pending" || order.paymentStatus === "Menunggu Refund") 
-                      ? "Mohon tunggu 1x24 jam kerja untuk proses verifikasi dan transfer dari tim Finance kami." 
-                      : `Nominal: ${formatIDR(refundRequestData?.nominal || order.finalGrandTotal || order.totalCost)}`}
+                      ? "Mohon tunggu 1x24 jam kerja untuk proses verifikasi dan transfer manual dari tim Finance kami." 
+                      : `Nominal Kembali: ${formatIDR(refundRequestData?.nominal || order.finalGrandTotal || order.totalCost)}`}
                   </p>
 
                   {/* BUKTI TRANSFER ADMIN */}
                   {(refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") && refundRequestData?.proofUrl && (
-                    <div className="mt-4 pt-4 border-t border-emerald-200/60">
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5" /> Bukti Transfer (Dari Admin)
+                    <div className="mt-6 pt-6 border-t border-emerald-200/60">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4" /> Bukti Transfer Admin
                       </p>
-                      <div className="bg-white p-2 rounded-xl border border-emerald-100 relative group overflow-hidden flex justify-center shadow-sm">
+                      <div className="bg-white p-2.5 rounded-[1.5rem] border border-emerald-100 relative group overflow-hidden flex justify-center shadow-sm">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={refundRequestData.proofUrl} alt="Bukti Refund" className="w-full h-auto max-h-48 object-contain rounded-lg" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <a href={refundRequestData.proofUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-slate-900 px-4 py-2 rounded-lg font-bold text-xs shadow-xl flex items-center gap-1.5 hover:bg-slate-100 transition-colors">
+                        <img src={refundRequestData.proofUrl} alt="Bukti Refund" className="w-full h-auto max-h-56 object-cover rounded-xl" />
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <a href={refundRequestData.proofUrl} target="_blank" rel="noopener noreferrer" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs shadow-xl flex items-center gap-2 hover:bg-slate-50 transition-colors active:scale-95">
                             <Eye className="w-4 h-4" /> Buka Layar Penuh
                           </a>
                         </div>
                       </div>
                     </div>
                   )}
-
                   {/* FALLBACK JIKA REFUND SELESAI TAPI ADMIN TIDAK UNGGAH BUKTI URL */}
                   {(order.paymentStatus === "Refund Selesai" && !refundRequestData?.proofUrl) && (
-                    <div className="mt-3 pt-3 border-t border-emerald-200/60">
-                       <p className="text-xs text-emerald-600 font-medium">Refund telah ditransfer. Silakan cek mutasi rekening Anda secara berkala.</p>
+                    <div className="mt-6 pt-5 border-t border-emerald-200/60">
+                       <p className="text-sm text-emerald-600 font-bold">Dana refund telah ditransfer ke rekening Anda. Silakan cek mutasi secara berkala.</p>
                     </div>
                   )}
-
                   {(refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") && (
-                    <p className="text-xs text-red-600 font-medium mt-3 bg-red-100/50 p-3 rounded-lg border border-red-100 leading-relaxed">
-                      Harap hubungi Customer Service untuk informasi lebih lanjut mengenai alasan penolakan pengembalian dana (refund) Anda.
-                    </p>
+                    <div className="mt-6 pt-5 border-t border-red-200/60">
+                      <p className="text-sm text-red-600 font-bold leading-relaxed">
+                        Harap hubungi Customer Service untuk informasi lebih lanjut mengenai alasan penolakan pengembalian dana Anda.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* CETAK RESI & INVOICE */}
-              {(order.paymentStatus === "Lunas" || order.paymentStatus === "Piutang B2B") && !order.status.includes("Batal") && (
-                <div className="flex flex-col sm:flex-row w-full gap-3 mt-2 border-t border-slate-100 pt-4">
-                  <Button onClick={handlePrintReceipt} variant="outline" className="flex-1 h-12 border-[#7A171D] text-[#7A171D] hover:bg-[#7A171D]/5 shadow-sm font-bold text-sm">
-                    <Printer className="w-4 h-4 mr-2" /> Cetak Resi
-                  </Button>
-                  <Button onClick={handlePrintInvoice} variant="outline" className="flex-1 h-12 border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm font-bold text-sm">
-                    <FileText className="w-4 h-4 mr-2" /> Invoice A4
-                  </Button>
-                </div>
-              )}
             </div>
           </div>
         </div>
       </div>
 
+      {/* COMPONENT TERSEMBUNYI UNTUK CETAK */}
       <div style={{ display: 'none' }}>
         {order && <ReceiptTemplate ref={receiptRef} resi={resiNumber} senderName={(originName as string) || user?.displayName || "-"} senderPhone={(originPhone as string) || "-"} originAddress={(originAddress as string) || "-"} receiverName={(order.destinations?.[0]?.receiverName as string) || (order.receiverName as string) || "-"} receiverPhone={(order.destinations?.[0]?.receiverPhone as string) || (order.receiverPhone as string) || "-"} destAddress={order.destinations && order.destinations.length > 1 ? `${order.destinations.length} Titik Tujuan` : ((order.destinations?.[0]?.address as string) || (order.destination as string) || "-")} weight={order.totalWeight || order.weight || 0} serviceType={order.serviceType || "Kargo"} vehicleName={order.vehicleName || order.vehicle || "Armada"} date={formatFirebaseDate(order.createdAt)} itemsDesc={((order.destinations?.[0]?.items as DeliveryItem[])?.[0]?.name) || "Paket Kargo"} />}
       </div>
@@ -537,6 +616,7 @@ export default function OrderDetailPage() {
         {order && <InvoiceA4Template ref={invoiceRef} invoiceNumber={`INV-${resiNumber}`} issueDate={issueDateObj.toLocaleDateString('id-ID')} dueDate={dueDateObj.toLocaleDateString('id-ID')} clientName={user?.displayName || (originName as string) || "Klien Yth."} clientCompany={user?.companyName} clientAddress={(originAddress as string) || "-"} clientEmail={user?.email || order.email || "-"} clientPhone={(originPhone as string) || user?.phoneNumber || "-"} items={invoiceItems} subTotal={invoiceSubTotal} discountAmount={invoiceDiscount} taxAmount={0} grandTotal={invoiceGrandTotal} />}
       </div>
 
+      {/* MODALS */}
       <AnimatePresence>
         {showClaimModal && user && <ClaimModal order={order} user={user} maxClaimAllowed={maxClaimAllowed} onClose={() => setShowClaimModal(false)} onSuccess={() => setHasExistingClaim(true)} showToast={showToast} />}
         {showRefundModal && user && <RefundModal order={order} user={user} onClose={() => setShowRefundModal(false)} onSuccess={(updates) => { setHasExistingRefund(true); setOrder({ ...order, ...updates }); setShowRefundModal(false); }} showToast={showToast} />}

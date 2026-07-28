@@ -70,52 +70,71 @@ export default function OrdersTab() {
   };
 
   return (
-    <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden font-sans">
-      
-      {/* Header Sticky */}
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-xl sticky top-0 z-20">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }} 
+      animate={{ opacity: 1, y: 0 }} 
+      className="glass-card rounded-[2.5rem] shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-white overflow-hidden font-sans relative transition-all duration-300"
+    >
+      {/* --- Background Ambient Glow --- */}
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-[#C5A059]/10 rounded-full blur-[80px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-[#7A171D]/10 rounded-full blur-[80px] pointer-events-none z-0" />
+
+      {/* --- HEADER STICKY --- */}
+      <div className="p-6 md:p-8 border-b border-white/60 flex flex-col sm:flex-row sm:items-center justify-between gap-5 bg-white/40 backdrop-blur-xl sticky top-0 z-20 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5)]">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Preferensi Pesanan</h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Atur penerimaan struk digital dan bukti pengiriman armada operasional.</p>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Preferensi Pesanan</h2>
+          <p className="text-slate-500 text-sm mt-1.5 font-medium leading-relaxed">Atur penerimaan struk digital dan opsi bukti pengiriman (Proof of Delivery).</p>
         </div>
         <Button 
           onClick={handleSavePreferences} 
           disabled={isLoading} 
           variant="primary"
-          className="w-full sm:w-auto px-6 shadow-md"
+          className="w-full sm:w-auto h-12 px-8 shadow-[0_8px_20px_rgba(122,23,29,0.2)] active:scale-95"
         >
-          {isLoading ? "Menyimpan..." : <><Save className="w-4 h-4 mr-2" /> Simpan Perubahan</>}
+          {isLoading ? "Menyimpan..." : <><Save className="w-4 h-4 mr-2" /> Simpan Konfigurasi</>}
         </Button>
       </div>
 
-      <div className="p-6 md:p-8 space-y-8">
+      <div className="p-6 md:p-8 space-y-8 relative z-10">
         
-        {/* Notifikasi Status */}
+        {/* --- TOAST NOTIFICATIONS (IN-CARD) --- */}
         <AnimatePresence>
           {isSuccess && (
             <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
-              <div className="p-4 bg-emerald-50 text-emerald-700 rounded-xl font-bold text-sm border border-emerald-100 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 shrink-0"/> Preferensi pesanan berhasil diperbarui secara sistem!
+              <div className="p-4 bg-emerald-50/80 backdrop-blur-md text-emerald-700 rounded-[1.25rem] font-bold text-sm border border-emerald-200 shadow-sm flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500"/> Preferensi pesanan berhasil diperbarui secara sistem!
               </div>
             </motion.div>
           )}
           {errorMsg && (
             <motion.div initial={{ opacity: 0, height: 0, y: -10 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -10 }} className="overflow-hidden">
-              <div className="p-4 bg-red-50 text-red-600 rounded-xl font-bold text-sm border border-red-100 flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0"/> {errorMsg}
+              <div className="p-4 bg-red-50/80 backdrop-blur-md text-red-600 rounded-[1.25rem] font-bold text-sm border border-red-200 shadow-sm flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 text-red-500"/> {errorMsg}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           
-          {/* Section: E-Receipt */}
-          <div className={cn("p-6 md:p-8 rounded-3xl border transition-all shadow-sm", eReceipt ? "bg-white border-[#7A171D]/30 shadow-md ring-4 ring-[#7A171D]/5" : "bg-slate-50/50 border-slate-200")}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          {/* ========================================================= */}
+          {/* SECTION 1: E-RECEIPT DIGITAL (Bento Box) */}
+          {/* ========================================================= */}
+          <div className={cn(
+            "p-6 md:p-8 rounded-[2rem] border transition-all duration-300 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative overflow-hidden", 
+            eReceipt ? "bg-white/80 border-white shadow-[0_10px_30px_rgba(122,23,29,0.06)]" : "bg-white/40 border-white/60"
+          )}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7A171D]/5 rounded-full blur-[40px] pointer-events-none z-0" />
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 mb-4 relative z-10">
               <div className="flex items-start gap-4">
-                <div className={cn("p-3 rounded-2xl shrink-0 border shadow-sm transition-colors", eReceipt ? "bg-[#7A171D]/10 text-[#7A171D] border-[#7A171D]/20" : "bg-white text-slate-400 border-slate-200")}>
-                  <Receipt className="w-6 h-6" />
+                <div className={cn(
+                  "w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 border transition-all duration-300", 
+                  eReceipt 
+                    ? "bg-gradient-to-br from-[#9A242B] to-[#7A171D] text-white border-[#5A0E13] shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_4px_10px_rgba(122,23,29,0.2)]" 
+                    : "bg-slate-100 border-white text-slate-400 shadow-sm"
+                )}>
+                  <Receipt className="w-5 h-5 drop-shadow-sm" />
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 text-base md:text-lg tracking-tight">E-Receipt Digital</h4>
@@ -123,74 +142,112 @@ export default function OrdersTab() {
                 </div>
               </div>
               
-              {/* Toggle Switch Modern */}
+              {/* Custom 3D Toggle Button */}
               <button 
                 type="button" 
                 onClick={() => setEReceipt(!eReceipt)} 
                 className={cn(
-                  "w-12 h-6.5 rounded-full flex items-center transition-colors p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-2 focus-visible:ring-[#7A171D]/50 border shadow-inner",
+                  "w-14 h-8 rounded-full flex items-center transition-all duration-300 p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-4 focus-visible:ring-[#7A171D]/20 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] border active:scale-95",
                   eReceipt ? "bg-[#7A171D] border-[#5A0E13]" : "bg-slate-200 border-slate-300"
                 )}
               >
-                <div className={cn("w-5 h-5 bg-white rounded-full shadow-sm transform transition-transform border border-slate-100", eReceipt ? "translate-x-5" : "translate-x-0")} />
+                <motion.div 
+                  layout
+                  initial={false}
+                  animate={{ x: eReceipt ? 24 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="w-6 h-6 bg-white rounded-full shadow-md border border-slate-100" 
+                />
               </button>
             </div>
 
-            {/* Email Input Field (Expandable) */}
+            {/* Email Input Field (Expandable with Framer Motion) */}
             <AnimatePresence>
               {eReceipt && (
-                <motion.div initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: "auto", marginTop: 24 }} exit={{ opacity: 0, height: 0, marginTop: 0 }} className="overflow-hidden">
-                  <div className="space-y-2 pt-4 border-t border-slate-100/60 pl-0 sm:pl-16">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email Penerima Invoice</label>
+                <motion.div 
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }} 
+                  animate={{ opacity: 1, height: "auto", marginTop: 24 }} 
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }} 
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden relative z-10"
+                >
+                  <div className="space-y-2 pt-4 border-t border-slate-100/60 pl-0 sm:pl-[4.5rem]">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Penerima Invoice</label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Mail className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                       <Input 
                         type="email" 
                         value={eReceiptEmail} 
                         onChange={(e) => setEReceiptEmail(e.target.value)} 
                         placeholder="Contoh: finance@company.com" 
-                        className="pl-11 border-slate-200 focus-visible:border-[#7A171D] focus-visible:ring-[#7A171D]/10 bg-slate-50 focus-visible:bg-white" 
+                        className="pl-12 h-14 font-black bg-white/60 focus-visible:bg-white focus-visible:border-[#7A171D]/50 focus-visible:ring-[#7A171D]/15" 
                         required={eReceipt}
                       />
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium">Kosongkan jika ingin dikirim ke email login Anda ({user?.email}).</p>
+                    <p className="text-[10px] text-slate-400 font-bold leading-relaxed pt-1">Kosongkan jika ingin tagihan dikirimkan langsung ke email utama Anda (<span className="text-slate-600">{user?.email}</span>).</p>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* Section: Proof of Delivery */}
-          <div className={cn("p-6 md:p-8 rounded-3xl border transition-all shadow-sm", proofOfDelivery ? "bg-white border-[#C5A059]/40 shadow-md ring-4 ring-[#C5A059]/10" : "bg-slate-50/50 border-slate-200")}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* ========================================================= */}
+          {/* SECTION 2: PROOF OF DELIVERY (Bento Box) */}
+          {/* ========================================================= */}
+          <div className={cn(
+            "p-6 md:p-8 rounded-[2rem] border transition-all duration-300 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative overflow-hidden", 
+            proofOfDelivery ? "bg-white/80 border-white shadow-[0_10px_30px_rgba(197,160,89,0.08)]" : "bg-white/40 border-white/60"
+          )}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059]/10 rounded-full blur-[40px] pointer-events-none z-0" />
+            
+            <div className="flex flex-col sm:flex-row justify-between gap-5 relative z-10">
               <div className="flex items-start gap-4">
-                <div className={cn("p-3 rounded-2xl shrink-0 border shadow-sm transition-colors", proofOfDelivery ? "bg-[#C5A059]/10 text-[#C5A059] border-[#C5A059]/20" : "bg-white text-slate-400 border-slate-200")}>
-                  <ShieldCheck className="w-6 h-6" />
+                <div className={cn(
+                  "w-12 h-12 rounded-[1rem] flex items-center justify-center shrink-0 border transition-all duration-300", 
+                  proofOfDelivery 
+                    ? "bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] text-[#5A0E13] border-[#A68345] shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_4px_10px_rgba(197,160,89,0.3)]" 
+                    : "bg-slate-100 border-white text-slate-400 shadow-sm"
+                )}>
+                  <ShieldCheck className="w-5 h-5 drop-shadow-sm" />
                 </div>
                 <div>
-                  <h4 className="font-black text-slate-900 text-base md:text-lg tracking-tight uppercase tracking-wider">Proof of Delivery</h4>
-                  <p className="text-xs font-medium text-slate-500 mt-1 max-w-[220px] leading-relaxed">Dapatkan konfirmasi tanda tangan atau bukti foto saat paket tiba di tujuan.</p>
+                  <h4 className="font-black text-slate-900 text-base md:text-lg tracking-tight uppercase tracking-widest">Proof of Delivery</h4>
+                  <p className="text-xs font-medium text-slate-500 mt-1 max-w-[220px] leading-relaxed">Dapatkan konfirmasi tanda tangan atau bukti foto saat paket tiba di tujuan akhir.</p>
                 </div>
               </div>
               
-              {/* Toggle Switch Modern */}
+              {/* Custom 3D Toggle Button */}
               <button 
                 type="button" 
                 onClick={() => setProofOfDelivery(!proofOfDelivery)} 
                 className={cn(
-                  "w-12 h-6.5 rounded-full flex items-center transition-colors p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059]/50 border shadow-inner",
+                  "w-14 h-8 rounded-full flex items-center transition-all duration-300 p-1 shrink-0 self-start sm:self-auto outline-none focus-visible:ring-4 focus-visible:ring-[#C5A059]/20 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] border active:scale-95",
                   proofOfDelivery ? "bg-[#C5A059] border-[#a88645]" : "bg-slate-200 border-slate-300"
                 )}
               >
-                <div className={cn("w-5 h-5 bg-white rounded-full shadow-sm transform transition-transform border border-slate-100", proofOfDelivery ? "translate-x-5" : "translate-x-0")} />
+                <motion.div 
+                  layout
+                  initial={false}
+                  animate={{ x: proofOfDelivery ? 24 : 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  className="w-6 h-6 bg-white rounded-full shadow-md border border-slate-100" 
+                />
               </button>
             </div>
             
             {/* Dekorasi Khusus PoD */}
             <AnimatePresence>
                {proofOfDelivery && (
-                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center">
-                    <p className="text-[10px] font-bold text-[#C5A059] bg-[#C5A059]/10 px-3 py-1.5 rounded-full uppercase tracking-widest border border-[#C5A059]/20">Fitur Keamanan Aktif</p>
+                 <motion.div 
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }} 
+                  animate={{ opacity: 1, height: "auto", marginTop: 24 }} 
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }} 
+                  transition={{ duration: 0.3 }}
+                  className="pt-6 border-t border-slate-100/80 flex items-center justify-start sm:pl-[4.5rem] relative z-10"
+                 >
+                    <span className="text-[10px] font-black text-[#C5A059] bg-[#C5A059]/10 px-4 py-1.5 rounded-[0.75rem] uppercase tracking-widest border border-[#C5A059]/20 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4)] flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Fitur Keamanan Aktif
+                    </span>
                  </motion.div>
                )}
             </AnimatePresence>
@@ -198,6 +255,6 @@ export default function OrdersTab() {
 
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
