@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 // PERBAIKAN: Gunakan relative path khusus untuk file CSS global
 import "./globals.css"; 
 import AuthProvider from "@/components/AuthProvider";
+import { Analytics } from "@vercel/analytics/next"; // <-- TAMBAHAN VERCEL ANALYTICS
 
 // Inisialisasi font lokal Geist Sans
 const geistSans = localFont({
@@ -62,6 +63,9 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        
+        {/* Komponen Vercel Analytics berjalan di background */}
+        <Analytics />
       </body>
     </html>
   );
