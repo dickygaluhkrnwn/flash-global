@@ -88,4 +88,4 @@ export default function OriginForm({ originData, setOriginData, setOriginCoords,
 
     </div>
   );
-}
+} 

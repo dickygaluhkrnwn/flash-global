@@ -381,4 +381,4 @@ export default function DropsAccordion({
       </div>
     </div>
   );
-}
+} 

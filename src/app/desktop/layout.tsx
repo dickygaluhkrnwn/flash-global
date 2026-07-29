@@ -4,7 +4,7 @@ export default function DesktopLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}) { 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-[#7A171D]/15 selection:text-[#7A171D] relative overflow-x-hidden font-sans z-0">
       

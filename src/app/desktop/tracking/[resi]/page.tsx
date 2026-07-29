@@ -590,4 +590,4 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       </div>
     </main>
   );
-}
+} 

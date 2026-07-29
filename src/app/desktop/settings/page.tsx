@@ -148,4 +148,4 @@ function SidebarButton({ icon: Icon, label, isActive, onClick }: SidebarButtonPr
       <span className="relative z-10 tracking-wide">{label}</span>
     </button>
   );
-}
+} 

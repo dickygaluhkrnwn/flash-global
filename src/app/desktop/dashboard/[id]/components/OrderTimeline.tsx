@@ -72,4 +72,4 @@ export default function OrderTimeline({ timelineData, orderStatus }: { timelineD
       </div>
     </div>
   );
-}
+} 

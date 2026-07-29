@@ -204,4 +204,4 @@ export default function PiutangTab(props: Props) {
       </div>
     </motion.div>
   );
-}
+} 

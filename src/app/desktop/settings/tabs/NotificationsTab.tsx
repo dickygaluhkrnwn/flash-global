@@ -257,4 +257,4 @@ export default function NotificationsTab() {
       </div>
     </motion.div>
   );
-}
+} 

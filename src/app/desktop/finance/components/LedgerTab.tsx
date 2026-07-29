@@ -77,4 +77,4 @@ export default function LedgerTab({ ledgerLogs, formatRupiah }: Props) {
       </div>
     </motion.div>
   );
-}
+} 

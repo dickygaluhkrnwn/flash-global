@@ -236,4 +236,4 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
       
     </motion.div>
   );
-}
+} 

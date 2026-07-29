@@ -84,4 +84,13 @@
   .client-scrollbar:hover::-webkit-scrollbar-thumb {
     @apply bg-slate-300;
   }
+
+  /* ======================================================================
+     NATIVE APP FEEL UTILITIES 
+     ====================================================================== */
+  
+  /* Hilangkan efek kotak biru saat tap di Android/iOS */
+  .tap-highlight-transparent {
+    -webkit-tap-highlight-color: transparent;
+  }
 }

@@ -184,4 +184,4 @@ function FeatureCard({ icon: Icon, color, bg, title, desc }: { icon: React.Eleme
       <p className="text-sm text-slate-500 font-medium leading-relaxed relative z-10">{desc}</p>
     </div>
   );
-}
+} 
