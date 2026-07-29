@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { 
   MapPin, Scale, Navigation, 
-  Car, ArrowRight, Truck, Globe2, Calculator, Zap
+  Car, ArrowRight, Truck, Globe2, Calculator
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -18,7 +18,10 @@ import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 
 import { AdminPricingConfig, EstimateData, DynamicVehicle } from "@/types/order";
-import AuthModal from "@/app/desktop/components/AuthModal";
+
+// --- IMPORT MOBILE COMPONENTS ---
+import AuthModal from "@/app/mobile/components/AuthModal";
+import VehicleShowcase from "@/app/mobile/components/VehicleShowcase";
 
 interface ExtendedPricingConfig extends AdminPricingConfig {
   customVehicles?: DynamicVehicle[];
@@ -223,7 +226,7 @@ export default function MobilePortalPage() {
   };
 
   return (
-    <div className="flex flex-col space-y-8 px-4 w-full">
+    <div className="flex flex-col space-y-8 px-4 w-full font-sans">
       
       {/* ============================================================== */}
       {/* 📦 SECTION 1: DOMESTIK (MAP & KALKULATOR) */}
@@ -237,7 +240,7 @@ export default function MobilePortalPage() {
           <p className="text-slate-500 font-medium mt-1 text-xs">Simulasi tarif instan ke seluruh Indonesia.</p>
         </div>
 
-        {/* Peta: Tetap menggunakan overflow-hidden agar bentuk membulat rapi */}
+        {/* Peta Mini */}
         <div className="w-full h-[220px] glass-card rounded-[2rem] p-1.5 relative overflow-hidden z-10">
           <div className="absolute top-4 left-4 glass-panel px-3 py-2 rounded-xl z-20 flex items-center gap-2 pointer-events-none shadow-sm">
             <div className="relative flex items-center justify-center">
@@ -265,7 +268,7 @@ export default function MobilePortalPage() {
           </div>
         </div>
 
-        {/* Form Kalkulator Mobile: BUG FIX - Dihilangkan overflow-hidden agar dropdown tidak terpotong */}
+        {/* Form Kalkulator Mobile */}
         <div className="glass-card rounded-[2rem] p-5 relative z-30">
           <form onSubmit={handleCalculateDomestik} className="space-y-6 relative z-10">
             {/* Input Lokasi */}
@@ -321,57 +324,23 @@ export default function MobilePortalPage() {
               </div>
             </div>
 
-            {/* Armada Selector: ROMBAKAN UI - Horizontal Native Scroll menggantikan Select Option & Showcase Desktop */}
-            <div className="space-y-2 pt-2 relative z-10">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Pilihan Armada</label>
-              <div className="flex overflow-x-auto gap-3 pb-2 no-scrollbar -mx-5 px-5 snap-x snap-mandatory tap-highlight-transparent">
-                
-                {/* Opsi AI Auto */}
-                <div 
-                  onClick={() => { setDomestikData(p => ({...p, vehicle: "auto"})); setDomestikEstimate(null); }}
-                  className={cn(
-                    "snap-center shrink-0 w-[130px] rounded-[1.5rem] p-4 border-2 transition-all active:scale-95 flex flex-col justify-between h-[105px] select-none cursor-pointer",
-                    domestikData.vehicle === "auto" 
-                      ? "bg-white border-[#7A171D] shadow-[0_4px_15px_rgba(122,23,29,0.12)]" 
-                      : "bg-white/40 backdrop-blur-sm border-transparent hover:border-slate-300"
-                  )}
-                >
-                  <Zap className={cn("w-6 h-6 mb-2", domestikData.vehicle === "auto" ? "text-[#7A171D]" : "text-slate-400")} />
-                  <div>
-                    <p className={cn("text-xs font-black", domestikData.vehicle === "auto" ? "text-[#7A171D]" : "text-slate-700")}>Rekomendasi AI</p>
-                    <p className="text-[9px] font-bold text-slate-400">Paling Efisien</p>
-                  </div>
-                </div>
-
-                {/* Opsi Dynamic dari Database */}
-                {availableVehicles.map(v => {
-                  const isSelected = domestikData.vehicle === v.id;
-                  return (
-                    <div 
-                      key={v.id}
-                      onClick={() => { setDomestikData(p => ({...p, vehicle: v.id})); setDomestikEstimate(null); }}
-                      className={cn(
-                        "snap-center shrink-0 w-[130px] rounded-[1.5rem] p-4 border-2 transition-all active:scale-95 flex flex-col justify-between h-[105px] select-none cursor-pointer",
-                        isSelected 
-                          ? "bg-white border-[#7A171D] shadow-[0_4px_15px_rgba(122,23,29,0.12)]" 
-                          : "bg-white/40 backdrop-blur-sm border-transparent hover:border-slate-300"
-                      )}
-                    >
-                      <Truck className={cn("w-6 h-6 mb-2", isSelected ? "text-[#7A171D]" : "text-slate-400")} />
-                      <div>
-                        <p className={cn("text-xs font-black", isSelected ? "text-[#7A171D]" : "text-slate-700")}>{v.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400">Maks {v.maxWeight} Kg</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {/* Armada Selector: Terintegrasi dengan VehicleShowcase Mobile */}
+            <div className="space-y-3 pt-4 relative z-10">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Pilihan Armada</label>
+              <VehicleShowcase 
+                vehicles={availableVehicles} 
+                selectedVehicleId={domestikData.vehicle} 
+                onSelect={(id) => { 
+                  setDomestikData(p => ({...p, vehicle: id})); 
+                  setDomestikEstimate(null); 
+                }} 
+              />
             </div>
 
             {/* Button Kalkulasi / Result */}
-            <div className="pt-2 relative z-10">
+            <div className="pt-4 relative z-10">
               {!domestikEstimate ? (
-                <Button type="submit" isLoading={isDomestikLoading} variant="primary" className="w-full h-14 text-sm rounded-[1.25rem]">
+                <Button type="submit" isLoading={isDomestikLoading} variant="primary" className="w-full h-14 text-sm rounded-[1.25rem] shadow-md font-black">
                   Kalkulasi Tarif <Calculator className="w-4 h-4 ml-2 opacity-70"/>
                 </Button>
               ) : (
@@ -394,7 +363,7 @@ export default function MobilePortalPage() {
                     <div className="flex items-center justify-between"><span className="flex items-center gap-1.5"><Car className="w-3.5 h-3.5 text-[#C5A059]"/> Armada:</span> <b className="text-[#C5A059]">{domestikEstimate.parameters.vehicleName}</b></div>
                   </div>
 
-                  <Button type="button" onClick={() => handleProceed("domestik")} className="w-full mt-2 h-12 bg-white text-slate-900 hover:bg-slate-100 border-none relative z-10 text-sm">
+                  <Button type="button" onClick={() => handleProceed("domestik")} className="w-full mt-2 h-12 bg-white text-slate-900 hover:bg-slate-100 border-none relative z-10 text-sm font-black tap-highlight-transparent">
                     Lanjutkan <ArrowRight className="w-4 h-4 ml-2"/>
                   </Button>
                 </motion.div>
@@ -415,25 +384,25 @@ export default function MobilePortalPage() {
           <p className="text-slate-500 font-medium mt-1 text-xs">Cek estimasi biaya kargo internasional.</p>
         </div>
 
-        <div className="glass-card rounded-[2rem] overflow-hidden border border-white relative p-5">
+        <div className="glass-card rounded-[2rem] overflow-hidden border border-white relative p-5 shadow-sm">
           <div className="absolute top-[-50%] right-[-20%] w-[80%] h-[100%] bg-gradient-to-bl from-[#C5A059]/15 to-transparent pointer-events-none rounded-full blur-[40px]"></div>
           
           <form onSubmit={handleCalculateGlobal} className="space-y-4 relative z-10">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Asal</label>
-                <Input name="origin" value={globalData.origin} onChange={(e) => { setGlobalData(p => ({...p, origin: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: ID" required className="h-12 text-xs" />
+                <Input name="origin" value={globalData.origin} onChange={(e) => { setGlobalData(p => ({...p, origin: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: ID" required className="h-12 text-xs font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Tujuan</label>
-                <Input name="destination" value={globalData.destination} onChange={(e) => { setGlobalData(p => ({...p, destination: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: SG" required className="h-12 text-xs" />
+                <Input name="destination" value={globalData.destination} onChange={(e) => { setGlobalData(p => ({...p, destination: e.target.value})); setGlobalEstimate(null); }} placeholder="Cth: SG" required className="h-12 text-xs font-bold" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Berat (Kg)</label>
-                <Input type="number" name="weight" min="1" value={globalData.weight} onChange={(e) => { setGlobalData(p => ({...p, weight: e.target.value})); setGlobalEstimate(null); }} placeholder="10" required className="h-12 text-xs" />
+                <Input type="number" name="weight" min="1" value={globalData.weight} onChange={(e) => { setGlobalData(p => ({...p, weight: e.target.value})); setGlobalEstimate(null); }} placeholder="10" required className="h-12 text-xs font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Dimensi (cm)</label>
@@ -447,7 +416,7 @@ export default function MobilePortalPage() {
 
             <div className="pt-2">
               {!globalEstimate ? (
-                <Button type="submit" isLoading={isGlobalLoading} variant="gold" className="w-full h-14 text-sm rounded-[1.25rem]">
+                <Button type="submit" isLoading={isGlobalLoading} variant="gold" className="w-full h-14 text-sm font-black rounded-[1.25rem] shadow-md tap-highlight-transparent">
                   Cek Estimasi Global <Globe2 className="w-4 h-4 ml-2 opacity-70"/>
                 </Button>
               ) : (
@@ -461,7 +430,7 @@ export default function MobilePortalPage() {
                       {globalEstimate.chargeableWeight} Kg
                     </div>
                   </div>
-                  <Button type="button" onClick={() => handleProceed("forwarding")} className="w-full mt-1 h-12 bg-slate-900 text-white hover:bg-slate-800 border-none shadow-md text-sm">
+                  <Button type="button" onClick={() => handleProceed("forwarding")} className="w-full mt-1 h-12 bg-slate-900 text-white hover:bg-slate-800 border-none shadow-md text-sm font-black tap-highlight-transparent">
                     Buat Penawaran <ArrowRight className="w-4 h-4 ml-2"/>
                   </Button>
                 </motion.div>
@@ -471,6 +440,7 @@ export default function MobilePortalPage() {
         </div>
       </section>
 
+      {/* MODAL LOGIN MOBILE */}
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );

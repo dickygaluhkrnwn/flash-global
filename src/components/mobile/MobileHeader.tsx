@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { 
-  User, Settings, LogOut, LayoutDashboard, 
+  User, Settings, LogOut, 
   ChevronDown, TicketPercent, LifeBuoy, CreditCard, Info, MapPin
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -139,17 +139,13 @@ export default function MobileHeader() {
 
               {/* List Menu */}
               <div className="space-y-1">
-                <Link href="/dashboard" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-2xl transition-colors tap-highlight-transparent">
-                  <LayoutDashboard className="w-4 h-4" /> Dasbor Portal
-                </Link>
-
                 {user?.role === 'b2b' && (
                   <Link href="/finance" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-700 active:bg-indigo-50 active:text-indigo-700 rounded-2xl transition-colors tap-highlight-transparent">
                     <CreditCard className="w-4 h-4 text-indigo-500" /> Tagihan B2B
                   </Link>
                 )}
                 
-                {/* MENU LACAK RESI (BARU DITAMBAHKAN) */}
+                {/* MENU LACAK RESI */}
                 <Link href="/tracking" onClick={() => setIsProfileOpen(false)} className="flex items-center justify-between px-4 py-3 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-2xl transition-colors tap-highlight-transparent">
                   <div className="flex items-center gap-3">
                     <MapPin className="w-4 h-4 text-[#7A171D]" /> Lacak Resi

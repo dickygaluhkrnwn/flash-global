@@ -18,32 +18,27 @@ export default function MobileLayout({
   const isDetailPage = (pathname.startsWith("/dashboard/") && pathname !== "/dashboard") || 
                        (pathname.startsWith("/tracking/") && pathname !== "/tracking");
 
-  // 3. Deteksi halaman Form Wizard / Checkout / Forwarding
+  // 3. Deteksi halaman Form Wizard / Checkout / Forwarding / Pengaturan
   const isBookingPage = pathname.includes("/delivery/booking") || 
                         pathname.includes("/pembayaran") || 
-                        pathname.includes("/forwarding/quote");
+                        pathname.includes("/forwarding/quote") ||
+                        pathname.includes("/settings"); // <-- DITAMBAHKAN DI SINI
 
-  // Jika di halaman Auth, Detail, ATAU Booking/Pembayaran/Forwarding, sembunyikan Navigasi Global
+  // Jika di halaman Auth, Detail, ATAU Booking/Pembayaran/Forwarding/Settings, sembunyikan Navigasi Global
   const hideGlobalNav = isAuthPage || isDetailPage || isBookingPage;
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-slate-50 text-slate-900 selection:bg-[#7A171D]/15 selection:text-[#7A171D] relative overflow-x-hidden font-sans z-0">
+    <div className="min-h-[100dvh] flex flex-col bg-[#f8fafc] text-slate-900 selection:bg-[#7A171D]/15 selection:text-[#7A171D] relative overflow-x-hidden font-sans z-0">
       
-      {/* --- AMBIENT GLOWING BACKGROUND --- */}
+      {/* AMBIENT GLOWING BACKGROUND (PREMIUM APPLE GLASS STYLE) */}
       <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-        <div className="absolute top-[-5%] left-[-20%] w-[70%] h-[40%] rounded-full bg-rose-200/40 blur-[100px]" />
-        <div className="absolute bottom-[5%] right-[-20%] w-[60%] h-[40%] rounded-full bg-amber-100/40 blur-[100px]" />
-        <div className="absolute top-[30%] left-[50%] w-[50%] h-[30%] rounded-full bg-blue-100/30 blur-[90px]" />
+        <div className="absolute top-[-15%] right-[-10%] w-[300px] h-[300px] bg-[#7A171D] rounded-full blur-[120px] opacity-[0.08]" />
+        <div className="absolute bottom-[-15%] left-[-10%] w-[350px] h-[350px] bg-[#C5A059] rounded-full blur-[120px] opacity-[0.08]" />
       </div>
 
       {/* Render Header HANYA jika BUKAN di halaman khusus */}
       {!hideGlobalNav && <MobileHeader />}
       
-      {/* 
-        BUG FIX: Hapus `z-10` dari className main.
-        Tanpa z-index pengikat, child component yang menggunakan overlay `fixed z-[150]` 
-        (seperti di tab Settings) akan bisa melampaui MobileHeader (z-100) dan BottomNav (z-50).
-      */}
       <main className={`flex-grow flex flex-col w-full max-w-md mx-auto relative ${hideGlobalNav ? "" : "pt-[80px] pb-[100px]"}`}> 
         {children}
       </main>
