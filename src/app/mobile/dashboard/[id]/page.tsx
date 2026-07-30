@@ -23,6 +23,7 @@ import OrderTimeline, { TimelineItem } from "./components/OrderTimeline";
 import { ClaimModal, RefundModal } from "./components/OrderModals";
 
 import { OrderDetail, FirebaseTimestamp, LocationDetail, DeliveryItem } from "@/types/order";
+import { Badge } from "@/components/ui/Badge";
 
 interface RefundData {
   id: string;
@@ -70,41 +71,23 @@ export default function MobileOrderDetailPage() {
     const fetchOrderDetail = async () => {
       if (!user?.uid || !orderId) return;
       setIsLoading(true);
-      let fetchedOrderDocId = null;
 
       try {
-        let docRef = doc(db, "orders", orderId);
-        let docSnap = await getDoc(docRef);
-        let category = "domestik";
-
-        if (!docSnap.exists()) {
-          docRef = doc(db, "quotes", orderId);
-          docSnap = await getDoc(docRef);
-          category = "internasional";
-        }
+        // HANYA DOMESTIK (orders)
+        const docRef = doc(db, "orders", orderId);
+        const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data.userId && data.userId !== user.uid) {
-            setErrorMsg("Akses Ditolak.");
+            setErrorMsg("Akses Ditolak. Anda tidak memiliki izin.");
             setIsLoading(false); return;
           }
-          fetchedOrderDocId = docSnap.id;
-          setOrder({ id: docSnap.id, category, ...data } as OrderDetail);
-        } else {
-          setErrorMsg("Pesanan tidak ditemukan.");
-          setIsLoading(false); return;
-        }
-      } catch (error) {
-        console.error(error);
-        setErrorMsg("Terjadi kesalahan sistem.");
-        setIsLoading(false); return; 
-      }
+          setOrder({ id: docSnap.id, category: "domestik", ...data } as OrderDetail);
 
-      if (fetchedOrderDocId) {
-        try {
-          const claimQ = query(collection(db, "insurance_claims"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
-          const refundQ = query(collection(db, "refund_requests"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
+          // Pengecekan Claim & Refund
+          const claimQ = query(collection(db, "insurance_claims"), where("orderId", "==", docSnap.id), where("userId", "==", user.uid));
+          const refundQ = query(collection(db, "refund_requests"), where("orderId", "==", docSnap.id), where("userId", "==", user.uid));
           const [claimSnap, refundSnap] = await Promise.all([getDocs(claimQ), getDocs(refundQ)]);
           
           if (!claimSnap.empty) setHasExistingClaim(true);
@@ -112,9 +95,15 @@ export default function MobileOrderDetailPage() {
             setHasExistingRefund(true);
             setRefundRequestData({ id: refundSnap.docs[0].id, ...refundSnap.docs[0].data() } as RefundData);
           }
-        } catch (err) { console.warn(err); }
+        } else {
+          setErrorMsg("Pesanan tidak ditemukan.");
+        }
+      } catch (error) {
+        console.error("Gagal menarik data pesanan:", error);
+        setErrorMsg("Terjadi kesalahan sistem saat memuat data.");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     fetchOrderDetail();
@@ -188,7 +177,7 @@ export default function MobileOrderDetailPage() {
 
   // --- DATA PREPARATION ---
   const timelineData = renderTimeline();
-  const resiNumber = order.resi || order.quoteId || order.id.slice(-12).toUpperCase();
+  const resiNumber = order.resi || order.id.slice(-12).toUpperCase();
 
   const originAddress = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).address : order.origin;
   const originName = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderName : order.senderName;
@@ -226,7 +215,7 @@ export default function MobileOrderDetailPage() {
   const invoiceDiscount = (order.breakdown?.b2bDiscount || 0) + (order.discountPromoAmount || 0);
   const invoiceGrandTotal = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
 
-  // --- LOGIKA STICKY PRIMARY ACTION (Di bagian bawah layar) ---
+  // --- LOGIKA STICKY PRIMARY ACTION ---
   const isB2B = order.statusSub === "Piutang B2B";
   let PrimaryAction = null;
 
@@ -243,7 +232,6 @@ export default function MobileOrderDetailPage() {
       </button>
     );
   } else {
-    // Default action (Selesai / Batal)
     PrimaryAction = (
       <button onClick={() => window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(`Halo CS, tolong cek pesanan saya ID: ${resiNumber}`)}`, "_blank")} className="w-full h-14 bg-white border border-slate-200 text-slate-700 rounded-[1.25rem] font-bold shadow-sm flex items-center justify-center gap-2 active:scale-95 tap-highlight-transparent">
         <MessageCircle className="w-5 h-5 text-emerald-500" /> Hubungi CS Bantuan
@@ -251,7 +239,6 @@ export default function MobileOrderDetailPage() {
     );
   }
 
-  // Helper Warna Status Bar
   const getStatusColor = () => {
     if (order.status.includes("Selesai")) return "bg-emerald-500 text-white";
     if (order.status.includes("Batal")) return "bg-red-500 text-white";
@@ -259,24 +246,20 @@ export default function MobileOrderDetailPage() {
     return "bg-amber-500 text-white";
   };
 
+  const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[0_8px_30px_rgba(0,0,0,0.04)] rounded-[1.5rem]";
+
   return (
-    // =========================================================================
-    // 🚀 NATIVE PUSH VIEW ARCHITECTURE
-    // fixed inset-0 z-[150]: Mengambang di atas seluruh UI termasuk BottomNav
-    // Flex-col h-[100dvh]: Mengambil alih kontrol tinggi layar sepenuhnya
-    // =========================================================================
     <div className="fixed inset-0 z-[150] bg-slate-50 flex justify-center font-sans overflow-hidden">
       
-      {/* Batasi Max Width agar tetap rapi di tablet */}
       <div className="w-full max-w-md relative flex flex-col h-[100dvh] bg-slate-50 shadow-2xl">
         
-        {/* AMBIENT GLOW LOKAL */}
+        {/* AMBIENT GLOW */}
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
           <div className="absolute top-[-5%] left-[-10%] w-[60vw] h-[30vh] rounded-full bg-rose-200/40 blur-[100px]" />
           <div className="absolute bottom-[-5%] right-[-10%] w-[60vw] h-[30vh] rounded-full bg-amber-100/40 blur-[100px]" />
         </div>
 
-        {/* TOAST NOTIFICATION */}
+        {/* TOAST */}
         <AnimatePresence>
           {toast && (
             <motion.div initial={{ opacity: 0, y: -20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.9 }} 
@@ -286,25 +269,21 @@ export default function MobileOrderDetailPage() {
           )}
         </AnimatePresence>
 
-        {/* ==============================================================
-            1. APP BAR (HEADER NATIVE) - Posisinya Flex-None di Atas
-            ============================================================== */}
+        {/* 1. APP BAR HEADER */}
         <div className="flex-none glass-panel border-b border-white shadow-sm flex items-center justify-between px-4 py-3 pt-safe relative z-20">
           <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center text-slate-700 bg-white/50 rounded-full active:scale-90 tap-highlight-transparent border border-white">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
             <h2 className="text-sm font-black text-slate-900 tracking-tight">Detail Pesanan</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{order.category}</p>
+            <p className="text-[10px] font-bold text-[#7A171D] uppercase tracking-widest">Domestik Instan</p>
           </div>
           <button onClick={() => handleCopyResi(resiNumber)} className="w-10 h-10 flex items-center justify-center text-slate-700 bg-white/50 rounded-full active:scale-90 tap-highlight-transparent border border-white">
             {copiedResi ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
           </button>
         </div>
 
-        {/* ==============================================================
-            2. SCROLLABLE MAIN CONTENT - Posisinya Flex-Grow di Tengah
-            ============================================================== */}
+        {/* 2. SCROLLABLE MAIN CONTENT */}
         <main className="flex-grow overflow-y-auto px-4 pt-5 pb-[130px] space-y-4 relative z-10 no-scrollbar">
           
           {/* STATUS BANNER */}
@@ -319,7 +298,7 @@ export default function MobileOrderDetailPage() {
           </div>
 
           {/* RESI & VEHICLE QUICK INFO */}
-          <div className="glass-card bg-white p-4 rounded-3xl border border-slate-100 flex items-center justify-between shadow-sm">
+          <div className={`${glassCard} p-4 flex items-center justify-between`}>
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">No. Resi</p>
               <p className="font-mono font-black text-slate-900 text-sm tracking-tighter">{resiNumber}</p>
@@ -336,8 +315,8 @@ export default function MobileOrderDetailPage() {
             </div>
           </div>
 
-          {/* ROUTE CARD (Origin -> Dest) */}
-          <div className="glass-card bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
+          {/* ROUTE CARD (Origin -> Dest MULTIDROP) */}
+          <div className={`${glassCard} p-5 relative`}>
             <div className="relative pl-3">
               <div className="absolute left-[7px] top-2 bottom-6 w-[2px] bg-slate-200 rounded-full"></div>
               
@@ -358,7 +337,7 @@ export default function MobileOrderDetailPage() {
                   <p className="text-[10px] font-black text-[#7A171D] uppercase tracking-widest mb-1">Tujuan</p>
                   {order.destinations ? order.destinations.map((dest: LocationDetail, idx: number) => (
                     <div key={idx} className="mb-3 last:mb-0">
-                      <p className="text-sm font-bold text-slate-900 leading-snug">{dest.receiverName} {order.destinations!.length > 1 && <span className="text-[#7A171D] text-[10px] bg-red-50 px-1.5 py-0.5 rounded ml-1">Drop {idx + 1}</span>}</p>
+                      <p className="text-sm font-bold text-slate-900 leading-snug">{dest.receiverName} {order.destinations!.length > 1 && <Badge variant="primary" className="ml-1 px-1.5 py-0.5 text-[9px] shadow-none">Drop {idx + 1}</Badge>}</p>
                       <p className="text-xs font-medium text-slate-500 mt-1 line-clamp-2">{dest.address}</p>
                     </div>
                   )) : (
@@ -369,9 +348,9 @@ export default function MobileOrderDetailPage() {
             </div>
           </div>
 
-          {/* DRIVER CARD (Jika Ada) */}
+          {/* DRIVER CARD */}
           {order.driverName && (
-            <div className="glass-card bg-slate-900 text-white rounded-3xl p-4 flex items-center justify-between shadow-lg">
+            <div className="bg-slate-900 text-white rounded-3xl p-4 flex items-center justify-between shadow-lg border border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-slate-800 rounded-2xl flex items-center justify-center border border-slate-700 shrink-0"><User className="w-6 h-6 text-slate-400" /></div>
                 <div>
@@ -389,9 +368,9 @@ export default function MobileOrderDetailPage() {
           <OrderTimeline timelineData={timelineData} orderStatus={order.status} />
 
           {/* BILLING SUMMARY */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ReceiptText className="w-4 h-4 text-slate-400"/> Rincian Pembayaran</h3>
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><ReceiptText className="w-4 h-4 text-[#7A171D]"/> Rincian Pembayaran</h3>
             </div>
             <div className="p-5 space-y-3 text-sm font-medium text-slate-600">
               {order.breakdown ? (
@@ -413,8 +392,8 @@ export default function MobileOrderDetailPage() {
             </div>
           </div>
 
-          {/* SECONDARY ACTIONS (Grouped List Style) */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          {/* SECONDARY ACTIONS */}
+          <div className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
               <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Menu Bantuan & Cetak</h3>
             </div>
@@ -458,7 +437,7 @@ export default function MobileOrderDetailPage() {
 
           {/* STATUS REFUND TRACKER */}
           {(hasExistingRefund || order.paymentStatus?.includes("Refund")) && (
-            <div className={cn("p-4 rounded-3xl border text-xs font-bold shadow-sm", 
+            <div className={cn("p-4 rounded-[1.5rem] border text-xs font-bold shadow-sm", 
               (refundRequestData?.status === "Approved" || order.paymentStatus === "Refund Selesai") ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
               (refundRequestData?.status === "Rejected" || order.paymentStatus === "Refund Ditolak") ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"
             )}>
@@ -475,10 +454,8 @@ export default function MobileOrderDetailPage() {
           )}
         </main>
 
-        {/* ==============================================================
-            3. ACTION BAR (FOOTER NATIVE) - Posisinya Absolute ke Bawah
-            ============================================================== */}
-        <div className="absolute bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/60 p-4 pb-safe shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+        {/* 3. ACTION BAR (FOOTER NATIVE) */}
+        <div className="absolute bottom-0 left-0 right-0 z-50 glass-panel border-t border-white/60 p-4 pb-safe bg-white/95 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
           {PrimaryAction}
         </div>
 

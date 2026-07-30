@@ -168,11 +168,11 @@ function MobileQuoteForm() {
           right: 0 !important;
           z-index: 999999 !important;
           border-radius: 1.25rem !important;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+          box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
           border: 1px solid rgba(226, 232, 240, 1) !important;
           margin-top: 8px !important;
           background-color: rgba(255, 255, 255, 0.98) !important;
-          backdrop-filter: blur(20px) !important;
+          backdrop-filter: blur(25px) !important;
           font-family: inherit !important;
         }
         mapbox-search-box {
@@ -222,6 +222,7 @@ function MobileQuoteForm() {
           <form id="quote-form" onSubmit={handleSubmit} className="space-y-6">
             
             {/* SECTION 1: Rute Internasional (Z-Index diurutkan menurun agar Dropdown Listbox tidak tenggelam) */}
+            {/* BUG FIX: Membuang overflow-hidden agar listbox bisa melayang bebas */}
             <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-50">
               <div className="flex items-center gap-3 mb-5 border-b pb-4 border-slate-100">
                 <div className="w-8 h-8 rounded-xl bg-slate-50 border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">1</div>
@@ -321,7 +322,7 @@ function MobileQuoteForm() {
             </div>
 
             {/* SECTION 2: Spesifikasi Kargo (Z-Index Bawah: 30) */}
-            <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-30">
+            <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-30 overflow-hidden">
               <div className="flex items-center gap-3 mb-5 border-b pb-4 border-slate-100">
                 <div className="w-8 h-8 rounded-xl bg-slate-50 border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">2</div>
                 <h3 className="text-base font-black text-slate-900 tracking-tight">Kargo Utama</h3>
@@ -365,7 +366,7 @@ function MobileQuoteForm() {
             </div>
 
             {/* SECTION 3: Kontak (Z-Index Dasar: 20) */}
-            <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-20">
+            <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-20 overflow-hidden">
               <div className="flex items-center gap-3 mb-5 border-b pb-4 border-slate-100">
                 <div className="w-8 h-8 rounded-xl bg-slate-50 border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">3</div>
                 <h3 className="text-base font-black text-slate-900 tracking-tight">Kontak PIC</h3>

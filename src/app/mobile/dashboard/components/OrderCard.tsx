@@ -33,6 +33,13 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
   const displayPrice = order.finalPrice || order.price;
   const isB2B = order.statusSub === "Piutang B2B";
 
+  // =======================================================================
+  // LOGIKA SMART ROUTING (Mendeteksi arah detail card)
+  // =======================================================================
+  const detailPath = order.category === "internasional" 
+    ? `/dashboard/forwarding/${order.id}` 
+    : `/dashboard/${order.id}`;
+
   const renderActionButtons = () => {
     // Semua tombol dibuat full-width dengan height h-12 agar sangat nyaman disentuh jempol
     if (order.status === "Menunggu Pembayaran" && !isB2B) {
@@ -46,7 +53,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status === "Menunggu Kurir" || order.status === "Sedang Diproses" || order.status === "Menuju Lokasi Jemput") {
       return (
         <div className="grid grid-cols-2 gap-2 w-full">
-          <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }} className="h-12 bg-slate-800 text-white rounded-xl text-[11px] font-bold active:scale-95 border border-slate-950 flex items-center justify-center gap-1.5 tap-highlight-transparent">
+          <button onClick={(e) => { e.stopPropagation(); router.push(detailPath); }} className="h-12 bg-slate-800 text-white rounded-xl text-[11px] font-bold active:scale-95 border border-slate-950 flex items-center justify-center gap-1.5 tap-highlight-transparent">
             <Printer className="w-3.5 h-3.5" /> Cetak AWB
           </button>
           <button onClick={(e) => { e.stopPropagation(); router.push(`/tracking/${order.resi}`); }} className="h-12 bg-emerald-500 text-white rounded-xl text-[11px] font-bold active:scale-95 border border-emerald-700 flex items-center justify-center gap-1.5 tap-highlight-transparent">
@@ -66,7 +73,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
 
     if (order.status.includes("Selesai")) {
       return (
-        <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }} className="w-full h-12 bg-[#DFBE7B] text-slate-900 rounded-xl text-xs font-black active:scale-95 border border-[#A68345] flex items-center justify-center gap-2 tap-highlight-transparent">
+        <button onClick={(e) => { e.stopPropagation(); router.push(detailPath); }} className="w-full h-12 bg-[#DFBE7B] text-slate-900 rounded-xl text-xs font-black active:scale-95 border border-[#A68345] flex items-center justify-center gap-2 tap-highlight-transparent">
           <Star className="w-4 h-4 fill-current" /> Beri Penilaian
         </button>
       );
@@ -90,7 +97,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         isB2B ? "glass-card bg-indigo-50/50 border-indigo-200/60 shadow-sm active:bg-indigo-50" 
               : "glass-card bg-white/70 border-white shadow-sm active:bg-slate-50"
       )}
-      onClick={() => router.push(`/dashboard/${order.id}`)}
+      onClick={() => router.push(detailPath)}
     >
       <div className="px-5 py-3 border-b border-slate-200/50 flex justify-between items-center relative z-10 bg-white/40">
         <div className="flex items-center gap-2">
