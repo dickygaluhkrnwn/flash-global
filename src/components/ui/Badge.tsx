@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "success" | "warning" | "danger" | "gold" | "brand" | "outline" | "glass";
+  variant?: "default" | "success" | "warning" | "danger" | "gold" | "brand" | "outline" | "glass" | "primary";
 }
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {
@@ -17,6 +17,8 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
     outline: "bg-transparent text-slate-500 border-slate-300", 
     // BARU: Glass badge untuk melayang di atas gambar/peta
     glass: "bg-white/30 backdrop-blur-md text-slate-800 border-white/50 shadow-sm",
+    // BARU: Primary badge untuk label utama dengan warna brand
+    primary: "bg-gradient-to-r from-[#9A242B] to-[#7A171D] text-white border-transparent shadow-sm",
   };
 
   return (
@@ -31,4 +33,4 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
   );
 }
 
-export { Badge }; 
+export { Badge };

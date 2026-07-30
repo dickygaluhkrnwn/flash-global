@@ -42,6 +42,13 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
   const isB2B = order.statusSub === "Piutang B2B";
 
   // =======================================================================
+  // LOGIKA SMART ROUTING: Membedakan Domestik & Internasional (Forwarding)
+  // =======================================================================
+  const detailPath = order.category === "internasional" 
+    ? `/dashboard/forwarding/${order.id}` 
+    : `/dashboard/${order.id}`;
+
+  // =======================================================================
   // LOGIKA CERDAS: MENYESUAIKAN TOMBOL AKSI BERDASARKAN STATUS & ROLE B2B
   // =======================================================================
   const renderActionButtons = () => {
@@ -62,7 +69,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
       return (
         <>
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }} 
+            onClick={(e) => { e.stopPropagation(); router.push(detailPath); }} 
             className="flex-1 sm:flex-none px-4 py-3 bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_4px_10px_rgba(15,23,42,0.2)] active:scale-95 border border-slate-950 flex items-center justify-center gap-2"
           >
             <Printer className="w-4 h-4" /> Cetak AWB
@@ -93,7 +100,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status.includes("Selesai")) {
       return (
         <button 
-          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }}
+          onClick={(e) => { e.stopPropagation(); router.push(detailPath); }}
           className="flex-1 sm:flex-none px-5 py-3 bg-gradient-to-b from-[#DFBE7B] to-[#C5A059] hover:from-[#EAD098] hover:to-[#D2B270] text-slate-900 rounded-xl text-xs font-black transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),0_4px_10px_rgba(197,160,89,0.2)] active:scale-95 border border-[#A68345] flex items-center justify-center gap-2"
         >
           <Star className="w-4 h-4 fill-current" /> Beri Penilaian
@@ -124,7 +131,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         isB2B ? "bg-white/80 backdrop-blur-xl border-indigo-200/60 shadow-[0_8px_30px_rgba(99,102,241,0.05)] hover:shadow-[0_8px_40px_rgba(99,102,241,0.1)] hover:bg-white" 
               : "bg-white/60 backdrop-blur-xl border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.06)] hover:bg-white hover:border-slate-100"
       )}
-      onClick={() => router.push(`/dashboard/${order.id}`)}
+      onClick={() => router.push(detailPath)}
     >
       {/* HEADER: Kategori & Status Operasional */}
       <div className="px-6 py-4 border-b border-slate-100/60 flex justify-between items-center relative z-10">
@@ -222,9 +229,9 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         
         {/* Tombol Aksi Cerdas */}
         <div className="flex gap-3 w-full sm:w-auto">
-          {/* Tombol "Lihat Detail" (Glass Style) */}
+          {/* Tombol "Lihat Detail" (Glass Style) - Menggunakan route cerdas */}
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${order.id}`); }}
+            onClick={(e) => { e.stopPropagation(); router.push(detailPath); }}
             className="hidden sm:flex px-5 py-3 bg-white/80 backdrop-blur-md border border-slate-200 hover:border-slate-300 hover:bg-white text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
           >
             Lihat Detail
@@ -236,4 +243,4 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
       
     </motion.div>
   );
-} 
+}

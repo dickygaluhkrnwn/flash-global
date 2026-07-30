@@ -6,9 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 import { 
   ArrowLeft, MapPin, Truck, ReceiptText, CalendarClock, User, Phone, 
   CheckCircle2, Clock, Ban, TicketPercent, Building, CreditCard, AlertCircle, 
-  Navigation, ShieldCheck, Scale, MessageCircle, Copy, FileWarning, Printer, 
-  FileText, Banknote, XCircle, Eye, LifeBuoy, Map
-} from "lucide-react";
+  Navigation, ShieldCheck, Scale, MessageCircle, Copy, Printer, 
+  FileText, Banknote, XCircle, Eye, LifeBuoy, Map, FileWarning
+} from "lucide-react"; // BUG FIX: Mengembalikan FileWarning
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
@@ -29,7 +29,6 @@ import { ClaimModal, RefundModal } from "./components/OrderModals";
 // Global Types
 import { OrderDetail, FirebaseTimestamp, LocationDetail, DeliveryItem } from "@/types/order";
 
-// BUG FIX: Mengganti tipe 'any' menjadi interface yang terstruktur agar aman saat di-build
 interface RefundData {
   id: string;
   status: string;
@@ -38,7 +37,7 @@ interface RefundData {
   [key: string]: unknown;
 }
 
-export default function OrderDetailPage() {
+export default function DeliveryOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
   const orderId = params.id as string;
@@ -49,7 +48,6 @@ export default function OrderDetailPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedResi, setCopiedResi] = useState(false);
 
-  // === STATE UNTUK TOAST NOTIFICATION ===
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const showToast = (type: "success" | "error", msg: string) => {
@@ -57,16 +55,13 @@ export default function OrderDetailPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // States Claim
+  // States Claim & Refund
   const [hasExistingClaim, setHasExistingClaim] = useState(false);
   const [showClaimModal, setShowClaimModal] = useState(false);
-  
-  // States Refund & Detail Data
   const [hasExistingRefund, setHasExistingRefund] = useState(false);
   const [refundRequestData, setRefundRequestData] = useState<RefundData | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
 
-  // Print Refs
   const receiptRef = useRef<HTMLDivElement>(null);
   const handlePrintReceipt = useReactToPrint({ contentRef: receiptRef, documentTitle: `Resi-${order?.resi || orderId}` });
 
@@ -81,18 +76,11 @@ export default function OrderDetailPage() {
     const fetchOrderDetail = async () => {
       if (!user?.uid || !orderId) return;
       setIsLoading(true);
-      let fetchedOrderDocId = null;
 
       try {
-        let docRef = doc(db, "orders", orderId);
-        let docSnap = await getDoc(docRef);
-        let category = "domestik";
-
-        if (!docSnap.exists()) {
-          docRef = doc(db, "quotes", orderId);
-          docSnap = await getDoc(docRef);
-          category = "internasional";
-        }
+        // HANYA MENGAMBIL DARI COLLECTION ORDERS (DOMESTIK)
+        const docRef = doc(db, "orders", orderId);
+        const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -101,35 +89,27 @@ export default function OrderDetailPage() {
             setIsLoading(false);
             return;
           }
-          fetchedOrderDocId = docSnap.id;
-          setOrder({ id: docSnap.id, category, ...data } as OrderDetail);
-        } else {
-          setErrorMsg("Data pesanan tidak ditemukan di sistem.");
-          setIsLoading(false);
-          return;
-        }
-      } catch (error) {
-        console.error("Gagal menarik data pesanan:", error);
-        setErrorMsg("Terjadi kesalahan sistem saat memuat data pesanan.");
-        setIsLoading(false);
-        return; 
-      }
+          setOrder({ id: docSnap.id, category: "domestik", ...data } as OrderDetail);
 
-      if (fetchedOrderDocId) {
-        try {
-          const claimQ = query(collection(db, "insurance_claims"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
-          const refundQ = query(collection(db, "refund_requests"), where("orderId", "==", fetchedOrderDocId), where("userId", "==", user.uid));
+          // Cek Klaim & Refund
+          const claimQ = query(collection(db, "insurance_claims"), where("orderId", "==", docSnap.id), where("userId", "==", user.uid));
+          const refundQ = query(collection(db, "refund_requests"), where("orderId", "==", docSnap.id), where("userId", "==", user.uid));
           const [claimSnap, refundSnap] = await Promise.all([getDocs(claimQ), getDocs(refundQ)]);
           
           if (!claimSnap.empty) setHasExistingClaim(true);
-          
           if (!refundSnap.empty) {
             setHasExistingRefund(true);
             setRefundRequestData({ id: refundSnap.docs[0].id, ...refundSnap.docs[0].data() } as RefundData);
           }
-        } catch (err) { console.warn("Peringatan: Gagal mengecek status klaim/refund:", err); }
+        } else {
+          setErrorMsg("Data pesanan tidak ditemukan di sistem.");
+        }
+      } catch (error) {
+        console.error("Gagal menarik data pesanan:", error);
+        setErrorMsg("Terjadi kesalahan sistem saat memuat data pesanan.");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     fetchOrderDetail();
@@ -228,7 +208,7 @@ export default function OrderDetailPage() {
   }
 
   const timelineData = renderTimeline();
-  const resiNumber = order.resi || order.quoteId || order.id.slice(-12).toUpperCase();
+  const resiNumber = order.resi || order.id.slice(-12).toUpperCase();
 
   const originAddress = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).address : order.origin;
   const originName = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail).senderName : order.senderName;
@@ -274,7 +254,7 @@ export default function OrderDetailPage() {
       {/* === AMBIENT GLOWING BACKGROUND === */}
       <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-5%] w-[40vw] h-[50vh] rounded-full bg-[#7A171D]/10 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[50vh] rounded-full bg-[#C5A059]/15 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[50vh] rounded-full bg-slate-300/40 blur-[120px]" />
       </div>
 
       {/* === UI TOAST NOTIFICATION === */}
@@ -305,7 +285,7 @@ export default function OrderDetailPage() {
           
           <div className="relative z-10">
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <Badge variant={order.category === "internasional" ? "brand" : "gold"} className="shadow-sm px-3.5 py-1.5 text-[10px] uppercase tracking-widest font-black">{order.serviceType || "Kargo Reguler"}</Badge>
+              <Badge variant="primary" className="shadow-sm px-3.5 py-1.5 text-[10px] uppercase tracking-widest font-black">{order.serviceType || "Kargo Reguler"}</Badge>
               <span className="text-[10px] font-black text-slate-500 flex items-center gap-1.5 bg-white/60 backdrop-blur-md px-3.5 py-1.5 rounded-lg border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] uppercase tracking-widest">
                 <CalendarClock className="w-3.5 h-3.5"/> {formatFirebaseDate(order.createdAt)}
               </span>
@@ -343,11 +323,11 @@ export default function OrderDetailPage() {
             
             {/* KARTU RUTE & DETAIL PAKET */}
             <div className="glass-card rounded-[2.5rem] p-6 md:p-8 space-y-8 border border-white shadow-[0_15px_40px_rgba(0,0,0,0.03)] relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059]/10 rounded-full blur-[80px] pointer-events-none z-0" />
+              <div className="absolute top-0 right-0 w-64 h-64 bg-[#7A171D]/5 rounded-full blur-[80px] pointer-events-none z-0" />
 
               {/* Seksi Rute (Origin -> Destination) */}
               <div className="relative z-10">
-                <h3 className="text-base font-black text-slate-900 mb-8 flex items-center gap-2.5 tracking-tight"><Map className="w-5 h-5 text-[#7A171D]" /> Peta Perjalanan Kargo</h3>
+                <h3 className="text-base font-black text-slate-900 mb-8 flex items-center gap-2.5 tracking-tight"><Map className="w-5 h-5 text-[#7A171D]" /> Peta Perjalanan Pengiriman</h3>
                 
                 <div className="relative pl-3">
                   <div className="absolute left-[19px] top-8 bottom-8 w-[3px] bg-gradient-to-b from-slate-200 via-slate-200 to-[#7A171D]/20 z-0 rounded-full"></div>
@@ -360,7 +340,6 @@ export default function OrderDetailPage() {
                       <div className="min-w-0 w-full">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Lokasi Pengirim</p>
                         <div className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)]">
-                          {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
                           <p className="font-bold text-slate-900 text-sm leading-relaxed break-words line-clamp-2">{originAddress || "-"}</p>
                           {originName && (
                             <div className="mt-5 pt-4 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs font-black text-slate-500">
@@ -372,19 +351,18 @@ export default function OrderDetailPage() {
                       </div>
                     </div>
 
-                    {/* DESTINATIONS */}
+                    {/* DESTINATIONS (MULTIDROP SUPPORT) */}
                     <div className="flex items-start gap-5">
                       <div className="mt-1 bg-white border-[3px] border-[#7A171D]/30 p-2 rounded-full shadow-[0_4px_10px_rgba(122,23,29,0.2)] shrink-0 z-10"><MapPin className="w-4 h-4 text-[#7A171D] drop-shadow-sm" /></div>
                       <div className="min-w-0 w-full">
-                        <p className="text-[10px] font-black text-[#7A171D]/60 uppercase tracking-widest mb-2">Titik Tujuan Akhir</p>
-                        {order.destinations ? order.destinations.map((dest: LocationDetail, idx: number) => (
+                        <p className="text-[10px] font-black text-[#7A171D]/60 uppercase tracking-widest mb-2">Titik Tujuan Pengiriman</p>
+                        {order.destinations && order.destinations.length > 0 ? order.destinations.map((dest: LocationDetail, idx: number) => (
                           <div key={idx} className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] mb-4 last:mb-0 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#DFBE7B]/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-[#DFBE7B]/20 transition-colors" />
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7A171D]/5 rounded-full blur-[40px] pointer-events-none group-hover:bg-[#7A171D]/10 transition-colors" />
                             
                             <div className="flex justify-between items-start mb-2 relative z-10">
-                              {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
                               <p className="font-bold text-slate-900 text-sm leading-relaxed pr-4 break-words line-clamp-2">{dest.address}</p>
-                              {order.destinations && order.destinations.length > 1 && <Badge variant="glass" className="shrink-0 shadow-sm px-3 py-1">Drop {idx + 1}</Badge>}
+                              {order.destinations && order.destinations.length > 1 && <Badge variant="primary" className="shrink-0 shadow-sm px-3 py-1 text-[10px]">Drop {idx + 1}</Badge>}
                             </div>
                             {dest.receiverName && (
                               <div className="mt-5 pt-4 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-3 text-xs font-black text-slate-500 relative z-10">
@@ -395,7 +373,6 @@ export default function OrderDetailPage() {
                           </div>
                         )) : (
                           <div className="bg-white/60 backdrop-blur-md p-6 rounded-[1.5rem] border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] relative z-10">
-                             {/* BUG FIX DI SINI: line-clamp-2 & break-words */}
                              <p className="font-bold text-slate-900 text-sm leading-relaxed break-words line-clamp-2">{order.destination || "-"}</p>
                           </div>
                         )}
@@ -457,11 +434,11 @@ export default function OrderDetailPage() {
             
             {/* --- KARTU TAGIHAN (3D PREMIUM DARK BENTO) --- */}
             <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-[2.5rem] shadow-[0_24px_50px_rgba(15,23,42,0.4)] border border-slate-800 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-15 pointer-events-none group-hover:opacity-25 transition-opacity duration-700"></div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-slate-200 rounded-full blur-[100px] opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity duration-700"></div>
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#7A171D] rounded-full blur-[100px] opacity-20 pointer-events-none group-hover:opacity-30 transition-opacity duration-700"></div>
               
               <div className="p-8 md:p-10 relative z-10">
-                <h3 className="text-xl font-black mb-8 flex items-center gap-3 tracking-tight drop-shadow-md"><ReceiptText className="w-6 h-6 text-[#C5A059]" /> Rincian Transaksi</h3>
+                <h3 className="text-xl font-black mb-8 flex items-center gap-3 tracking-tight drop-shadow-md"><ReceiptText className="w-6 h-6 text-slate-300" /> Rincian Transaksi</h3>
                 
                 <div className="space-y-5 mb-10 text-sm font-semibold">
                   {order.breakdown ? (
@@ -480,7 +457,7 @@ export default function OrderDetailPage() {
                 
                 <div className="pt-8 border-t border-slate-800">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Keseluruhan</p>
-                  <p className="text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#A68345] tracking-tighter drop-shadow-sm">{formatIDR(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || order.offeredPrice || 0)}</p>
+                  <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-sm">{formatIDR(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || order.offeredPrice || 0)}</p>
                 </div>
               </div>
 
@@ -509,7 +486,7 @@ export default function OrderDetailPage() {
               <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2.5 tracking-tight"><LifeBuoy className="w-5 h-5 text-[#7A171D]" /> Pusat Bantuan & Tindakan</h3>
               
               <div className="grid grid-cols-1 gap-4">
-                <Button onClick={() => window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(`Halo Tim CS Flash Global,\nSaya menanyakan pesanan saya:\nID: ${resiNumber}\nMohon dibantu.`)}`, "_blank")} variant="outline" className="w-full h-14 justify-start text-slate-600 bg-white/60 hover:bg-white border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] font-bold rounded-2xl transition-all">
+                <Button onClick={() => window.open(`https://wa.me/6281234567890?text=${encodeURIComponent(`Halo Tim CS Flash Global,\nSaya menanyakan pesanan Instan saya:\nID: ${resiNumber}\nMohon dibantu.`)}`, "_blank")} variant="outline" className="w-full h-14 justify-start text-slate-600 bg-white/60 hover:bg-white border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] font-bold rounded-2xl transition-all">
                   <MessageCircle className="w-5 h-5 text-emerald-500 mr-2" /> Hubungi Layanan Pelanggan
                 </Button>
 
@@ -623,4 +600,4 @@ export default function OrderDetailPage() {
       </AnimatePresence>
     </main>
   );
-} 
+}

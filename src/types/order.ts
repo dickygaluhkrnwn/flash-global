@@ -34,12 +34,12 @@ export interface Quote {
   phone: string;
   origin: string;
   originCountry: string;
-  originCity?: string;   // BARU
-  originDetail?: string; // BARU
+  originCity?: string;   
+  originDetail?: string; 
   destination: string;
   destCountry: string;
-  destCity?: string;     // BARU
-  destDetail?: string;   // BARU
+  destCity?: string;     
+  destDetail?: string;   
   itemType: string; 
   weight: number;
   length: number;
@@ -49,6 +49,16 @@ export interface Quote {
   status: string; 
   offeredPrice?: number; 
   customsDocUrl?: string; 
+
+  // --- BARU DITAMBAHKAN UNTUK DETAIL ADMIN & CLIENT ---
+  pickupDate?: string; 
+  receiverName?: string;
+  receiverPhone?: string;
+  vendorName?: string;
+  vendorBill?: number;
+  trackingNumber?: string; // AWB / Resi Ekspedisi Forwarding
+  adminNotes?: string;
+  
   createdAt: Date | FirebaseTimestamp;
 }
 
