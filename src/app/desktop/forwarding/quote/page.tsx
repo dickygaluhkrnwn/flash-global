@@ -9,7 +9,7 @@ import {
   ShieldCheck, 
   MessageCircle, Info, Maximize, Zap,
   Anchor, Plane, ArrowRight
-} from "lucide-react"; // GLOBE2 SUDAH DIHAPUS DARI SINI
+} from "lucide-react"; 
 import { db } from "@/lib/firebase"; 
 import { collection, addDoc, serverTimestamp, FieldValue } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/Badge";
 // ======================================================================
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
-  loading: () => <div className="h-[56px] w-full bg-white/60 backdrop-blur-md rounded-2xl border border-white animate-pulse flex items-center px-5 text-sm font-bold text-slate-400">Synchronizing global satellites...</div> 
+  loading: () => <div className="h-[56px] w-full bg-white/60 backdrop-blur-md rounded-2xl border border-white animate-pulse flex items-center px-5 text-sm font-bold text-slate-400">Menyiapkan satelit global...</div> 
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
@@ -36,14 +36,14 @@ const inputGlassGold = "bg-white/60 backdrop-blur-md border border-white focus-w
 
 // Helper Component for Labels - Didefinisikan dengan Tipe yang Aman & Styling Apple
 const FieldLabel = ({ label, icon: Icon, infoText }: { label: string, icon?: React.ElementType, infoText?: string }) => (
-  <div className="flex items-center justify-between px-1 mb-2">
+  <div className="flex items-center justify-between px-1 mb-2 relative z-50">
     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
       {Icon && <Icon className="w-3.5 h-3.5 text-[#C5A059]" />} {label}
     </label>
     {infoText && (
       <div className="group relative cursor-pointer">
         <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#C5A059] transition-colors" />
-        <div className="absolute right-0 bottom-6 w-48 p-2 bg-slate-900 text-white text-[10px] font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+        <div className="absolute right-0 bottom-6 w-56 p-3 bg-slate-900 text-white text-[11px] leading-relaxed font-medium rounded-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] shadow-xl">
           {infoText}
         </div>
       </div>
@@ -69,8 +69,14 @@ function QuoteForm() {
     name: user?.displayName || "", 
     email: user?.email || "",
     phone: "",
+    originCountry: "",
+    originCity: "",
     origin: searchParams.get("origin") || "",
+    originDetail: "",
+    destCountry: "",
+    destCity: "",
     destination: searchParams.get("destination") || "",
+    destDetail: "",
     itemType: "",
     weight: searchParams.get("weight") || "",
     length: searchParams.get("l") || "",
@@ -87,17 +93,14 @@ function QuoteForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Function to extract Country from Mapbox address (usually after the last comma)
-  const extractCountry = (fullAddress: string) => {
-    if (!fullAddress) return "-";
-    const parts = fullAddress.split(",");
-    return parts[parts.length - 1].trim();
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.originCountry || !formData.originCity || !formData.destCountry || !formData.destCity) {
+      setErrorMsg("Negara dan Kota asal maupun tujuan wajib diisi.");
+      return;
+    }
     if (!formData.origin || !formData.destination) {
-      setErrorMsg("Origin and destination locations are required.");
+      setErrorMsg("Pencarian titik peta lokasi tidak boleh kosong.");
       return;
     }
 
@@ -115,9 +118,13 @@ function QuoteForm() {
         email: formData.email,
         phone: formData.phone,
         origin: formData.origin,
-        originCountry: extractCountry(formData.origin),
+        originCountry: formData.originCountry,
+        originCity: formData.originCity,
+        originDetail: formData.originDetail,
         destination: formData.destination,
-        destCountry: extractCountry(formData.destination),
+        destCountry: formData.destCountry,
+        destCity: formData.destCity,
+        destDetail: formData.destDetail,
         itemType: formData.itemType,
         weight: Number(formData.weight) || 0,
         length: Number(formData.length) || 0,
@@ -132,14 +139,14 @@ function QuoteForm() {
 
       // WhatsApp Message Template
       const adminWA = "6281234567890"; 
-      const waText = `Hello Flash Global Expert Team, I would like to request a quotation for international forwarding.%0A%0A*🧾 Quotation ID:* ${quoteId}%0A*👤 PIC Name:* ${formData.name}%0A%0A*📌 Routing:*%0A- Origin: ${extractCountry(formData.origin)} (${formData.origin})%0A- Destination: ${extractCountry(formData.destination)} (${formData.destination})%0A%0A*📦 Cargo Specifications:*%0A- Description: ${formData.itemType}%0A- Actual Weight: ${formData.weight} Kg%0A- Dimensions: ${formData.length}x${formData.width}x${formData.height} cm%0A%0APlease assist with the estimated Freight, Duty & Tax (Landed Cost). Thank you.`;
+      const waText = `Halo Tim Ahli Flash Global, saya ingin mengajukan penawaran untuk pengiriman luar negeri (Forwarding).%0A%0A*🧾 ID Penawaran:* ${quoteId}%0A*👤 PIC:* ${formData.name}%0A%0A*📍 Titik Asal:*%0A- Negara: ${formData.originCountry}%0A- Kota: ${formData.originCity}%0A- Map: ${formData.origin}%0A- Detail: ${formData.originDetail || "-"}%0A%0A*📍 Titik Tujuan:*%0A- Negara: ${formData.destCountry}%0A- Kota: ${formData.destCity}%0A- Map: ${formData.destination}%0A- Detail: ${formData.destDetail || "-"}%0A%0A*📦 Spesifikasi Kargo:*%0A- Deskripsi Barang: ${formData.itemType}%0A- Berat Rill: ${formData.weight} Kg%0A- Dimensi (PxLxT): ${formData.length}x${formData.width}x${formData.height} cm%0A%0AMohon bantuannya untuk estimasi Biaya Pengiriman & Pajak (Landed Cost). Terima kasih.`;
       
       window.open(`https://wa.me/${adminWA}?text=${waText}`, "_blank");
       router.push("/dashboard");
 
     } catch (error) {
       console.error("Failed to save quote:", error);
-      setErrorMsg("Failed to process your request. Please check your connection and try again.");
+      setErrorMsg("Gagal memproses permintaan Anda. Periksa koneksi dan coba lagi.");
     } finally {
       setIsLoading(false);
     }
@@ -149,16 +156,20 @@ function QuoteForm() {
     <div className="w-full relative z-10 pb-20 font-sans">
       
       {/* GLOBAL CSS INJECTION TO HACK MAPBOX SEARCH BOX UI TO APPLE GLASS */}
+      {/* BUG FIX: Memaksa overflow terlihat dan layer tertinggi */}
       <style dangerouslySetInnerHTML={{__html: `
         mapbox-search-listbox {
-          z-index: 99999 !important;
-          border-radius: 20px !important;
-          box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
+          position: absolute !important;
+          top: 100% !important;
+          left: 0 !important;
+          right: 0 !important;
+          z-index: 999999 !important;
+          border-radius: 1.25rem !important;
+          box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 1) !important;
           border: 1px solid rgba(255, 255, 255, 0.8) !important;
-          margin-top: 12px !important;
-          background-color: rgba(255, 255, 255, 0.95) !important;
-          backdrop-filter: blur(20px) !important;
-          overflow: hidden !important;
+          margin-top: 8px !important;
+          background-color: rgba(255, 255, 255, 0.98) !important;
+          backdrop-filter: blur(25px) !important;
           font-family: inherit !important;
         }
         mapbox-search-box {
@@ -185,7 +196,7 @@ function QuoteForm() {
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button onClick={() => router.push("/delivery/booking")} className="h-12 px-6 rounded-2xl border border-white bg-white/60 backdrop-blur-md shadow-sm text-xs font-bold text-slate-600 hover:text-[#7A171D] hover:bg-white transition-colors w-full md:w-auto flex items-center justify-center">
-            Pindah ke Domestik
+            Pindah ke Instan
           </button>
         </div>
       </div>
@@ -206,56 +217,112 @@ function QuoteForm() {
         {/* KIRI: PREMIUM CARGO DATA FORM (GLASSMORPHISM)             */}
         {/* ========================================================= */}
         <div className="w-full lg:w-[60%] xl:w-[65%] space-y-6">
-          <form id="quote-form" onSubmit={handleSubmit} className="space-y-6">
+          <form id="quote-form" onSubmit={handleSubmit} className="space-y-6 flex flex-col h-full">
             
-            {/* SECTION 1: Routing */}
-            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059]/10 blur-[50px] rounded-full pointer-events-none"></div>
+            {/* SECTION 1: Routing Terperinci */}
+            {/* BUG FIX: Membuang overflow-hidden dari card form agar listbox tidak terpotong */}
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059]/10 blur-[50px] rounded-full pointer-events-none z-0"></div>
               
               <div className="flex items-center gap-4 mb-8 border-b pb-4 border-slate-100/60 relative z-10">
                 <div className="w-10 h-10 rounded-xl bg-white border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">1</div>
                 <h3 className="text-xl font-black text-slate-900 tracking-tight">Rute Internasional</h3>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                {/* Mapbox Origin */}
-                <div className="relative z-[60]">
-                  <FieldLabel label="Lokasi Asal (Origin)" icon={Anchor} infoText="Pilih dari daftar dropdown yang muncul agar negara asal dapat terekam." />
-                  <div className={cn("relative group flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
-                    <div className="flex-1 overflow-hidden">
-                      <SearchBox
-                        accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.origin} placeholder="Search origin port/country..."
-                        onRetrieve={(res) => {
-                          const feature = res.features[0];
-                          handleSmartMapChange("origin", feature.properties.full_address || feature.properties.name);
-                        }}
-                        theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
-                      />
+              <div className="space-y-8 relative z-10">
+                
+                {/* LOKASI ASAL (Z-Index 60 agar Mapbox Dropdown melayang di atas form lainnya) */}
+                <div className="relative z-[60] bg-white/40 border border-[#C5A059]/20 rounded-3xl p-6 md:p-8 space-y-5">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-1 flex items-center gap-2"><Anchor className="w-5 h-5 text-[#C5A059]"/> Titik Asal Kargo (Origin)</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Negara Asal</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="originCountry" value={formData.originCountry} onChange={handleChange} placeholder="Cth: Indonesia" className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Kota Asal</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="originCity" value={formData.originCity} onChange={handleChange} placeholder="Cth: Jakarta" className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-50">
+                    <FieldLabel label="Pencarian Alamat Satelit" infoText="Ketik jalan atau lokasi, sistem kami akan menyimpan koordinat global untuk presisi rute kapal/pesawat." />
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      {/* BUG FIX: Membiarkan overflow default (visible) */}
+                      <div className="flex-1 w-full relative">
+                        <SearchBox
+                          accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.origin} placeholder="Ketik nama jalan / gedung..."
+                          onRetrieve={(res) => {
+                            const feature = res.features[0];
+                            handleSmartMapChange("origin", feature.properties.full_address || feature.properties.name);
+                          }}
+                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Detail Patokan (Opsional)</label>
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      <input type="text" name="originDetail" value={formData.originDetail} onChange={handleChange} placeholder="Cth: Gudang pintu biru di sebelah minimarket..." className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" />
                     </div>
                   </div>
                 </div>
 
-                {/* Mapbox Destination */}
-                <div className="relative z-[50]">
-                  <FieldLabel label="Lokasi Tujuan (Destination)" icon={Plane} infoText="Pilih dari daftar dropdown yang muncul agar negara tujuan dapat terekam."/>
-                  <div className={cn("relative group flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
-                    <div className="flex-1 overflow-hidden">
-                      <SearchBox
-                        accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.destination} placeholder="Search destination port/country..."
-                        onRetrieve={(res) => {
-                          const feature = res.features[0];
-                          handleSmartMapChange("destination", feature.properties.full_address || feature.properties.name);
-                        }}
-                        theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
-                      />
+                {/* LOKASI TUJUAN (Z-Index 50 agar dropdownnya berada di atas elemen bawah, tapi kalah dari origin) */}
+                <div className="relative z-[50] bg-white/40 border border-[#C5A059]/20 rounded-3xl p-6 md:p-8 space-y-5">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-1 flex items-center gap-2"><Plane className="w-5 h-5 text-[#C5A059]"/> Titik Tujuan Kargo (Destination)</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Negara Tujuan</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="destCountry" value={formData.destCountry} onChange={handleChange} placeholder="Cth: Singapore" className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Kota Tujuan</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="destCity" value={formData.destCity} onChange={handleChange} placeholder="Cth: Changi" className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-40">
+                    <FieldLabel label="Pencarian Alamat Satelit" infoText="Ketik jalan atau pelabuhan tujuan, sistem kami akan menyimpan koordinat global untuk presisi perhitungan bea pelabuhan." />
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      <div className="flex-1 w-full relative">
+                        <SearchBox
+                          accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.destination} placeholder="Ketik nama jalan / pelabuhan..."
+                          onRetrieve={(res) => {
+                            const feature = res.features[0];
+                            handleSmartMapChange("destination", feature.properties.full_address || feature.properties.name);
+                          }}
+                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Detail Patokan (Opsional)</label>
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      <input type="text" name="destDetail" value={formData.destDetail} onChange={handleChange} placeholder="Cth: Lantai 3, Gedung Utama..." className="w-full bg-transparent border-none outline-none px-5 text-sm font-bold text-slate-900 placeholder:text-slate-400" />
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
 
             {/* SECTION 2: Cargo Specs */}
-            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative overflow-hidden">
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative z-30">
               <div className="flex items-center gap-4 mb-8 border-b pb-4 border-slate-100/60 relative z-10">
                 <div className="w-10 h-10 rounded-xl bg-white border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">2</div>
                 <h3 className="text-xl font-black text-slate-900 tracking-tight">Spesifikasi Kargo Utama</h3>
@@ -286,18 +353,10 @@ function QuoteForm() {
                   </div>
                 </div>
               </div>
-              
-              <div className="mt-8 p-4 bg-amber-50/80 backdrop-blur-md rounded-2xl border border-amber-200 flex items-start gap-3 shadow-sm relative z-10">
-                <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-amber-800 leading-relaxed font-bold">
-                  <strong className="block mb-1 text-amber-900 text-xs tracking-tight">Kebijakan Volumetrik Internasional</strong>
-                  Sistem kami akan membandingkan <b>Berat Aktual</b> dengan <b>Berat Volumetrik (P x L x T / 5000)</b>, dan menggunakan nilai yang lebih tinggi untuk kalkulasi harga akhir.
-                </p>
-              </div>
             </div>
 
             {/* SECTION 3: Contact */}
-            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative overflow-hidden">
+            <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative z-20">
               <div className="flex items-center gap-4 mb-8 border-b pb-4 border-slate-100/60 relative z-10">
                 <div className="w-10 h-10 rounded-xl bg-white border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">3</div>
                 <h3 className="text-xl font-black text-slate-900 tracking-tight">Informasi Kontak PIC</h3>
@@ -332,10 +391,12 @@ function QuoteForm() {
         </div>
 
         {/* ========================================================= */}
-        {/* KANAN: PROCEDURE PANEL & SUBMIT (STICKY & DARK)           */}
+        {/* KANAN: PROCEDURE PANEL & INFO CARDS (FLEX COLUMN GROW)    */}
         {/* ========================================================= */}
-        <div className="w-full lg:w-[40%] xl:w-[35%] lg:sticky lg:top-28 z-20">
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-[2.5rem] p-8 shadow-[0_20px_60px_rgba(15,23,42,0.3)] relative overflow-hidden text-white">
+        <div className="w-full lg:w-[40%] xl:w-[35%] flex flex-col gap-6 lg:sticky lg:top-28 z-10 h-full">
+          
+          {/* Card Prosedur & Tombol Submit */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-[2.5rem] p-8 shadow-[0_20px_60px_rgba(15,23,42,0.3)] relative overflow-hidden text-white shrink-0">
             <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-[#C5A059] rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
             
             <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center mb-6 border border-white/20 shadow-inner relative z-10">
@@ -364,13 +425,6 @@ function QuoteForm() {
               </div>
             </div>
 
-            <div className="flex items-start gap-3 mb-10 bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 shadow-inner relative z-10">
-              <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-              <span className="text-[11px] font-bold text-emerald-200 leading-relaxed">
-                Quotation kami dijamin transparan tanpa biaya tersembunyi (No Hidden Fees).
-              </span>
-            </div>
-
             <button 
               type="submit" 
               form="quote-form"
@@ -384,6 +438,39 @@ function QuoteForm() {
               )}
             </button>
           </motion.div>
+
+          {/* Edukasi Kalkulator - Card Elastis (Flex Grow) mengisi sisa tinggi form di kiri */}
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="glass-card p-6 md:p-8 rounded-[2.5rem] border border-white/60 shadow-sm flex-grow flex flex-col justify-center relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A059]/10 blur-[40px] rounded-full pointer-events-none z-0"></div>
+            <div className="relative z-10">
+              <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Info className="w-5 h-5 text-[#C5A059]" /> Catatan & Garansi Layanan
+              </h4>
+              
+              <ul className="space-y-5 text-sm font-medium text-slate-500">
+                <li className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div className="pt-0.5">
+                    <p className="font-black text-slate-800 leading-tight mb-1">Transparansi Harga</p>
+                    <p className="text-xs leading-relaxed">Quotation kami dijamin transparan tanpa biaya tersembunyi (No Hidden Fees) di pelabuhan tujuan.</p>
+                  </div>
+                </li>
+                
+                <li className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+                    <Box className="w-5 h-5" />
+                  </div>
+                  <div className="pt-0.5">
+                    <p className="font-black text-slate-800 leading-tight mb-1">Kebijakan Volumetrik</p>
+                    <p className="text-xs leading-relaxed">Penerbangan global menerapkan standar CBM. Sistem membandingkan Berat Aktual vs Volumetrik (PxLxT / 5000).</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </motion.div>
+
         </div>
 
       </div>
@@ -408,4 +495,4 @@ export default function DesktopForwardingQuotePage() {
       </Suspense>
     </main>
   );
-} 
+}

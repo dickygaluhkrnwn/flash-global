@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Globe, Search, Filter, 
-  ArrowUpDown, DollarSign, Weight, FileText, ShieldAlert,
-  PlaneTakeoff, ArrowRight, User
+  Globe2, Search, Filter, 
+  ArrowUpDown, Weight, ShieldAlert,
+  PlaneTakeoff, ArrowRight, User, Anchor, Plane, Box
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -20,11 +20,14 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 // IMPORT GLOBAL TYPES
 import { Quote } from "@/types/order";
 
+// Type Extension untuk menangani data lama dan data baru secara aman
+type QuoteWithDisplayId = Quote & { quoteId?: string };
+
 export default function GlobalOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [quotes, setQuotes] = useState<QuoteWithDisplayId[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters & Sorting
@@ -33,19 +36,27 @@ export default function GlobalOrdersPage() {
   const [sortOrder, setSortOrder] = useState("newest");
 
   // =========================================================================
-  // CUSTOM STYLES: APPLE GLASSMORPHISM
+  // CUSTOM STYLES & LAYOUTS
   // =========================================================================
   const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
-  // Khusus untuk card per order agar punya batas/sekat yang tegas
-  const glassCard = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.05)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 rounded-[1.5rem]";
+  const glassCard = "bg-white/80 backdrop-blur-xl border border-slate-100 shadow-sm hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all duration-300 rounded-[1.5rem]";
 
   // =========================================================================
-  // LOGIC AREA: JANGAN DIUBAH!
+  // LOGIC AREA & BACKWARD COMPATIBILITY HELPERS
   // =========================================================================
   useEffect(() => {
     const q = query(collection(db, "quotes"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setQuotes(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Quote)));
+      setQuotes(snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+          ...data,
+          // BUG FIX: Memastikan id SELALU berisi Document ID dari Firebase, tidak tertimpa oleh data dalam dokumen
+          id: d.id, 
+          // Menyimpan FFW-xxx ke quoteId agar bisa ditampilkan di UI
+          quoteId: data.id || data.quoteId || d.id, 
+        } as QuoteWithDisplayId;
+      }));
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -61,11 +72,31 @@ export default function GlobalOrdersPage() {
     return new Date(ts as string | number).getTime();
   };
 
+  // Helper untuk Backward Compatibility (Orderan Lama yang hanya punya string origin/destination)
+  const getCity = (city?: string, fullAddress?: string) => {
+    if (city) return city;
+    if (!fullAddress) return "-";
+    return fullAddress.split(",")[0].trim();
+  };
+
+  const getCountry = (country?: string, fullAddress?: string) => {
+    if (country) return country;
+    if (!fullAddress) return "-";
+    const parts = fullAddress.split(",");
+    return parts[parts.length - 1].trim();
+  };
+
   const processedQuotes = useMemo(() => {
     let result = [...quotes];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(o => o.id.toLowerCase().includes(q) || (o.originCountry || "").toLowerCase().includes(q) || (o.destCountry || "").toLowerCase().includes(q));
+      result = result.filter(o => 
+        o.id.toLowerCase().includes(q) || 
+        (o.quoteId || "").toLowerCase().includes(q) || // Fitur pencarian FFW-xxx
+        (o.originCountry || o.origin || "").toLowerCase().includes(q) || 
+        (o.destCountry || o.destination || "").toLowerCase().includes(q) ||
+        (o.name || "").toLowerCase().includes(q)
+      );
     }
     if (filterStatus !== "All") result = result.filter(o => o.status.includes(filterStatus));
     
@@ -86,13 +117,9 @@ export default function GlobalOrdersPage() {
     return result;
   }, [quotes, searchQuery, filterStatus, sortOrder]);
 
-  const totalQuotes = quotes.length;
-  const pendingQuotes = quotes.filter(q => !q.offeredPrice).length;
-
   // =======================================================================
-  // UI AREA: GLASSMORPHISM BENTO-BOX & MODERN LIST
+  // UI RENDER
   // =======================================================================
-  
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
@@ -117,63 +144,62 @@ export default function GlobalOrdersPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-8 pb-16 font-sans max-w-[1600px] mx-auto">
 
-      {/* 1. HEADER (Bento Glass) */}
-      <div className={`${glassPanel} p-8 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:bg-white/80`}>
-        <div className="relative z-10 space-y-3">
-          <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
-            {/* 3D ICON GOLD ACCENT */}
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_16px_rgba(197,160,89,0.3)] border border-[#A68345]">
-              <Globe className="w-6 h-6 text-white" strokeWidth={2.5} />
+      {/* ======================================================================= */}
+      {/* 1. POWERFUL HERO SECTION (COMMAND CENTER VIBE) */}
+      {/* ======================================================================= */}
+      <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 rounded-[2.5rem] p-8 lg:p-12 overflow-hidden shadow-[0_20px_50px_rgba(15,23,42,0.4)] border border-slate-700">
+        {/* Ambient Lights */}
+        <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-[radial-gradient(circle_at_center,rgba(197,160,89,0.15)_0,transparent_70%)] pointer-events-none" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[400px] h-[400px] bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.1)_0,transparent_70%)] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+          <div className="space-y-5 max-w-3xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#C5A059]/10 border border-[#C5A059]/20 text-[#C5A059] text-[10px] font-black uppercase tracking-widest">
+              <Globe2 className="w-3.5 h-3.5" /> Forwarding Command Center
             </div>
-            Global Forwarding
-          </h1>
-          <p className="text-slate-500 text-sm max-w-xl font-medium mt-2">
-            Manajemen bea cukai internasional, tracking global, dan penawaran harga ekspor/impor.
-          </p>
+            <h1 className="text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+              Lalu Lintas <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#DFBE7B] to-[#C5A059]">Ekspor & Impor.</span>
+            </h1>
+            <p className="text-slate-400 text-sm lg:text-base leading-relaxed font-medium max-w-2xl">
+              Pusat kendali kargo internasional. Evaluasi klasifikasi HS Code, kalkulasi biaya (Freight, Duty & Tax), dan terbitkan Quotation resmi dengan presisi dan cepat kepada klien.
+            </p>
+          </div>
+
+          {/* Abstract Floating Icon */}
+          <div className="hidden lg:flex items-center justify-center shrink-0 w-32 h-32 relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] rounded-[2rem] opacity-20 blur-xl animate-pulse"></div>
+            <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] p-[1px] shadow-[0_0_30px_rgba(197,160,89,0.3)] relative z-10">
+              <div className="w-full h-full bg-slate-900 rounded-[2rem] flex items-center justify-center">
+                <PlaneTakeoff className="w-10 h-10 text-[#DFBE7B]" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* 2. STATS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`${glassPanel} rounded-2xl p-6 relative overflow-hidden group hover:bg-white/80`}>
-          <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-[#C5A059] rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity" />
-          <div className="flex justify-between items-start relative z-10">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Total Permintaan Kuotasi</span>
-            <div className="w-10 h-10 rounded-full bg-white/60 border border-white shadow-sm flex items-center justify-center"><FileText className="w-5 h-5 text-[#C5A059]" /></div>
-          </div>
-          <p className="text-3xl font-black text-slate-900 mt-4 relative z-10 tracking-tight">{totalQuotes} <span className="text-base text-slate-400 font-bold">Request</span></p>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={`${glassPanel} rounded-2xl p-6 relative overflow-hidden group hover:bg-white/80 border-amber-200/50`}>
-          <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-amber-500 rounded-full blur-[80px] opacity-20 group-hover:opacity-40 transition-opacity" />
-          <div className="flex justify-between items-start relative z-10">
-            <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest">Menunggu Penawaran</span>
-            <div className="w-10 h-10 rounded-full bg-amber-100/50 border border-amber-200 shadow-sm flex items-center justify-center"><ShieldAlert className="w-5 h-5 text-amber-600" /></div>
-          </div>
-          <p className="text-3xl font-black text-amber-700 mt-4 relative z-10 tracking-tight">{pendingQuotes} <span className="text-base text-amber-600/50 font-bold">Pending</span></p>
-        </motion.div>
-      </div>
-
-      {/* 3. MAIN DATA: CARD-BASED LIST (Floating Cards) */}
+      {/* ======================================================================= */}
+      {/* 2. MAIN DATA: FILTER & MODERN LIST */}
+      {/* ======================================================================= */}
       <div className="flex flex-col gap-6">
         
-        {/* Filters & Search Bar (Terpisah dari List Order) */}
+        {/* Filters & Search Bar */}
         <div className={`${glassPanel} rounded-[1.5rem] p-4 flex flex-col lg:flex-row gap-4 justify-between items-center z-20 relative`}>
           <div className="w-full lg:w-1/3">
             <AdminInput 
-              leftIcon={<Search className="w-4 h-4" />}
-              placeholder="Cari ID Req, Negara Asal / Tujuan..." 
+              leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+              placeholder="Cari ID, Klien, atau Negara..." 
               value={searchQuery} 
               onChange={(e) => setSearchQuery(e.target.value)} 
+              className="bg-white/60 focus:bg-white"
             />
           </div>
           
           <div className="flex flex-wrap lg:flex-nowrap w-full lg:w-auto gap-3">
             <div className="relative flex-1 lg:flex-none">
               <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[160px]">
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-[1.25rem] pl-11 pr-8 py-3 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[160px]">
                 <option value="All">Semua Status</option>
                 <option value="Menunggu">Pending</option>
                 <option value="Disetujui">Approved</option>
@@ -182,137 +208,140 @@ export default function GlobalOrdersPage() {
             
             <div className="relative flex-1 lg:flex-none">
               <ArrowUpDown className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
-              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[180px]">
-                <option value="newest">Sortir: Terbaru</option>
-                <option value="oldest">Sortir: Terlama</option>
-                <option value="heaviest">Sortir: Terberat (Kg)</option>
-                <option value="highest_value">Sortir: Nilai Terbesar</option>
+              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-[1.25rem] pl-11 pr-8 py-3 text-sm outline-none focus:border-[#C5A059] focus:ring-[3px] focus:ring-[#C5A059]/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[180px]">
+                <option value="newest">Terbaru</option>
+                <option value="oldest">Terlama</option>
+                <option value="heaviest">Terberat (Kg)</option>
+                <option value="highest_value">Nilai Terbesar</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* List Pesanan - Card Layout Float */}
+        {/* List Pesanan - Presisi Layout Grid */}
         <div className="space-y-4 min-h-[500px]">
           
           {/* Header Penjelas Kolom untuk Desktop */}
           {processedQuotes.length > 0 && (
             <div className="hidden lg:grid grid-cols-12 gap-6 px-8 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              <div className="col-span-3">ID & Klien</div>
-              <div className="col-span-3">Jalur Penerbangan</div>
+              <div className="col-span-3">Identitas & Pemohon</div>
+              <div className="col-span-4">Rute Internasional</div>
               <div className="col-span-3">Spesifikasi Kargo</div>
-              <div className="col-span-1">Status</div>
-              <div className="col-span-2 text-right">Tindakan</div>
+              <div className="col-span-2 text-right">Status & Tindakan</div>
             </div>
           )}
 
-          {processedQuotes.length === 0 ? (
-            <div className={`${glassPanel} rounded-[2rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full`}>
-              <Globe className="w-16 h-16 mb-4 opacity-20" />
-              <p>Tidak ada data kuotasi forwarding yang cocok.</p>
-            </div>
-          ) : (
-            processedQuotes.map((q, idx) => {
-              // Tentukan varian badge
-              let badgeVariant: "success"|"warning"|"danger"|"default" = "default";
-              if (q.status.includes("Setuju") || q.status.includes("Approved")) badgeVariant = "success";
-              else if (q.status.includes("Menunggu")) badgeVariant = "warning";
-              else if (q.status.includes("Tolak")) badgeVariant = "danger";
+          <AnimatePresence>
+            {processedQuotes.length === 0 ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${glassPanel} rounded-[2.5rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full border-dashed border-2 border-slate-300 bg-slate-50/50`}>
+                <Globe2 className="w-16 h-16 mb-4 opacity-20" />
+                <p>Tidak ada data penawaran yang ditemukan.</p>
+              </motion.div>
+            ) : (
+              processedQuotes.map((q, idx) => {
+                let badgeVariant: "success"|"warning"|"danger"|"default" = "default";
+                if (q.status.includes("Setuju") || q.status.includes("Approved")) badgeVariant = "success";
+                else if (q.status.includes("Menunggu") || q.status.includes("Pending")) badgeVariant = "warning";
+                else if (q.status.includes("Tolak") || q.status.includes("Rejected")) badgeVariant = "danger";
 
-              return (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  key={q.id} 
-                  className={`${glassCard} p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center group`}
-                >
-                  {/* KOLOM 1: ID & KLIEN */}
-                  <div className="lg:col-span-3 flex flex-col items-start gap-2">
-                    <AdminBadge variant="gold" className="text-[10px] px-3 py-1 bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] text-white border-[#A68345]">
-                      #{q.id}
-                    </AdminBadge>
-                    <p className="text-[11px] text-slate-600 font-bold flex items-center gap-1.5 ml-1 mt-1 truncate max-w-[200px]" title={q.name}>
-                      <User className="w-3.5 h-3.5 text-slate-400"/> {q.name}
-                    </p>
-                  </div>
-                  
-                  {/* KOLOM 2: JALUR PENERBANGAN */}
-                  <div className="lg:col-span-3 space-y-3 relative pl-5">
-                    <div className="absolute left-[7px] top-2 bottom-2 w-[2px] bg-slate-200 group-hover:bg-[#C5A059]/40 transition-colors"></div>
-                    
-                    <div className="flex items-start gap-3 relative">
-                      <span className="absolute -left-[24px] mt-1 w-3 h-3 bg-slate-300 rounded-full border-2 border-white shadow-sm"></span>
-                      <div className="overflow-hidden w-full bg-white/50 px-3 py-2 rounded-xl border border-white shadow-sm">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Asal (Export)</p>
-                        <p className="font-bold text-slate-900 truncate" title={q.originCountry}>
-                           {q.originCountry}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 relative">
-                      <span className="absolute -left-[24px] mt-1 w-3 h-3 bg-[#C5A059] rounded-full border-2 border-white shadow-[0_0_5px_rgba(197,160,89,0.5)]"></span>
-                      <div className="overflow-hidden w-full bg-white/50 px-3 py-2 rounded-xl border border-white shadow-sm">
-                        <p className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest mb-0.5">Tujuan (Import)</p>
-                        <p className="font-bold text-slate-900 truncate" title={q.destCountry}>
-                           {q.destCountry}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                // Backward Compatibility Data Extraction
+                const oCity = getCity(q.originCity, q.origin);
+                const oCountry = getCountry(q.originCountry, q.origin);
+                const dCity = getCity(q.destCity, q.destination);
+                const dCountry = getCountry(q.destCountry, q.destination);
 
-                  {/* KOLOM 3: SPESIFIKASI KARGO */}
-                  <div className="lg:col-span-3 flex flex-col items-start gap-2">
-                    <div className="flex items-center gap-2 bg-white/60 px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm w-fit mb-1">
-                      <PlaneTakeoff className="w-4 h-4 text-[#C5A059]" />
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Jenis Komoditi</span>
-                        <span className="text-xs font-bold text-slate-800">{q.itemType || "General Cargo"}</span>
+                return (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(idx * 0.05, 0.5) }}
+                    key={q.id} 
+                    className={`${glassCard} p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-center group`}
+                  >
+                    {/* KOLOM 1: ID & KLIEN (Col-span-3) */}
+                    <div className="lg:col-span-3 flex flex-col items-start justify-center">
+                      <div className="flex items-center gap-2 mb-2">
+                        {/* Menampilkan quoteId (FFW-XXX) di UI */}
+                        <AdminBadge variant="gold" className="text-[10px] px-2.5 py-0.5 bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] text-white border-[#A68345] shadow-sm">
+                          #{q.quoteId}
+                        </AdminBadge>
+                        <span className="text-[9px] font-bold text-slate-400">
+                          {q.createdAt ? new Date(getMillis(q.createdAt)).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : "-"}
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <p className="text-xs text-slate-600 font-bold flex items-center gap-1.5 bg-white/50 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <Weight className="w-3.5 h-3.5 text-slate-400"/> {q.weight} Kg
+                      <p className="text-sm font-black text-slate-900 truncate max-w-full" title={q.name}>
+                        {q.name}
                       </p>
-                      <p className="text-[10px] text-slate-500 font-semibold bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
-                        Dim: {q.length}x{q.width}x{q.height} cm
+                      <p className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mt-0.5 truncate max-w-full">
+                        <User className="w-3 h-3 text-slate-400"/> {q.email || q.phone}
                       </p>
                     </div>
-                  </div>
-
-                  {/* KOLOM 4: STATUS & HARGA */}
-                  <div className="lg:col-span-1 flex flex-col items-start gap-2">
-                    <AdminBadge variant={badgeVariant} className="text-[10px]">
-                      {q.status}
-                    </AdminBadge>
                     
-                    {q.offeredPrice ? (
-                      <div className="text-[11px] font-black flex items-center gap-1.5 px-3 py-2 rounded-xl border shadow-sm w-fit bg-emerald-50/50 border-emerald-200 text-emerald-700 mt-1">
-                        <DollarSign className="w-4 h-4 text-emerald-500" /> 
-                        {formatRupiah(q.offeredPrice)}
+                    {/* KOLOM 2: JALUR PENERBANGAN (Col-span-4) */}
+                    <div className="lg:col-span-4 flex items-center justify-between bg-slate-50/50 border border-slate-100 p-3 rounded-[1.25rem]">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1"><Anchor className="w-3 h-3"/> Origin</p>
+                        <p className="text-xs font-black text-slate-900 truncate" title={oCity}>{oCity}</p>
+                        <p className="text-[10px] font-bold text-slate-500 truncate" title={oCountry}>{oCountry}</p>
                       </div>
-                    ) : (
-                      <div className="text-[9px] font-bold flex items-center gap-1.5 px-3 py-2 rounded-xl border shadow-sm w-fit bg-amber-50/50 border-amber-200 text-amber-600 mt-1 uppercase tracking-widest">
-                        <ShieldAlert className="w-4 h-4" /> Pending
+                      
+                      <div className="w-8 flex justify-center shrink-0">
+                        <ArrowRight className="w-4 h-4 text-[#C5A059] opacity-50" />
                       </div>
-                    )}
-                  </div>
 
-                  {/* KOLOM 5: TINDAKAN */}
-                  <div className="lg:col-span-2 flex flex-col items-end gap-2 justify-center">
-                    <AdminButton 
-                      size="sm" 
-                      variant="gold" 
-                      onClick={() => router.push(`/admin/orders/global/${q.id}`)} 
-                      className="w-full text-[11px] shadow-sm py-5"
-                    >
-                      Buka Detail <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                    </AdminButton>
-                  </div>
-                </motion.div>
-              );
-            })
-          )}
+                      <div className="flex-1 min-w-0 text-right">
+                        <p className="text-[9px] font-black text-[#C5A059] uppercase tracking-widest mb-0.5 flex items-center justify-end gap-1"><Plane className="w-3 h-3"/> Dest</p>
+                        <p className="text-xs font-black text-slate-900 truncate" title={dCity}>{dCity}</p>
+                        <p className="text-[10px] font-bold text-slate-500 truncate" title={dCountry}>{dCountry}</p>
+                      </div>
+                    </div>
+
+                    {/* KOLOM 3: SPESIFIKASI KARGO (Col-span-3) */}
+                    <div className="lg:col-span-3 flex flex-col justify-center gap-1.5">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Box className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs font-bold text-slate-800 truncate" title={q.itemType || "General Cargo"}>
+                          {q.itemType || "General Cargo"}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] text-slate-700 font-black flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                          <Weight className="w-3 h-3 text-slate-500"/> {q.weight} Kg
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-bold bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                          {q.length}x{q.width}x{q.height} cm
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* KOLOM 4: STATUS & ACTION (Col-span-2) */}
+                    <div className="lg:col-span-2 flex flex-col items-end gap-2.5 justify-center border-t lg:border-t-0 lg:border-l border-slate-100 pt-4 lg:pt-0 lg:pl-4">
+                      {q.offeredPrice ? (
+                        <div className="text-xs font-black text-emerald-700 w-full text-right truncate">
+                          {formatRupiah(q.offeredPrice)}
+                        </div>
+                      ) : (
+                        <AdminBadge variant={badgeVariant} className="text-[9px] px-2 py-0.5 w-max">
+                          {q.status}
+                        </AdminBadge>
+                      )}
+                      
+                      {/* 
+                        Mengarahkan menggunakan q.id (Document ID Asli di Firestore), BUKAN FFW-xxx.
+                        Sehingga halaman detail pasti menemukannya tanpa error Not Found.
+                      */}
+                      <AdminButton 
+                        size="sm" 
+                        variant="gold" 
+                        onClick={() => router.push(`/admin/orders/global/${q.id}`)} 
+                        className="w-full text-[10px] shadow-sm py-4 h-auto rounded-xl"
+                      >
+                        Buka Detail <ArrowRight className="w-3 h-3 ml-1" />
+                      </AdminButton>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

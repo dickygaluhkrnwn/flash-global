@@ -54,8 +54,14 @@ function MobileQuoteForm() {
     name: user?.displayName || "", 
     email: user?.email || "",
     phone: "",
+    originCountry: "",
+    originCity: "",
     origin: searchParams.get("origin") || "",
+    originDetail: "",
+    destCountry: "",
+    destCity: "",
     destination: searchParams.get("destination") || "",
+    destDetail: "",
     itemType: "",
     weight: searchParams.get("weight") || "",
     length: searchParams.get("l") || "",
@@ -72,16 +78,14 @@ function MobileQuoteForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const extractCountry = (fullAddress: string) => {
-    if (!fullAddress) return "-";
-    const parts = fullAddress.split(",");
-    return parts[parts.length - 1].trim();
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.originCountry || !formData.originCity || !formData.destCountry || !formData.destCity) {
+      setErrorMsg("Negara dan Kota asal maupun tujuan wajib diisi.");
+      return;
+    }
     if (!formData.origin || !formData.destination) {
-      setErrorMsg("Mohon lengkapi lokasi Asal dan Tujuan.");
+      setErrorMsg("Pencarian titik peta lokasi tidak boleh kosong.");
       return;
     }
 
@@ -98,9 +102,13 @@ function MobileQuoteForm() {
         email: formData.email,
         phone: formData.phone,
         origin: formData.origin,
-        originCountry: extractCountry(formData.origin),
+        originCountry: formData.originCountry,
+        originCity: formData.originCity,
+        originDetail: formData.originDetail,
         destination: formData.destination,
-        destCountry: extractCountry(formData.destination),
+        destCountry: formData.destCountry,
+        destCity: formData.destCity,
+        destDetail: formData.destDetail,
         itemType: formData.itemType,
         weight: Number(formData.weight) || 0,
         length: Number(formData.length) || 0,
@@ -114,7 +122,7 @@ function MobileQuoteForm() {
       await addDoc(collection(db, "quotes"), quotePayload);
 
       const adminWA = "6281234567890"; 
-      const waText = `Halo Tim Flash Global Expert,\n\nSaya ingin meminta Quotation untuk pengiriman kargo internasional.\n\n🧾 *ID Quotation:* ${quoteId}\n👤 *Nama PIC:* ${formData.name}\n\n*📌 Rute:* \n- Asal: ${extractCountry(formData.origin)} (${formData.origin})\n- Tujuan: ${extractCountry(formData.destination)} (${formData.destination})\n\n*📦 Spesifikasi Kargo:*\n- Deskripsi: ${formData.itemType}\n- Berat Aktual: ${formData.weight} Kg\n- Dimensi: ${formData.length}x${formData.width}x${formData.height} cm\n\nMohon bantuannya untuk estimasi Biaya Pengiriman (Freight, Duty & Tax). Terima kasih.`;
+      const waText = `Halo Tim Flash Global Expert,\n\nSaya ingin meminta Quotation untuk pengiriman kargo internasional.\n\n🧾 *ID Quotation:* ${quoteId}\n👤 *Nama PIC:* ${formData.name}\n\n*📍 Titik Asal:*\n- Negara: ${formData.originCountry}\n- Kota: ${formData.originCity}\n- Peta: ${formData.origin}\n- Detail: ${formData.originDetail || "-"}\n\n*📍 Titik Tujuan:*\n- Negara: ${formData.destCountry}\n- Kota: ${formData.destCity}\n- Peta: ${formData.destination}\n- Detail: ${formData.destDetail || "-"}\n\n*📦 Spesifikasi Kargo:*\n- Deskripsi: ${formData.itemType}\n- Berat Aktual: ${formData.weight} Kg\n- Dimensi: ${formData.length}x${formData.width}x${formData.height} cm\n\nMohon bantuannya untuk estimasi Biaya Pengiriman (Freight, Duty & Tax). Terima kasih.`;
       
       window.open(`https://wa.me/${adminWA}?text=${encodeURIComponent(waText)}`, "_blank");
       router.push("/dashboard");
@@ -151,9 +159,13 @@ function MobileQuoteForm() {
     // =========================================================================
     <div className="fixed inset-0 z-[150] bg-[#f8fafc] flex justify-center font-sans overflow-hidden">
       
-      {/* GLOBAL CSS INJECTION MAPBOX UI - BUG FIX: Z-INDEX & PADDING */}
+      {/* GLOBAL CSS INJECTION MAPBOX UI - BUG FIX: DROPDOWN OVERLAY ABSOLUTE */}
       <style dangerouslySetInnerHTML={{__html: `
         mapbox-search-listbox {
+          position: absolute !important;
+          top: 100% !important;
+          left: 0 !important;
+          right: 0 !important;
           z-index: 999999 !important;
           border-radius: 1.25rem !important;
           box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
@@ -216,40 +228,99 @@ function MobileQuoteForm() {
                 <h3 className="text-base font-black text-slate-900 tracking-tight">Rute Pengiriman</h3>
               </div>
               
-              <div className="space-y-5">
-                {/* Z-Index tertinggi di kelompok form ini */}
-                <div className="relative z-50">
-                  <FieldLabel label="Asal (Origin)" icon={Anchor} infoText="Pilih dari daftar dropdown yang muncul agar negara asal dapat terekam di sistem." />
-                  <div className={cn("relative group flex items-center rounded-[1.25rem] h-14", inputGlassGold)}>
-                    {/* HILANGKAN OVERFLOW HIDDEN, BIARKAN RELATIVE SAJA */}
-                    <div className="flex-1 relative flex items-center">
-                      <SearchBox
-                        accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.origin} placeholder="Kota/Negara Asal..."
-                        onRetrieve={(res) => handleSmartMapChange("origin", res.features[0].properties.full_address || res.features[0].properties.name)}
-                        // BUG FIX: Hapus padding dari variables, andalkan flex items-center
-                        theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
-                      />
+              <div className="space-y-6">
+                
+                {/* LOKASI ASAL (Z-Index Tertinggi: 60) */}
+                <div className="relative z-[60] bg-slate-50/50 p-4 rounded-[1.5rem] border border-slate-200 space-y-4">
+                  <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Anchor className="w-4 h-4 text-[#C5A059]"/> Titik Asal Kargo</h4>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Negara Asal</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="originCountry" value={formData.originCountry} onChange={handleChange} placeholder="Cth: ID" className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Kota Asal</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="originCity" value={formData.originCity} onChange={handleChange} placeholder="Cth: Jakarta" className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-50">
+                    <FieldLabel label="Pencarian Map Satelit" infoText="Cari alamat lengkap pada peta agar koordinat tersimpan di sistem kami." />
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      {/* BUG FIX: Relative parent to contain absolute dropdown listbox */}
+                      <div className="flex-1 w-full relative">
+                        <SearchBox
+                          accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.origin} placeholder="Jalan / Gedung..."
+                          onRetrieve={(res) => {
+                            const feature = res.features[0];
+                            handleSmartMapChange("origin", feature.properties.full_address || feature.properties.name);
+                          }}
+                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '13px', fontWeight: '700' } }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Detail Patokan (Opsional)</label>
+                    <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                      <input type="text" name="originDetail" value={formData.originDetail} onChange={handleChange} placeholder="Cth: Gudang pintu biru..." className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" />
                     </div>
                   </div>
                 </div>
 
-                {/* Z-Index lebih rendah dari origin, tapi lebih tinggi dari form di bawahnya */}
-                <div className="relative z-40">
-                  <FieldLabel label="Tujuan (Destination)" icon={Plane} infoText="Pilih dari daftar dropdown yang muncul agar negara tujuan dapat terekam di sistem."/>
-                  <div className={cn("relative group flex items-center rounded-[1.25rem] h-14", inputGlassGold)}>
-                    <div className="flex-1 relative flex items-center">
-                      <SearchBox
-                        accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.destination} placeholder="Kota/Negara Tujuan..."
-                        onRetrieve={(res) => handleSmartMapChange("destination", res.features[0].properties.full_address || res.features[0].properties.name)}
-                        theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
-                      />
+                {/* LOKASI TUJUAN (Z-Index Menengah: 50) */}
+                <div className="relative z-[50] bg-slate-50/50 p-4 rounded-[1.5rem] border border-slate-200 space-y-4">
+                  <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Plane className="w-4 h-4 text-[#C5A059]"/> Titik Tujuan Kargo</h4>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Negara Tujuan</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="destCountry" value={formData.destCountry} onChange={handleChange} placeholder="Cth: SG" className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Kota Tujuan</label>
+                      <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                        <input type="text" name="destCity" value={formData.destCity} onChange={handleChange} placeholder="Cth: Changi" className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative z-40">
+                    <FieldLabel label="Pencarian Map Satelit" infoText="Cari alamat lengkap pada peta agar koordinat tersimpan di sistem kami." />
+                    <div className={cn("relative flex items-center rounded-2xl h-[56px] transition-all w-full", inputGlassGold)}>
+                      <div className="flex-1 w-full relative">
+                        <SearchBox
+                          accessToken={MAPBOX_TOKEN} options={{ language: 'en' }} value={formData.destination} placeholder="Jalan / Pelabuhan..."
+                          onRetrieve={(res) => {
+                            const feature = res.features[0];
+                            handleSmartMapChange("destination", feature.properties.full_address || feature.properties.name);
+                          }}
+                          theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '13px', fontWeight: '700' } }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-1.5 block">Detail Patokan (Opsional)</label>
+                    <div className={cn("relative flex items-center rounded-2xl h-12 transition-all w-full", inputGlassGold)}>
+                      <input type="text" name="destDetail" value={formData.destDetail} onChange={handleChange} placeholder="Cth: Lantai 3, Gedung Utama..." className="w-full bg-transparent border-none outline-none px-4 text-xs font-bold text-slate-900 placeholder:text-slate-400" />
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
 
-            {/* SECTION 2: Spesifikasi Kargo */}
+            {/* SECTION 2: Spesifikasi Kargo (Z-Index Bawah: 30) */}
             <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-30">
               <div className="flex items-center gap-3 mb-5 border-b pb-4 border-slate-100">
                 <div className="w-8 h-8 rounded-xl bg-slate-50 border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">2</div>
@@ -293,7 +364,7 @@ function MobileQuoteForm() {
               </div>
             </div>
 
-            {/* SECTION 3: Kontak */}
+            {/* SECTION 3: Kontak (Z-Index Dasar: 20) */}
             <div className="glass-card rounded-[2rem] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white relative z-20">
               <div className="flex items-center gap-3 mb-5 border-b pb-4 border-slate-100">
                 <div className="w-8 h-8 rounded-xl bg-slate-50 border border-[#C5A059]/30 text-[#C5A059] flex items-center justify-center font-black shadow-sm">3</div>

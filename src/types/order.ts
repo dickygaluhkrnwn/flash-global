@@ -3,7 +3,6 @@ export type TrackingStatus = 'pending' | 'pickup' | 'in_transit' | 'delivered' |
 // ----------------------------------------------------------------------
 // EXPORT DARI PAGE TRACKING (New Tracking Data Types)
 // ----------------------------------------------------------------------
-// Dipindah ke atas agar bisa digunakan oleh Order dan Quote
 export type FirebaseTimestamp = { toDate?: () => Date; toMillis?: () => number; seconds?: number } | string | number | null | undefined;
 
 export interface Order {
@@ -28,24 +27,28 @@ export interface Order {
 }
 
 export interface Quote {
-  id: string; // Digunakan sebagai quoteId
+  id: string; 
   userId: string;
   name: string;
   email: string;
   phone: string;
   origin: string;
   originCountry: string;
+  originCity?: string;   // BARU
+  originDetail?: string; // BARU
   destination: string;
   destCountry: string;
-  itemType: string; // Jenis barang (HS Code basis)
+  destCity?: string;     // BARU
+  destDetail?: string;   // BARU
+  itemType: string; 
   weight: number;
   length: number;
   width: number;
   height: number;
   serviceType: string;
-  status: string; // Diperlebar agar menampung 'Menunggu Persetujuan Klien', dll
-  offeredPrice?: number; // BARU: Dari Admin Global Orders
-  customsDocUrl?: string; // BARU: Dari Admin Global Orders
+  status: string; 
+  offeredPrice?: number; 
+  customsDocUrl?: string; 
   createdAt: Date | FirebaseTimestamp;
 }
 
@@ -164,7 +167,7 @@ export interface DeliveryItem {
   weightType?: "Kecil" | "Sedang" | string;
   dimType?: "S" | "M" | "L" | string;
   weightVal?: number;
-  weight?: number; // Kompatibilitas data lama
+  weight?: number; 
   length?: number;
   width?: number;
   height?: number;
@@ -191,7 +194,7 @@ export interface DashboardOrder {
   status: string;
   statusSub: string;
   date: string;
-  timestamp: number; // Milisecond untuk sorting presisi
+  timestamp: number; 
   
   // --- KEUANGAN & PROMO ---
   price: number; 
@@ -199,8 +202,8 @@ export interface DashboardOrder {
   promoCode?: string; 
   discountAmount?: number; 
   breakdown?: OrderBreakdown; 
-  paymentStatus?: string; // BUG FIX: Ditambahkan untuk menghilangkan error TypeScript
-  paymentMethod?: string; // BUG FIX: Ditambahkan untuk kompatibilitas data
+  paymentStatus?: string; 
+  paymentMethod?: string; 
   
   // --- OPERASIONAL & LOG PENGIRIMAN ---
   vehicle?: string;
@@ -235,7 +238,7 @@ export interface DynamicVehicle {
   id: string;
   name: string;
   isMotor: boolean;
-  category?: "Motor" | "Mobil" | "Truk"; // BARU: Klasifikasi jenis armada
+  category?: "Motor" | "Mobil" | "Truk"; 
   maxWeight: number;
   baseFare: number;
   minKm: number;
