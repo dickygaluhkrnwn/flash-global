@@ -229,15 +229,15 @@ export default function MobilePortalPage() {
     <div className="flex flex-col space-y-8 px-4 w-full font-sans">
       
       {/* ============================================================== */}
-      {/* 📦 SECTION 1: DOMESTIK (MAP & KALKULATOR) */}
+      {/* 📦 SECTION 1: PENGIRIMAN INSTAN (MAP & KALKULATOR) */}
       {/* ============================================================== */}
       <section className="space-y-4 relative z-20">
         <div className="px-1">
           <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
             <Truck className="w-6 h-6 text-[#7A171D]" /> 
-            Kargo Domestik
+            Pengiriman Instan
           </h1>
-          <p className="text-slate-500 font-medium mt-1 text-xs">Simulasi tarif instan ke seluruh Indonesia.</p>
+          <p className="text-slate-500 font-medium mt-1 text-xs">Kirim paket kilat dan lacak secara real-time.</p>
         </div>
 
         {/* Peta Mini */}
@@ -374,14 +374,14 @@ export default function MobilePortalPage() {
       </section>
 
       {/* ============================================================== */}
-      {/* 🌍 SECTION 3: KARGO INTERNASIONAL */}
+      {/* 🌍 SECTION 3: PENGIRIMAN LUAR NEGERI */}
       {/* ============================================================== */}
       <section className="pt-4 pb-6 relative z-10">
         <div className="px-1 mb-4">
           <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-            <Globe2 className="w-6 h-6 text-[#C5A059]" /> Forwarding
+            <Globe2 className="w-6 h-6 text-[#C5A059]" /> Pengiriman Luar Negeri
           </h2>
-          <p className="text-slate-500 font-medium mt-1 text-xs">Cek estimasi biaya kargo internasional.</p>
+          <p className="text-slate-500 font-medium mt-1 text-xs">Cek estimasi biaya kargo lintas negara.</p>
         </div>
 
         <div className="glass-card rounded-[2rem] overflow-hidden border border-white relative p-5 shadow-sm">

@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { 
   MapPin, Box, Maximize, 
   Globe2, Calculator, Truck, ChevronRight, 
-  Scale, Navigation, Car, ArrowRight, ShieldCheck, Zap
+  Scale, Navigation, Car, ArrowRight, ShieldCheck, Zap, Info
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -27,6 +27,7 @@ interface ExtendedPricingConfig extends AdminPricingConfig {
   customVehicles?: DynamicVehicle[];
 }
 
+// BUG FIX: Menambahkan Z-Index dan Custom Theme agar Dropdown terlihat rapi dan tidak tertutup
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
   loading: () => <div className="h-[56px] w-full bg-slate-100 rounded-2xl animate-pulse flex items-center px-5 text-sm text-slate-400 font-bold">Menyiapkan radar lokasi...</div> 
@@ -256,67 +257,38 @@ export default function DesktopPortalPage() {
       <div className="relative z-10 max-w-[1440px] mx-auto px-4 md:px-8">
         
         {/* ============================================================== */}
-        {/* 📦 SECTION 1: PENGIRIMAN DOMESTIK (#domestik) */}
+        {/* 📦 SECTION 1: PENGIRIMAN INSTAN (#domestik) */}
         {/* ============================================================== */}
         <section id="domestik" ref={domestikRef} className="pt-8 pb-16">
           <div className="mb-8 px-2 flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
                 <div className="p-3 rounded-2xl bg-[#7A171D]/10 text-[#7A171D] border border-[#7A171D]/20"><Truck className="w-7 h-7" /></div>
-                Kalkulator Domestik
+                Pengiriman Instan
               </h1>
-              <p className="text-slate-500 font-medium mt-3 text-base max-w-xl">Simulasi otomatis tarif pengiriman ke seluruh Indonesia dengan integrasi pemetaan satelit.</p>
+              <p className="text-slate-500 font-medium mt-3 text-base max-w-xl">Kirim paket kilat dan lacak secara real-time ke seluruh Indonesia dengan integrasi pemetaan satelit.</p>
             </div>
             <Button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/delivery/booking"); }} variant="primary" className="shadow-md h-12">
-              <Calculator className="w-4 h-4 mr-2"/> Booking Domestik
+              <Calculator className="w-4 h-4 mr-2"/> Booking Pengiriman
             </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch mb-16">
             
-            {/* KIRI: MAPBOX */}
-            <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-7 h-[400px] lg:h-auto min-h-[500px] relative order-2 lg:order-1">
-              <div className="glass-card w-full h-full p-2 rounded-[2.5rem] relative overflow-hidden group">
-                <div className="absolute top-6 left-6 glass-panel px-4 py-3 rounded-2xl z-20 flex items-center gap-3 pointer-events-none">
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute"></div>
-                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full relative z-10"></div>
-                  </div>
-                  <div>
-                    <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest leading-none mb-1">Satelit Radar</p>
-                    <p className="text-slate-500 text-[9px] font-bold uppercase leading-none">{routeDistanceKm > 0 ? `Jarak Tempuh: ${routeDistanceKm} KM` : "Menunggu Koordinat"}</p>
-                  </div>
-                </div>
-
-                <div className="w-full h-full rounded-[2rem] relative overflow-hidden bg-slate-100 border border-white/50">
-                  <MapBase
-                    longitude={mapViewState.longitude} latitude={mapViewState.latitude} zoom={mapViewState.zoom}
-                    interactive={true} className="w-full h-full" originCoords={originCoords} 
-                    drops={destCoords ? [{ id: "d1", lng: destCoords.lng, lat: destCoords.lat, address: domestikData.destination, detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [] }] : []}
-                    routeData={routeData}
-                  />
-                  {!originCoords && !destCoords && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-md z-10 pointer-events-none">
-                      <div className="bg-white/90 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white flex flex-col items-center">
-                        <MapPin className="w-10 h-10 text-[#7A171D] mb-3 animate-bounce" />
-                        <p className="text-slate-800 text-sm font-black tracking-wide">Pilih lokasi pada form kalkulator</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-
-            {/* KANAN: FORM DOMESTIK */}
-            <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-5 order-1 lg:order-2">
-              <div className="glass-card rounded-[2.5rem] p-6 lg:p-8 h-full flex flex-col">
-                <form onSubmit={handleCalculateDomestik} className="flex-grow flex flex-col justify-between space-y-6">
-                  <div className="space-y-5 relative z-10">
+            {/* KIRI: FORM PENGIRIMAN INSTAN */}
+            <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-5 order-2 lg:order-1 flex flex-col">
+              <div className="glass-card rounded-[2.5rem] p-6 lg:p-8 h-full flex flex-col border border-white/60">
+                <form onSubmit={handleCalculateDomestik} className="flex-grow flex flex-col justify-between space-y-6 relative z-10">
+                  <div className="space-y-5">
+                    
+                    {/* Lokasi Jemput & Tujuan */}
                     <div className="space-y-4 relative">
                       <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 z-0"></div>
-                      <div className="relative z-10 flex items-center gap-4">
+                      
+                      {/* ORIGIN (Z-Index Tertinggi: 60) agar dropdown tidak ketutupan */}
+                      <div className="relative z-[60] flex items-center gap-4">
                         <div className="w-3 h-3 rounded-full bg-white outline outline-4 outline-[#7A171D] border-2 border-[#7A171D] shrink-0"></div>
-                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-white focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
+                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-slate-100 focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
                           <SearchBox
                             accessToken={MAPBOX_TOKEN} options={{ language: 'id', country: 'ID' }} value={domestikData.origin} placeholder="Titik Penjemputan..."
                             onRetrieve={(res) => {
@@ -325,13 +297,15 @@ export default function DesktopPortalPage() {
                               setOriginCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
                               setDomestikEstimate(null);
                             }}
-                            theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                            theme={{ variables: { boxShadow: '0 10px 30px -10px rgba(0,0,0,0.15)', border: '1px solid #f1f5f9', colorBackground: '#ffffff', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700', borderRadius: '16px' } }}
                           />
                         </div>
                       </div>
-                      <div className="relative z-10 flex items-center gap-4">
+                      
+                      {/* DESTINATION (Z-Index Menengah: 50) */}
+                      <div className="relative z-[50] flex items-center gap-4">
                         <div className="w-3 h-3 rounded-full bg-[#7A171D] outline outline-4 outline-slate-100 shrink-0"></div>
-                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-white focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
+                        <div className={cls("flex-1 bg-white/60 backdrop-blur-md border border-slate-100 focus-within:ring-[3px] focus-within:ring-[#7A171D]/20 focus-within:bg-white rounded-2xl transition-all h-[56px] shadow-sm")}>
                           <SearchBox
                             accessToken={MAPBOX_TOKEN} options={{ language: 'id', country: 'ID' }} value={domestikData.destination} placeholder="Lokasi Pengiriman..."
                             onRetrieve={(res) => {
@@ -340,13 +314,14 @@ export default function DesktopPortalPage() {
                               setDestCoords({ lng: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] });
                               setDomestikEstimate(null);
                             }}
-                            theme={{ variables: { boxShadow: 'none', border: 'none', colorBackground: 'transparent', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700' } }}
+                            theme={{ variables: { boxShadow: '0 10px 30px -10px rgba(0,0,0,0.15)', border: '1px solid #f1f5f9', colorBackground: '#ffffff', padding: '16px 20px', fontFamily: 'inherit', unit: '14px', fontWeight: '700', borderRadius: '16px' } }}
                           />
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Dimensi & Berat (Z-Index Terendah: 40) */}
+                    <div className="grid grid-cols-2 gap-4 relative z-[40]">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Box className="w-3.5 h-3.5 text-[#7A171D]"/> Berat (Kg)</label>
                         <Input type="number" name="weight" min="1" value={domestikData.weight} onChange={(e) => { setDomestikData(p => ({...p, weight: e.target.value})); setDomestikEstimate(null); }} placeholder="Cth: 5" required />
@@ -359,7 +334,11 @@ export default function DesktopPortalPage() {
                           <input type="number" placeholder="T" value={domestikData.height} onChange={(e) => { setDomestikData(p => ({...p, height: e.target.value})); setDomestikEstimate(null); }} className="w-1/3 px-2 text-center text-sm font-bold bg-transparent outline-none" required />
                         </div>
                       </div>
-                      <div className="col-span-2 space-y-2 mt-2">
+                    </div>
+
+                    {/* PILIHAN ARMADA + SHOWCASE INTEGRATION (Z-Index: 30) */}
+                    <div className="col-span-2 space-y-4 pt-2 relative z-[30]">
+                      <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-[#7A171D]"/> Pilihan Armada</label>
                         <div className="relative">
                           <select value={domestikData.vehicle} onChange={(e) => { setDomestikData(p => ({...p, vehicle: e.target.value})); setDomestikEstimate(null); }} className="w-full h-[56px] px-5 text-sm font-bold border border-white bg-white/60 backdrop-blur-md rounded-2xl focus:border-[#7A171D]/50 focus:ring-[3px] focus:ring-[#7A171D]/15 focus:bg-white outline-none appearance-none transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer">
@@ -369,12 +348,30 @@ export default function DesktopPortalPage() {
                           <ChevronRight className="w-4 h-4 text-slate-400 absolute right-5 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
                         </div>
                       </div>
+
+                      {/* Showcase Image ditempatkan langsung di bawah Dropdown */}
+                      <div className="w-full relative z-10 pt-2 pb-2">
+                        {availableVehicles.length > 0 ? (
+                          <VehicleShowcase 
+                            vehicles={availableVehicles}
+                            selectedVehicleId={domestikData.vehicle}
+                            onSelect={(id) => {
+                              setDomestikData(p => ({...p, vehicle: id})); 
+                              setDomestikEstimate(null);
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-[250px] bg-white/50 backdrop-blur-sm rounded-[2rem] animate-pulse border border-white"></div>
+                        )}
+                      </div>
                     </div>
+
                   </div>
 
-                  <div className="pt-6">
+                  {/* Tombol Kalkulasi & Hasil (Z-Index: 20) */}
+                  <div className="pt-4 border-t border-slate-200/60 mt-auto relative z-20">
                     {!domestikEstimate ? (
-                      <Button type="submit" isLoading={isDomestikLoading} variant="primary" className="w-full h-14 text-base rounded-[1.25rem]">
+                      <Button type="submit" isLoading={isDomestikLoading} variant="primary" className="w-full h-14 text-base rounded-[1.25rem] font-black shadow-md">
                         Kalkulasi Jarak & Tarif <Calculator className="w-5 h-5 ml-2 opacity-70"/>
                       </Button>
                     ) : (
@@ -397,7 +394,7 @@ export default function DesktopPortalPage() {
                           <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Car className="w-4 h-4 text-[#C5A059]"/> Armada:</span> <b className="text-[#C5A059]">{domestikEstimate.parameters.vehicleName}</b></div>
                         </div>
 
-                        <Button type="button" onClick={() => handleProceed("domestik")} className="w-full mt-3 h-12 bg-white text-slate-900 hover:bg-slate-100 border-none relative z-10">
+                        <Button type="button" onClick={() => handleProceed("domestik")} className="w-full mt-3 h-12 bg-white text-slate-900 hover:bg-slate-100 border-none relative z-10 font-black shadow-md tap-highlight-transparent">
                           Lanjutkan Pemesanan <ArrowRight className="w-4 h-4 ml-2"/>
                         </Button>
                       </div>
@@ -406,28 +403,85 @@ export default function DesktopPortalPage() {
                 </form>
               </div>
             </motion.div>
-          </div>
-          
-          {/* ============================================================== */}
-          {/* COMPONENT: INTERACTIVE VEHICLE SLIDER */}
-          {/* ============================================================== */}
-          <div className="mt-6">
-            <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
-              <ShieldCheck className="w-6 h-6 text-[#7A171D]" /> Katalog Kapasitas Armada
-            </h3>
-            
-            {availableVehicles.length > 0 ? (
-              <VehicleShowcase 
-                vehicles={availableVehicles}
-                selectedVehicleId={domestikData.vehicle}
-                onSelect={(id) => {
-                  setDomestikData(p => ({...p, vehicle: id})); 
-                  setDomestikEstimate(null);
-                }}
-              />
-            ) : (
-              <div className="w-full h-[400px] bg-slate-100 rounded-[3rem] animate-pulse"></div>
-            )}
+
+            {/* KANAN: MAPBOX + INFO BANNER & CATATAN */}
+            <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-7 flex flex-col gap-6 order-1 lg:order-2">
+              
+              {/* Card Peta Satelit */}
+              <div className="glass-card w-full h-[400px] lg:h-[450px] p-2 rounded-[2.5rem] relative overflow-hidden group flex flex-col border border-white/60 shadow-sm shrink-0">
+                <div className="absolute top-6 left-6 glass-panel px-4 py-3 rounded-2xl z-20 flex items-center gap-3 pointer-events-none shadow-sm">
+                  <div className="relative flex items-center justify-center">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full animate-ping absolute"></div>
+                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full relative z-10"></div>
+                  </div>
+                  <div>
+                    <p className="text-slate-900 text-[10px] font-black uppercase tracking-widest leading-none mb-1">Satelit Radar</p>
+                    <p className="text-slate-500 text-[9px] font-bold uppercase leading-none">{routeDistanceKm > 0 ? `Jarak Tempuh: ${routeDistanceKm} KM` : "Menunggu Koordinat"}</p>
+                  </div>
+                </div>
+
+                <div className="w-full h-full rounded-[2rem] relative overflow-hidden bg-slate-100 border border-slate-200/50 flex-grow">
+                  <MapBase
+                    longitude={mapViewState.longitude} latitude={mapViewState.latitude} zoom={mapViewState.zoom}
+                    interactive={true} className="w-full h-full" originCoords={originCoords} 
+                    drops={destCoords ? [{ id: "d1", lng: destCoords.lng, lat: destCoords.lat, address: domestikData.destination, detail: "", receiverName: "", receiverPhone: "", receiverEmail: "", items: [] }] : []}
+                    routeData={routeData}
+                  />
+                  {!originCoords && !destCoords && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/30 backdrop-blur-md z-10 pointer-events-none">
+                      <div className="bg-white/90 p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white flex flex-col items-center">
+                        <MapPin className="w-10 h-10 text-[#7A171D] mb-3 animate-bounce" />
+                        <p className="text-slate-800 text-sm font-black tracking-wide">Pilih lokasi pada form di samping</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Grid Info Fitur Ekspedisi */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0">
+                <div className="glass-card p-5 rounded-[2rem] flex items-start gap-4 border border-white/60 shadow-sm">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 border border-emerald-100 shadow-sm">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 tracking-tight">Perlindungan Kargo</h4>
+                    <p className="text-[11px] text-slate-500 font-bold mt-1 leading-relaxed">Asuransi terintegrasi untuk menjamin keamanan.</p>
+                  </div>
+                </div>
+                <div className="glass-card p-5 rounded-[2rem] flex items-start gap-4 border border-white/60 shadow-sm">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0 border border-indigo-100 shadow-sm">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 tracking-tight">Routing Cerdas AI</h4>
+                    <p className="text-[11px] text-slate-500 font-bold mt-1 leading-relaxed">Efisiensi jarak & waktu dengan algoritma rute tercepat.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Catatan Simulasi Tarif - Flex Grow untuk mengisi sisa ruang bawah agar sejajar form */}
+              <div className="glass-card p-6 lg:p-8 rounded-[2rem] border border-white/60 shadow-sm flex flex-col justify-center flex-grow">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-5 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-500" /> Catatan Simulasi Tarif
+                </h4>
+                <ul className="space-y-4 text-xs font-bold text-slate-500">
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div>
+                    <p className="leading-relaxed">Tarif yang ditampilkan adalah <b className="text-slate-700">estimasi awal</b> berdasarkan perhitungan jarak lurus udara (Satelit) dan data dimensi muatan.</p>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div>
+                    <p className="leading-relaxed">Sistem akan otomatis membandingkan <b className="text-slate-700">Berat Aktual</b> dan <b className="text-slate-700">Berat Volumetrik (P×L×T / 6000)</b>, lalu menggunakan nilai tertinggi sebagai dasar tagihan.</p>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div>
+                    <p className="leading-relaxed">Jika Anda menggunakan opsi <b className="text-[#7A171D]">Otomatis (AI Rekomendasi)</b>, sistem akan memilihkan armada paling hemat yang sesuai dengan total berat muatan Anda.</p>
+                  </li>
+                </ul>
+              </div>
+
+            </motion.div>
           </div>
 
         </section>
@@ -435,7 +489,7 @@ export default function DesktopPortalPage() {
         <div className="w-full max-w-4xl mx-auto h-[1px] bg-gradient-to-r from-transparent via-slate-300 to-transparent my-10"></div>
 
         {/* ============================================================== */}
-        {/* 🌍 SECTION 2: KARGO INTERNASIONAL (FORWARDING) (#forwarding) */}
+        {/* 🌍 SECTION 2: PENGIRIMAN LUAR NEGERI (#forwarding) */}
         {/* ============================================================== */}
         <section id="forwarding" className="pt-8 pb-32 scroll-mt-24">
           
@@ -443,10 +497,10 @@ export default function DesktopPortalPage() {
             <div>
               <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
                 <div className="p-3 rounded-2xl bg-[#C5A059]/10 text-[#C5A059] border border-[#C5A059]/20"><Globe2 className="w-7 h-7" /></div>
-                Kalkulator Forwarding
+                Pengiriman Luar Negeri
               </h2>
               <p className="text-slate-500 font-medium mt-3 text-base max-w-xl">
-                Cek estimasi biaya kargo internasional secara instan.
+                Cek estimasi biaya pengiriman kargo lintas negara secara instan.
               </p>
             </div>
             <Button onClick={() => { if(!user) setShowAuthModal(true); else router.push("/forwarding/quote"); }} variant="gold" className="shadow-md h-12">
@@ -463,7 +517,7 @@ export default function DesktopPortalPage() {
                   <Globe2 className="w-7 h-7" />
                 </div>
                 <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-900 leading-tight mb-4 text-balance">
-                  Kargo Global, <br/><span className="text-[#C5A059]">Kini Lebih Cepat.</span>
+                  Pengiriman Luar Negeri, <br/><span className="text-[#C5A059]">Kini Lebih Cepat.</span>
                 </h2>
                 <p className="text-slate-500 font-medium text-lg mb-8 leading-relaxed max-w-md">
                   Pengiriman ekspor-impor bebas hambatan. Sistem mengkalkulasi estimasi berdasarkan dimensi muatan dan regulasi Bea Cukai terbaru.
@@ -504,21 +558,21 @@ export default function DesktopPortalPage() {
 
                   <div className="pt-4">
                     {!globalEstimate ? (
-                      <Button type="submit" isLoading={isGlobalLoading} variant="gold" className="w-full h-14 text-base rounded-[1.25rem]">
+                      <Button type="submit" isLoading={isGlobalLoading} variant="gold" className="w-full h-14 text-base rounded-[1.25rem] font-black shadow-md">
                         Cek Estimasi Global <Globe2 className="w-5 h-5 ml-2 opacity-70"/>
                       </Button>
                     ) : (
                       <div className="bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] rounded-[1.5rem] p-6 flex flex-col gap-4 shadow-[0_8px_30px_rgba(197,160,89,0.3)] border border-[#A68345] animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="flex justify-between items-start border-b border-white/20 pb-4">
                           <div>
-                            <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-1">Estimasi Kargo Global</p>
+                            <p className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-1">Estimasi Pengiriman Luar Negeri</p>
                             <h3 className="text-3xl font-black tracking-tight text-white">{formatRupiah(globalEstimate.finalEstimate)}</h3>
                           </div>
                           <div className="text-xs font-black px-3 py-1.5 rounded-lg bg-white text-[#C5A059] shadow-sm">
                             {globalEstimate.chargeableWeight} Kg
                           </div>
                         </div>
-                        <Button type="button" onClick={() => handleProceed("forwarding")} className="w-full mt-2 h-12 bg-slate-900 text-white hover:bg-slate-800 border-none shadow-xl">
+                        <Button type="button" onClick={() => handleProceed("forwarding")} className="w-full mt-2 h-12 bg-slate-900 text-white hover:bg-slate-800 border-none shadow-xl font-black">
                           Buat Penawaran Quote <ArrowRight className="w-4 h-4 ml-2"/>
                         </Button>
                       </div>
@@ -537,4 +591,4 @@ export default function DesktopPortalPage() {
 
     </main>
   );
-} 
+}
