@@ -12,8 +12,8 @@ export default function BottomNav() {
   // Susunan Presisi 5 Menu (Standar Maksimal Apple iOS)
   const navItems = [
     { name: "Beranda", path: "/", icon: Home },
-    { name: "Domestik", path: "/delivery/booking", icon: PackagePlus },
-    { name: "Global", path: "/forwarding/quote", icon: Globe2 }, // Menu Baru
+    { name: "Delivery", path: "/delivery/booking", icon: PackagePlus }, // Diubah
+    { name: "Forward", path: "/forwarding/quote", icon: Globe2 }, // Diubah
     { name: "Pesanan", path: "/dashboard", icon: ListOrdered },
     { name: "Profil", path: "/settings", icon: User },
   ];
