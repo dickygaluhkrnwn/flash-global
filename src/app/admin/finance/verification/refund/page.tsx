@@ -17,36 +17,30 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 import { FirebaseTimestamp } from "@/types/order";
 
-export interface RefundRequest {
-  id: string;
-  orderId: string;
-  userId: string;
-  clientName?: string;
-  nominal: number;
-  alasan: string;
-  rekeningTujuan: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  proofUrl?: string;
-  createdAt: FirebaseTimestamp;
-  processedAt?: FirebaseTimestamp;
-}
+// KODE DIBERSIHKAN: Import langsung dari Single Source of Truth
+import { RefundRequest } from "@/types/finance"; 
 
 // =========================================================================
-// UTILS LOKAL
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
 // =========================================================================
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-const getMillis = (ts: FirebaseTimestamp) => {
-  if (!ts) return 0;
-  if (typeof ts === 'object' && ts !== null) {
-    const objTs = ts as Record<string, unknown>;
-    if (typeof objTs.toMillis === 'function') return objTs.toMillis() as number;
-    if (typeof objTs.seconds === 'number') return objTs.seconds * 1000;
+
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
   }
-  return new Date(ts as string | number).getTime();
+  return new Date(timestamp as string | number).getTime();
 };
-const formatDate = (timestamp: FirebaseTimestamp) => {
-  if (!timestamp) return "-";
-  return new Date(getMillis(timestamp)).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+// KODE DIPERBAIKI: Menambahkan dukungan native Date
+const formatDate = (timestamp: FirebaseTimestamp | Date) => {
+  const millis = getMillis(timestamp);
+  if (!millis) return "-";
+  return new Date(millis).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
 // =========================================================================

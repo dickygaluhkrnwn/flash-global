@@ -29,6 +29,7 @@ export interface ActiveNode {
 export interface DriverData {
   id: string;
   name: string; // Nama Sopir atau Nama PIC Vendor
+  email?: string; // <-- BARU: Email pendaftar/entitas
   vehicleType: string;
   phone?: string; 
   balance?: number;
@@ -43,13 +44,17 @@ export interface DriverData {
   simNumber?: string;
   licensePlate?: string;
   
-  // BARU: Data Vendor (Perusahaan)
+  // BARU: Data Vendor (Perusahaan) & Perbankan
   companyName?: string;
   npwp?: string;
+  bankName?: string;    // <-- BARU: Informasi Perbankan Vendor
+  bankAccount?: string; // <-- BARU: Informasi Perbankan Vendor
   
   // BARU: Afiliasi (Penaut antara Truk/Sopir ke Vendor Perusahaan)
   vendorId?: string;
   vendorName?: string;
+  driverId?: string;    // <-- BARU: Relasi Truk ke Sopir
+  driverName?: string;  // <-- BARU: Relasi Truk ke Sopir
   
   // BARU: Media & Kelengkapan Dokumen
   baseAddress?: string;

@@ -93,12 +93,16 @@ export interface UnpaidOrder {
   destAddress: string;
   amount: number;
   status: string;
+  weight?: number;  // <-- KODE DIBERSIHKAN: Kompatibilitas data receivables
+  vehicle?: string; // <-- KODE DIBERSIHKAN: Kompatibilitas data receivables
 }
 
 export interface B2BClientDebt {
   id: string; 
   name: string;
   email: string;
+  phone?: string;    // <-- TAMBAHAN DARI KEBUTUHAN HALAMAN DETAIL (Print Invoice)
+  address?: string;  // <-- TAMBAHAN DARI KEBUTUHAN HALAMAN DETAIL (Print Invoice)
   unpaidCount: number;
   totalDebt: number;
   orders: UnpaidOrder[];
@@ -119,4 +123,68 @@ export interface RefundRequest {
   proofUrl?: string; // Bukti transfer pengembalian dana dari Finance
   createdAt: Date | FirebaseTimestamp;
   processedAt?: Date | FirebaseTimestamp;
+}
+
+// ----------------------------------------------------------------------
+// EXPORT DARI WALLET CLIENTS (B2B)
+// ----------------------------------------------------------------------
+export interface B2BWalletData {
+  id: string;
+  name: string;
+  companyName: string;
+  email: string;
+  depositBalance: number;
+}
+
+// ----------------------------------------------------------------------
+// EXPORT DARI WALLET TOPUPS
+// ----------------------------------------------------------------------
+export interface TopupRequest {
+  id: string;
+  userId: string;
+  clientName: string;
+  amount: number;
+  proofUrl: string;
+  status: "Pending" | "Disetujui" | "Ditolak";
+  createdAt: FirebaseTimestamp;
+  userType?: "Driver" | "B2B";
+}
+
+// ----------------------------------------------------------------------
+// EXPORT DARI WALLET WITHDRAWALS
+// ----------------------------------------------------------------------
+export interface WithdrawalRequest {
+  id: string;
+  driverId: string;
+  amount: number;
+  status: "Pending" | "Disetujui" | "Ditolak";
+  timestamp: FirebaseTimestamp; // <-- KITA AMANKAN DENGAN FIREBASETIMESTAMP
+  driverName?: string; 
+  driverPhone?: string;
+  partnerType?: string;
+}
+
+// ----------------------------------------------------------------------
+// EXPORT DARI PRICING CONFIG
+// ----------------------------------------------------------------------
+export interface AdminDynamicVehicle {
+  id: string;
+  name: string;
+  category?: string;
+  maxWeight?: number;
+  isMotor?: boolean;
+  baseFare?: number;
+  minKm?: number;
+  perKm?: number;
+  insurancePercent?: number;
+  appCommission?: number;
+  imageUrl?: string;
+  [key: string]: unknown; // Allow additional dynamic fields
+}
+
+export interface AdminPricingConfig {
+  b2bDiscount: number;
+  tarifPorter: number;
+  customVehicles: AdminDynamicVehicle[];
+  [key: string]: unknown;
 }

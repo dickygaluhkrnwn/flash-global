@@ -22,14 +22,16 @@ import { cn } from "@/lib/utils";
 import { Promo } from "@/types/finance";
 import { FirebaseTimestamp } from "@/types/order";
 
-// --- HELPER FUNCTION: PARSING FIREBASE TIMESTAMP KE DATE ---
-const parsePromoDate = (ts: string | Date | FirebaseTimestamp): Date => {
+// =========================================================================
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
+// =========================================================================
+const parsePromoDate = (ts: FirebaseTimestamp | Date | string | number | null | undefined): Date => {
   if (!ts) return new Date();
+  if (ts instanceof Date) return ts;
   if (typeof ts === 'object' && ts !== null) {
-    const objTs = ts as Record<string, unknown>;
-    if (typeof objTs.toDate === 'function') return objTs.toDate() as Date;
+    const objTs = ts as Extract<FirebaseTimestamp, object>;
+    if (typeof objTs.toDate === 'function') return objTs.toDate();
     if (typeof objTs.seconds === 'number') return new Date(objTs.seconds * 1000);
-    if (ts instanceof Date) return ts;
   }
   return new Date(ts as string | number);
 };
@@ -80,10 +82,15 @@ export default function AdminPromoPage() {
     setIsLoading(true);
     try {
       const snap = await getDocs(collection(db, "promos"));
-      const promosList = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      })) as Promo[];
+      
+      // KODE DIBERSIHKAN: Safe typing untuk data Firestore
+      const promosList: Promo[] = snap.docs.map(d => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: d.id,
+          ...data
+        } as unknown as Promo;
+      });
       
       promosList.sort((a, b) => Number(b.isActive) - Number(a.isActive));
       setPromos(promosList);

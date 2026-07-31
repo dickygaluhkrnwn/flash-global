@@ -18,14 +18,8 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { cn } from "@/lib/utils";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
-// IMPORT GLOBAL TYPES
-interface B2BWalletData {
-  id: string;
-  name: string;
-  companyName: string;
-  email: string;
-  depositBalance: number;
-}
+// KODE DIBERSIHKAN: Import langsung dari Single Source of Truth
+import { B2BWalletData } from "@/types/finance";
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Blue Accent untuk B2B)
@@ -62,14 +56,15 @@ export default function AdminWalletClientsPage() {
       const b2bQ = query(collection(db, "users"), where("role", "==", "b2b"));
       const b2bSnap = await getDocs(b2bQ);
       
-      const b2bList = b2bSnap.docs.map(d => {
-        const data = d.data();
+      const b2bList: B2BWalletData[] = b2bSnap.docs.map(d => {
+        // KODE DIBERSIHKAN: Safe typing untuk ekstraksi data Firestore
+        const data = d.data() as Record<string, unknown>;
         return {
           id: d.id,
-          name: data.picName || data.displayName || "PIC Tidak Diketahui",
-          companyName: data.companyName || "Perusahaan Anonim",
-          email: data.email || "-",
-          depositBalance: data.depositBalance || 0 
+          name: String(data.picName || data.displayName || "PIC Tidak Diketahui"),
+          companyName: String(data.companyName || "Perusahaan Anonim"),
+          email: String(data.email || "-"),
+          depositBalance: Number(data.depositBalance || 0) 
         };
       });
 

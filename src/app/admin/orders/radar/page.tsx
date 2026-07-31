@@ -157,8 +157,9 @@ export default function RadarPage() {
     if (mapLayer === "all" || mapLayer === "fleets") {
       const mappedFleets = idleFleets.map(f => ({
         id: f.id,
-        lng: f.baseCoords!.lng,
-        lat: f.baseCoords!.lat,
+        // KODE DIBERSIHKAN: Menghindari pemaksaan Non-Null Assertion (!) yang rentan error
+        lng: f.baseCoords?.lng || 0,
+        lat: f.baseCoords?.lat || 0,
         address: `🟢 STANDBY: ${f.companyName || f.name} (${f.vehicleType || 'Armada'})`
       }));
       combinedMapDrops = [...combinedMapDrops, ...mappedFleets];

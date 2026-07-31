@@ -11,7 +11,7 @@ import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { Role } from "@/types/user";
-
+ 
 // Daftar role yang diizinkan masuk portal admin
 const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational", "staff"];
 

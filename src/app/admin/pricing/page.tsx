@@ -17,29 +17,8 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 
-// ======================================================================
-// TYPE DEFINITIONS 
-// ======================================================================
-interface AdminDynamicVehicle {
-  id: string;
-  name: string;
-  category?: string;
-  maxWeight?: number;
-  isMotor?: boolean;
-  baseFare?: number;
-  minKm?: number;
-  perKm?: number;
-  insurancePercent?: number;
-  appCommission?: number;
-  [key: string]: unknown;
-}
-
-interface AdminPricingConfig {
-  b2bDiscount: number;
-  tarifPorter: number;
-  customVehicles: AdminDynamicVehicle[];
-  [key: string]: unknown;
-}
+// IMPORT GLOBAL TYPES DARI FINANCE
+import { AdminDynamicVehicle, AdminPricingConfig } from "@/types/finance";
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM
@@ -70,12 +49,17 @@ export default function AdminPricingPage() {
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          const data = docSnap.data();
+          // KODE DIBERSIHKAN: Safe typing extraction
+          const data = docSnap.data() as Record<string, unknown>;
+          
           if (data.customVehicles && Array.isArray(data.customVehicles)) {
-            const mappedVehicles: AdminDynamicVehicle[] = data.customVehicles.map((v: Record<string, unknown>) => ({
-              ...(v as AdminDynamicVehicle),
-              appCommission: v.appCommission !== undefined ? Number(v.appCommission) : 20
-            }));
+            const mappedVehicles: AdminDynamicVehicle[] = data.customVehicles.map((v: unknown) => {
+              const vehicleData = v as Record<string, unknown>;
+              return {
+                ...(vehicleData as unknown as AdminDynamicVehicle),
+                appCommission: vehicleData.appCommission !== undefined ? Number(vehicleData.appCommission) : 20
+              };
+            });
 
             setPricingConfig({
               b2bDiscount: Number(data.b2bDiscount) || 15,

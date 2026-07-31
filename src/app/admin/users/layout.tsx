@@ -15,7 +15,7 @@ export default function AdminUsersLayout({ children }: { children: React.ReactNo
         className="font-sans pb-10"
       >
         {children}
-      </motion.div>
+      </motion.div> 
     </AnimatePresence>
   );
 }

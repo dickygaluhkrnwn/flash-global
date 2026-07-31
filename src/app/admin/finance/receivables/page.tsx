@@ -17,17 +17,9 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 
+// KODE DIBERSIHKAN: Import langsung dari source of truth
 import { B2BClientDebt, UnpaidOrder } from "@/types/finance";
-import { OrderDetail, LocationDetail } from "@/types/order";
-
-interface ExtendedUnpaidOrder extends UnpaidOrder {
-  weight: number;
-  vehicle: string;
-}
-
-export interface ExtendedB2BClientDebt extends Omit<B2BClientDebt, 'orders'> {
-  orders: ExtendedUnpaidOrder[];
-}
+import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
 
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(220,38,38,0.1)] transition-all duration-300 rounded-2xl";
@@ -36,7 +28,7 @@ export default function FinanceReceivablesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
 
-  const [b2bDebts, setB2bDebts] = useState<ExtendedB2BClientDebt[]>([]);
+  const [b2bDebts, setB2bDebts] = useState<B2BClientDebt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,14 +40,14 @@ export default function FinanceReceivablesPage() {
         const b2bOrderQ = query(collection(db, "orders"), where("isB2BApplied", "==", true));
         const b2bOrderSnap = await getDocs(b2bOrderQ);
         
-        const debtMap = new Map<string, ExtendedB2BClientDebt>();
+        const debtMap = new Map<string, B2BClientDebt>();
         
         b2bOrderSnap.forEach(docObj => {
           const data = docObj.data() as OrderDetail;
           
           if (data.paymentStatus !== "Lunas") {
             const userId = data.userId;
-            if (!userId) return; // Skip order yang tidak memiliki userId
+            if (!userId) return; 
 
             // PARSING AMAN
             const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
@@ -69,19 +61,20 @@ export default function FinanceReceivablesPage() {
             const weight = Number(data.totalWeight || data.weight || 0);
             const vehicle = data.vehicleName ? String(data.vehicleName) : (data.vehicle ? String(data.vehicle) : "Kargo Logistik");
             
-            // Safe Date Parsing
-            let dateObj = new Date();
-            if (data.createdAt) {
-               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-               const ts: any = data.createdAt;
-               if (ts && typeof ts.toDate === 'function') {
-                  dateObj = ts.toDate();
-               } else if (ts && typeof ts === 'object' && ts.seconds) {
-                  dateObj = new Date(ts.seconds * 1000);
-               } else {
-                  dateObj = new Date(ts);
-               }
-            }
+            // KODE DIBERSIHKAN: Safe Date Parsing menggunakan FirebaseTimestamp global
+            const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+              if (!timestamp) return 0;
+              if (timestamp instanceof Date) return timestamp.getTime();
+              if (typeof timestamp === 'object' && timestamp !== null) {
+                const ts = timestamp as Extract<FirebaseTimestamp, object>;
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+              }
+              return new Date(timestamp as string | number).getTime();
+            };
+
+            const millis = getMillis(data.createdAt);
+            const dateObj = millis ? new Date(millis) : new Date();
             const dateStr = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
             
             let primaryDest = "Tujuan";
@@ -91,7 +84,8 @@ export default function FinanceReceivablesPage() {
                  primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : String(data.destinations[0].address || "Tujuan");
             }
 
-            const orderDetail: ExtendedUnpaidOrder = {
+            // KODE DIBERSIHKAN: Menggunakan UnpaidOrder asli tanpa Extended
+            const orderDetail: UnpaidOrder = {
               id: String(docObj.id),
               date: dateStr,
               originAddress: originAddress,

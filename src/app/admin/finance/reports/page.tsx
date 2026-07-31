@@ -21,7 +21,7 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
 
 import { FinanceReport } from "@/types/finance";
-import { OrderDetail, LocationDetail } from "@/types/order";
+import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Emerald/Finance Accent)
@@ -56,16 +56,20 @@ export default function FinanceReportsPage() {
         setReports(reportSnap.docs.map(d => {
           const data = d.data() as OrderDetail;
           
-          // 1. Safe Date Parsing
-          let dateObj = new Date();
-          if (data.createdAt) {
-            const ts = data.createdAt as Record<string, unknown>;
-            if (typeof ts.toDate === 'function') {
-               dateObj = ts.toDate() as Date;
-            } else {
-               dateObj = new Date(data.createdAt as string | number);
+          // KODE DIBERSIHKAN: Safe Date Parsing
+          const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+            if (!timestamp) return 0;
+            if (timestamp instanceof Date) return timestamp.getTime();
+            if (typeof timestamp === 'object' && timestamp !== null) {
+              const ts = timestamp as Extract<FirebaseTimestamp, object>;
+              if (typeof ts.toMillis === 'function') return ts.toMillis();
+              if (typeof ts.seconds === 'number') return ts.seconds * 1000;
             }
-          }
+            return new Date(timestamp as string | number).getTime();
+          };
+
+          const millis = getMillis(data.createdAt);
+          const dateObj = millis ? new Date(millis) : new Date();
           
           // 2. Safe Destination Parsing
           let primaryDest = typeof data.destination === 'string' ? data.destination : "Tujuan";

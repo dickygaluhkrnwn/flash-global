@@ -7,7 +7,7 @@ import {
   Search, Filter, ArrowUpDown, 
   Clock, CheckCircle2, AlertCircle, XCircle, 
   ChevronDown, Package, ShieldAlert,
-  Wallet, MessageSquareWarning, Image as ImageIcon, Send, Activity
+  Wallet, MessageSquareWarning, Image as ImageIcon, Send, Activity, ExternalLink
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -19,7 +19,37 @@ import { cn } from "@/lib/utils";
 
 // IMPORT DARI GLOBAL TYPES
 import { InsuranceClaim } from "@/types/support";
-import { OrderDetail, LocationDetail } from "@/types/order";
+import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
+
+// =========================================================================
+// UTILS LOKAL (Type-Safe Timestamp & URL Checker)
+// =========================================================================
+const formatRupiah = (val: number) => {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
+};
+
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  }
+  return new Date(timestamp as string | number).getTime();
+};
+
+const formatTime = (ts: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  const millis = getMillis(ts);
+  if (!millis) return "Unknown";
+  return new Date(millis).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+// Cek apakah link bukti merupakan link gambar atau link eksternal (Drive, Dropbox, dll)
+const isImageUrl = (url: string) => {
+  if (!url) return false;
+  return url.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp)$/i) != null || url.includes('cloudinary') || url.includes('firebasestorage');
+};
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Amber/Support Theme)
@@ -45,7 +75,11 @@ export default function AdminClaimsPage() {
     const q = query(collection(db, "insurance_claims"), orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setClaims(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InsuranceClaim)));
+      // KODE DIBERSIHKAN: Safe typing
+      const claimsData: InsuranceClaim[] = snapshot.docs.map(d => {
+        return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as InsuranceClaim;
+      });
+      setClaims(claimsData);
       setIsLoading(false);
     }, (error) => {
       console.error("Gagal menarik klaim secara real-time:", error);
@@ -58,26 +92,6 @@ export default function AdminClaimsPage() {
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
-  };
-
-  const formatRupiah = (val: number) => {
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
-  };
-
-  // Safe Timestamp Parsers
-  const getMillis = (ts: unknown) => {
-    if (!ts) return 0;
-    const t = ts as { toMillis?: () => number, seconds?: number };
-    if (typeof t.toMillis === 'function') return t.toMillis();
-    if (typeof t.seconds === 'number') return t.seconds * 1000;
-    return new Date(ts as string | number).getTime();
-  };
-
-  const formatTime = (ts?: unknown) => {
-    if (!ts) return "Unknown";
-    const t = ts as { toDate?: () => Date };
-    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(ts as string | number);
-    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const processedClaims = useMemo(() => {
@@ -224,8 +238,6 @@ export default function AdminClaimsPage() {
                   <motion.div key={c.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: idx * 0.05 }}>
                     <TicketCard 
                       claim={c} 
-                      formatTime={formatTime} 
-                      formatRupiah={formatRupiah} 
                       setShowImageModal={setShowImageModal} 
                       showToast={showToast} 
                     />
@@ -261,20 +273,18 @@ export default function AdminClaimsPage() {
 // =========================================================================
 interface TicketCardProps {
   claim: InsuranceClaim;
-  formatTime: (ts?: unknown) => string;
-  formatRupiah: (val: number) => string;
   setShowImageModal: (url: string) => void;
   showToast: (type: "success" | "error", msg: string) => void;
 }
 
-function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showToast }: TicketCardProps) {
+function TicketCard({ claim, setShowImageModal, showToast }: TicketCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [orderData, setOrderData] = useState<OrderDetail | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const isPending = claim.status === "Pending Review";
-  const isApproved = claim.status === "Approved";
+  const isPending = claim.status === "Pending Review" || claim.status === "pending" || claim.status === "investigating";
+  const isApproved = claim.status === "Approved" || claim.status === "approved";
   
   // Status Bar Indicator
   const statusBarColor = isPending ? "bg-amber-500" : isApproved ? "bg-emerald-500" : "bg-red-500";
@@ -292,7 +302,9 @@ function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showTo
           docSnap = await getDoc(docRef);
         }
         if (docSnap.exists()) {
-          setOrderData({ id: docSnap.id, category: "domestik", status: "Unknown", ...docSnap.data() } as OrderDetail);
+          // KODE DIBERSIHKAN: Safe typing
+          const data = docSnap.data() as Record<string, unknown>;
+          setOrderData({ id: docSnap.id, category: "domestik", status: "Unknown", ...data } as unknown as OrderDetail);
         }
       } catch (e) {
         console.error("Gagal menarik detail order:", e);
@@ -316,6 +328,9 @@ function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showTo
       setIsProcessing(false);
     }
   };
+
+  const proofUrl = claim.proofUrl || (claim.proofImages && claim.proofImages[0]);
+  const isProofImage = isImageUrl(proofUrl || "");
 
   return (
     <div className={cn("bg-white/80 backdrop-blur-xl border shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] transition-all duration-300 relative overflow-hidden flex flex-col group", isExpanded ? "border-slate-300 rounded-[2rem] shadow-md" : `border-white rounded-[2rem] ${bgCardColor}`)}>
@@ -383,16 +398,32 @@ function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showTo
                   </div>
                   
                   {/* Lampiran */}
-                  {claim.proofUrl && (
+                  {proofUrl && (
                     <div 
-                      onClick={(e) => { e.stopPropagation(); setShowImageModal(claim.proofUrl!); }}
-                      className="w-48 h-32 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden relative cursor-pointer group shadow-sm"
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if (isProofImage) {
+                          setShowImageModal(proofUrl); 
+                        } else {
+                          window.open(proofUrl, "_blank");
+                        }
+                      }}
+                      className="w-48 h-32 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden relative cursor-pointer group shadow-sm flex items-center justify-center"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={claim.proofUrl} alt="Lampiran" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                        <ImageIcon className="w-6 h-6 text-white" />
-                      </div>
+                      {isProofImage ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={proofUrl} alt="Lampiran" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                            <ImageIcon className="w-6 h-6 text-white" />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center text-slate-500 group-hover:text-blue-600 transition-colors">
+                          <ExternalLink className="w-8 h-8 mb-2" />
+                          <span className="text-xs font-bold">Buka Tautan Eksternal</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -432,7 +463,7 @@ function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showTo
                         <div className="mt-1 w-2 h-2 rounded-full bg-slate-300 ring-4 ring-slate-100 shrink-0" />
                         <div>
                           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Asal</p>
-                          <p className="text-xs font-bold text-slate-900">{typeof orderData.origin === 'object' && orderData.origin !== null ? (orderData.origin as LocationDetail).address : (orderData.origin || "-")}</p>
+                          <p className="text-xs font-bold text-slate-900">{typeof orderData.origin === 'object' && orderData.origin !== null ? (orderData.origin as LocationDetail).address : String(orderData.origin || "-")}</p>
                         </div>
                       </div>
                       <div className="border-l-2 border-dashed border-slate-200 ml-[3px] pl-5 py-1">
@@ -442,7 +473,7 @@ function TicketCard({ claim, formatTime, formatRupiah, setShowImageModal, showTo
                         <div className="mt-1 w-2 h-2 rounded-full bg-red-600 ring-4 ring-red-50 shrink-0" />
                         <div>
                           <p className="text-[9px] text-red-600 font-bold uppercase tracking-wider mb-0.5">Tujuan Akhir</p>
-                          <p className="text-xs font-bold text-slate-900">{orderData.destinations && orderData.destinations.length > 0 ? orderData.destinations[orderData.destinations.length - 1].address : (orderData.destination || "-")}</p>
+                          <p className="text-xs font-bold text-slate-900">{orderData.destinations && orderData.destinations.length > 0 ? orderData.destinations[orderData.destinations.length - 1].address : String(orderData.destination || "-")}</p>
                         </div>
                       </div>
                     </div>

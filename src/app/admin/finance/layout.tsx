@@ -15,5 +15,5 @@ export default function AdminFinanceLayout({ children }: { children: React.React
         {children}
       </motion.div>
     </AnimatePresence>
-  );
+  ); 
 }

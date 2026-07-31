@@ -20,24 +20,8 @@ import { useReactToPrint } from "react-to-print";
 import { InvoiceA4Template } from "@/components/shared/InvoiceA4Template";
 
 // MENGGUNAKAN GLOBAL TYPES
-import { UnpaidOrder } from "@/types/finance";
-import { OrderDetail, LocationDetail } from "@/types/order";
-
-interface ExtendedUnpaidOrder extends UnpaidOrder {
-  weight: number;
-  vehicle: string;
-}
-
-export interface ExtendedB2BClientDebt {
-  id: string; // userId
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  unpaidCount: number;
-  totalDebt: number;
-  orders: ExtendedUnpaidOrder[];
-}
+import { UnpaidOrder, B2BClientDebt } from "@/types/finance"; // <-- KODE DIBERSIHKAN: Import langsung
+import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
 
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(220,38,38,0.1)] transition-all duration-300 rounded-2xl";
@@ -47,7 +31,7 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
   const userIdParam = decodeURIComponent(params.id);
   const { user: currentUser } = useAuthStore();
 
-  const [clientData, setClientData] = useState<ExtendedB2BClientDebt | null>(null);
+  const [clientData, setClientData] = useState<B2BClientDebt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -85,7 +69,7 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
         const b2bOrderSnap = await getDocs(b2bOrderQ);
         
         let totalDebt = 0;
-        const orders: ExtendedUnpaidOrder[] = [];
+        const orders: UnpaidOrder[] = [];
         
         b2bOrderSnap.forEach(docObj => {
           const data = docObj.data() as OrderDetail;
@@ -98,18 +82,20 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
             const weight = Number(data.totalWeight || data.weight || 0);
             const vehicle = data.vehicleName ? String(data.vehicleName) : (data.vehicle ? String(data.vehicle) : "Kargo Logistik");
             
-            let dateObj = new Date();
-            if (data.createdAt) {
-               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-               const ts: any = data.createdAt;
-               if (ts && typeof ts.toDate === 'function') {
-                  dateObj = ts.toDate();
-               } else if (ts && typeof ts === 'object' && ts.seconds) {
-                  dateObj = new Date(ts.seconds * 1000);
-               } else {
-                  dateObj = new Date(ts);
-               }
-            }
+            // KODE DIBERSIHKAN: Safe Date Parsing menggunakan FirebaseTimestamp global tanpa 'any'
+            const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+              if (!timestamp) return 0;
+              if (timestamp instanceof Date) return timestamp.getTime();
+              if (typeof timestamp === 'object' && timestamp !== null) {
+                const ts = timestamp as Extract<FirebaseTimestamp, object>;
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+              }
+              return new Date(timestamp as string | number).getTime();
+            };
+
+            const millis = getMillis(data.createdAt);
+            const dateObj = millis ? new Date(millis) : new Date();
             const dateStr = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
             
             let primaryDest = "Tujuan";
@@ -140,8 +126,8 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
              id: userIdParam,
              name: companyName,
              email: companyEmail,
-             phone: companyPhone,
-             address: companyAddress,
+             phone: companyPhone,     // Disimpan secara type-safe
+             address: companyAddress, // Disimpan secara type-safe
              unpaidCount: orders.length,
              totalDebt: totalDebt,
              orders: orders
@@ -301,8 +287,8 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
              </div>
              <div className="space-y-3">
                <p className="flex items-center gap-2 text-xs font-medium text-slate-600"><Mail className="w-4 h-4 text-slate-400 shrink-0"/> <span className="truncate">{clientData.email}</span></p>
-               <p className="flex items-center gap-2 text-xs font-medium text-slate-600"><Phone className="w-4 h-4 text-slate-400 shrink-0"/> <span className="font-mono">{clientData.phone}</span></p>
-               <p className="flex items-start gap-2 text-xs font-medium text-slate-600 leading-relaxed"><Map className="w-4 h-4 text-slate-400 shrink-0 mt-0.5"/> <span className="line-clamp-2">{clientData.address}</span></p>
+               <p className="flex items-center gap-2 text-xs font-medium text-slate-600"><Phone className="w-4 h-4 text-slate-400 shrink-0"/> <span className="font-mono">{clientData.phone || "-"}</span></p>
+               <p className="flex items-start gap-2 text-xs font-medium text-slate-600 leading-relaxed"><Map className="w-4 h-4 text-slate-400 shrink-0 mt-0.5"/> <span className="line-clamp-2">{clientData.address || "-"}</span></p>
              </div>
            </div>
 
@@ -425,8 +411,8 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
             dueDate={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
             clientName={String(clientData.name)}
             clientEmail={String(clientData.email)}
-            clientAddress={String(clientData.address)}
-            clientPhone={String(clientData.phone)}
+            clientAddress={String(clientData.address || "-")}
+            clientPhone={String(clientData.phone || "-")}
             items={clientData.orders.map(o => ({
               id: String(o.id).slice(-8).toUpperCase(),
               date: String(o.date),

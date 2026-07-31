@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { sendPasswordResetEmail } from "firebase/auth"; 
 import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminInput } from "@/components/admin/ui/AdminInput";

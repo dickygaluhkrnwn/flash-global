@@ -25,6 +25,10 @@ export interface User {
   
   // --- Field Spesifik B2B & Operasional ---
   companyName?: string;
+  legalCompanyName?: string; // <-- BARU: Nama legal entitas perusahaan
+  companyEmail?: string;     // <-- BARU: Email resmi perusahaan (jika beda dengan email login)
+  companyPhone?: string;     // <-- BARU: Kontak resmi perusahaan
+  depositBalance?: number;   // <-- BARU: Saldo prabayar/deposit klien B2B
   npwp?: string;
   defaultAddress?: string;
   picName?: string;

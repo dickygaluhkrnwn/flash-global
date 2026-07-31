@@ -325,4 +325,4 @@ export default function StaffDetailPage() {
       </div>
     </div>
   );
-}
+} 

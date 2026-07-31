@@ -17,28 +17,8 @@ import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
-import { OrderDetail, LocationDetail } from "@/types/order";
+import { OrderDetail, LocationDetail, TrackingHistoryItem, DeliveryItem } from "@/types/order";
 import { DriverData } from "@/types/admin";
-
-interface TrackingLog {
-  id?: string;
-  status?: string;
-  date?: string;
-  description?: string;
-  location?: string;
-  proofUrl?: string;
-}
-
-interface CargoItem {
-  name?: string;
-  dimType?: string;
-  length?: number | string;
-  width?: number | string;
-  height?: number | string;
-  weightType?: string;
-  value?: number | string;
-  [key: string]: unknown;
-}
 
 export default function DomesticOrderDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -129,7 +109,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
       }
 
       const uniqueId = Date.now().toString();
-      const newLog = { 
+      const newLog: TrackingHistoryItem = { 
         id: uniqueId, 
         status: statusForm.status, 
         date: finalLogDate, 
@@ -176,7 +156,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
         }
       }
 
-      const newLog = { 
+      const newLog: TrackingHistoryItem = { 
         id: uniqueId,
         status: "Menuju Lokasi Jemput", 
         date: logDate, 
@@ -218,7 +198,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   if (!order) return null;
 
   // =========================================================================
-  // SAFE DATA EXTRACTION
+  // SAFE DATA EXTRACTION (KODE DIBERSIHKAN DARI CASTING LIAR)
   // =========================================================================
   const originObj = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail) : null;
   const originAddr = String(originObj?.address || (typeof order.origin === 'string' ? order.origin : ""));
@@ -230,25 +210,22 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   const destName = String(destObj?.receiverName || order.receiverName || "Penerima");
   const destPhone = String(destObj?.receiverPhone || order.receiverPhone || "-");
 
-  // Ekstraksi Item Barang (Mencari di dalam Array Destinations)
   const orderItems = destObj?.items && Array.isArray(destObj.items) ? destObj.items : [];
 
   const isPaymentVerified = order.paymentStatus === "Lunas" || order.isB2BApplied; 
   
-  // PERBAIKAN DI SINI: DOUBLE CASTING (unknown -> Record)
-  const bd = (order.breakdown as unknown as Record<string, unknown>) || {};
+  const bd = order.breakdown || { deliveryFee: 0, insuranceFee: 0, porterFee: 0, tollFee: 0, b2bDiscount: 0, grandTotal: 0 };
   const deliveryFee = Number(bd.deliveryFee || 0);
   const insuranceFee = Number(bd.insuranceFee || 0);
   const porterFee = Number(bd.porterFee || 0);
   const tollFee = Number(bd.tollFee || 0);
   const b2bDiscount = Number(bd.b2bDiscount || 0);
   
-  const orderRecord = order as unknown as Record<string, unknown>;
-  const discountPromoAmount = Number(orderRecord.discountPromoAmount || 0);
-  const porterCount = Number(orderRecord.porterCount || 1);
+  const discountPromoAmount = Number(order.discountPromoAmount || 0);
+  const porterCount = Number(order.porterCount || 1);
   const grandTotal = Number(order.finalGrandTotal || bd.grandTotal || order.totalCost || 0);
   
-  const receiptUrl = orderRecord.receiptUrl ? String(orderRecord.receiptUrl) : null;
+  const receiptUrl = order.receiptUrl ? String(order.receiptUrl) : null;
 
   return (
     <div className="space-y-6 pb-10 max-w-7xl mx-auto">
@@ -355,8 +332,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-white/60">
-                     {orderItems.map((rawItm: unknown, i: number) => {
-                       const itm = rawItm as CargoItem;
+                     {orderItems.map((itm: DeliveryItem, i: number) => {
                        return (
                          <tr key={i} className="hover:bg-white/40 transition-colors">
                            <td className="p-4 pl-6 font-black text-slate-800">{itm.name || "Barang"}</td>
@@ -390,8 +366,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                  </div>
               ) : (
                 <div className="space-y-6 pt-2">
-                  {[...order.trackingHistory].reverse().map((item, idx: number) => {
-                    const log = item as TrackingLog;
+                  {[...order.trackingHistory].reverse().map((log: TrackingHistoryItem, idx: number) => {
                     return (
                       <div key={log.id || String(idx)} className="relative pl-6 border-l-2 border-slate-200 last:border-transparent pb-2">
                         <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${idx === 0 ? 'bg-gradient-to-br from-[#9A242B] to-[#7A171D]' : 'bg-slate-300'}`}>

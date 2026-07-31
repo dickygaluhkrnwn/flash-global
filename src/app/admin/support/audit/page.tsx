@@ -44,7 +44,10 @@ export default function AdminAuditPage() {
     const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const logsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
+      // KODE DIBERSIHKAN: Safe typing
+      const logsData: AuditLog[] = snapshot.docs.map(d => {
+        return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as AuditLog;
+      });
       setLogs(logsData);
       setIsLoading(false);
     }, (error) => {
@@ -59,12 +62,18 @@ export default function AdminAuditPage() {
   const formatTime = (ts?: unknown) => {
     if (!ts) return { date: "Memproses...", time: "" };
     let dateObj: Date;
-    const timestamp = ts as { toDate?: () => Date, seconds?: number };
     
-    if (typeof timestamp.toDate === 'function') {
-      dateObj = timestamp.toDate();
-    } else if (typeof timestamp.seconds === 'number') {
-      dateObj = new Date(timestamp.seconds * 1000);
+    if (ts instanceof Date) {
+      dateObj = ts;
+    } else if (typeof ts === 'object' && ts !== null) {
+      const timestamp = ts as { toDate?: () => Date, seconds?: number };
+      if (typeof timestamp.toDate === 'function') {
+        dateObj = timestamp.toDate();
+      } else if (typeof timestamp.seconds === 'number') {
+        dateObj = new Date(timestamp.seconds * 1000);
+      } else {
+        dateObj = new Date();
+      }
     } else {
       dateObj = new Date(ts as string | number);
     }
@@ -79,15 +88,15 @@ export default function AdminAuditPage() {
   const getActionTheme = (action: string = "") => {
     const act = action.toLowerCase();
     if (act.includes('delete') || act.includes('remove') || act.includes('suspend') || act.includes('reject')) {
-      return { badge: "danger", text: "text-red-600" };
+      return { badge: "danger" as const, text: "text-red-600" };
     }
     if (act.includes('create') || act.includes('add') || act.includes('approve') || act.includes('lunas')) {
-      return { badge: "success", text: "text-emerald-600" };
+      return { badge: "success" as const, text: "text-emerald-600" };
     }
     if (act.includes('update') || act.includes('edit') || act.includes('modify') || act.includes('ubah')) {
-      return { badge: "info", text: "text-blue-600" };
+      return { badge: "info" as const, text: "text-blue-600" };
     }
-    return { badge: "default", text: "text-slate-600" };
+    return { badge: "default" as const, text: "text-slate-600" };
   };
 
   const uniqueModules = useMemo(() => {
@@ -264,7 +273,6 @@ export default function AdminAuditPage() {
                       {/* Kolom 4: Aksi & Deskripsi */}
                       <div className="w-full lg:w-[40%] flex flex-col gap-2 bg-slate-50/50 p-4 rounded-xl border border-slate-100 shadow-inner h-full min-h-[80px]">
                         <div className="flex items-center gap-2">
-                          {/* @ts-expect-error Pengecualian disengaja karena varian dinamis belum didukung penuh oleh komponen AdminBadge di versi ini */}
                           <AdminBadge variant={theme.badge} className="text-[9px] uppercase tracking-widest py-0.5 px-2">{log.action}</AdminBadge>
                         </div>
                         {log.details && (

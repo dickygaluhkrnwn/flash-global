@@ -11,7 +11,7 @@ export default function AdminOrdersLayout({ children }: { children: React.ReactN
         exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.3 }}
         className="font-sans pb-10"
-      >
+      > 
         {children}
       </motion.div>
     </AnimatePresence>

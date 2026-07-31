@@ -39,5 +39,6 @@ export interface AuditLog {
   targetId?: string; // ID entitas yang dimanipulasi
   details?: string;
   ipAddress?: string;
-  timestamp: Date | FirebaseTimestamp;
+  // KODE DIBERSIHKAN: Timestamp dibuat super fleksibel agar fungsi formatTime aman dari Type Error
+  timestamp: FirebaseTimestamp | Date | string | number | null | undefined;
 }

@@ -74,14 +74,18 @@ export default function AdminPaymentsPage() {
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          const data = docSnap.data() as PaymentConfig;
-          setPaymentConfig({
-            transferBank: data.transferBank || [],
-            qrisImageUrl: data.qrisImageUrl || null
-          });
-          setLocalBanks(data.transferBank || []);
-          setLocalQrisUrl(data.qrisImageUrl || null);
-          setQrisPreview(data.qrisImageUrl || null);
+          // KODE DIBERSIHKAN: Safe Extraction untuk menghindari crash jika data corrupt
+          const rawData = docSnap.data() || {};
+          
+          const safeData: PaymentConfig = {
+            transferBank: Array.isArray(rawData.transferBank) ? rawData.transferBank : [],
+            qrisImageUrl: typeof rawData.qrisImageUrl === 'string' ? rawData.qrisImageUrl : null
+          };
+
+          setPaymentConfig(safeData);
+          setLocalBanks(safeData.transferBank);
+          setLocalQrisUrl(safeData.qrisImageUrl);
+          setQrisPreview(safeData.qrisImageUrl);
         }
       } catch (error) {
         console.error("Gagal menarik master data pembayaran:", error);

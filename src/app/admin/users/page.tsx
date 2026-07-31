@@ -4,4 +4,4 @@ import { redirect } from "next/navigation";
 // URL utama /admin/users akan langsung dilempar ke tab pertama (B2C)
 export default function AdminUsersMainPage() {
   redirect("/admin/users/b2c");
-}
+} 

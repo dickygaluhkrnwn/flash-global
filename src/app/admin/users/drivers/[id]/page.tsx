@@ -19,42 +19,8 @@ import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
-import { PricingConfig } from "@/types/admin";
-import { DynamicVehicle } from "@/types/order";
-
-// ======================================================================
-// JURUS SHIELDING INTERFACE
-// ======================================================================
-export interface SafeDriverData {
-  id: string;
-  name?: string;
-  phone?: string;
-  partnerType?: string;
-  companyName?: string;
-  npwp?: string;
-  nik?: string;
-  simNumber?: string;
-  licensePlate?: string;
-  vehicleType?: string;
-  bankName?: string;
-  bankAccount?: string;
-  vendorId?: string;
-  vendorName?: string;
-  driverId?: string;
-  driverName?: string; 
-  isSuspended?: boolean;
-  balance?: number;
-  baseAddress?: string;
-  fotoProfileUrl?: string;
-  fotoKtpUrl?: string;
-  fotoSimUrl?: string;
-  npwpUrl?: string;
-  stnkUrl?: string;
-  kirUrl?: string;
-  baseCoords?: { lat: number; lng: number };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any; 
-}
+import { PricingConfig, DriverData } from "@/types/admin";
+import { DynamicVehicle } from "@/types/order"; // <-- KODE DIBERSIHKAN: Menghapus FirebaseTimestamp karena tidak lagi dipakai
 
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
@@ -79,10 +45,10 @@ export default function DriverDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const [partner, setPartner] = useState<SafeDriverData | null>(null);
-  const [formData, setFormData] = useState<Partial<SafeDriverData>>({});
+  const [partner, setPartner] = useState<DriverData | null>(null);
+  const [formData, setFormData] = useState<Partial<DriverData>>({});
   
-  const [vendors, setVendors] = useState<SafeDriverData[]>([]);
+  const [vendors, setVendors] = useState<DriverData[]>([]);
   const [fleetDrivers, setFleetDrivers] = useState<{id: string, name: string, vendorId: string}[]>([]); 
   const [vehiclesConfig, setVehiclesConfig] = useState<DynamicVehicle[]>([]);
 
@@ -113,7 +79,7 @@ export default function DriverDetailPage() {
           setIsLoading(false);
           return;
         }
-        const data = { id: docSnap.id, ...docSnap.data() } as SafeDriverData;
+        const data = { id: docSnap.id, ...docSnap.data() } as DriverData;
         setPartner(data);
         setFormData(data);
 
@@ -123,7 +89,7 @@ export default function DriverDetailPage() {
 
         const vQuery = query(collection(db, "driver_wallets"), where("partnerType", "==", "Vendor"));
         const vSnap = await getDocs(vQuery);
-        setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() }) as SafeDriverData));
+        setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() }) as DriverData));
 
         const dQuery = query(collection(db, "driver_wallets"), where("partnerType", "==", "FleetDriver"));
         const dSnap = await getDocs(dQuery);
@@ -186,7 +152,7 @@ export default function DriverDetailPage() {
         files.kir ? uploadToCloudinary(files.kir) : Promise.resolve(formData.kirUrl),
       ]);
 
-      const payload: Partial<SafeDriverData> = {
+      const payload: Partial<DriverData> = {
         ...formData,
         fotoProfileUrl: profileUrl, fotoKtpUrl: ktpUrl, fotoSimUrl: simUrl,
         npwpUrl: npwpUrl, stnkUrl: stnkUrl, kirUrl: kirUrl
@@ -213,7 +179,7 @@ export default function DriverDetailPage() {
       });
 
       await updateDoc(doc(db, "driver_wallets", partnerId), payload);
-      setPartner(payload as SafeDriverData);
+      setPartner(payload as DriverData);
       setFormData(payload);
       setFiles({ profile: null, ktp: null, sim: null, npwp: null, stnk: null, kir: null });
       setIsEditing(false);

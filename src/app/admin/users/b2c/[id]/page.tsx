@@ -19,6 +19,7 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 import { User as UserType } from "@/types/user";
+import { FirebaseTimestamp } from "@/types/order"; // <-- IMPORT TIPE FIREBASE TIMESTAMP
 
 export default function B2CDetailPage() {
   const router = useRouter();
@@ -93,12 +94,12 @@ export default function B2CDetailPage() {
     }
   };
 
-  const formatDate = (dateInput: unknown) => {
+  // KODE DIBERSIHKAN: Menggunakan FirebaseTimestamp dari global types
+  const formatDate = (dateInput: FirebaseTimestamp | unknown) => {
     if (!dateInput) return "-";
     
-    // Jika berupa object (Firestore Timestamp)
     if (typeof dateInput === 'object' && dateInput !== null) {
-      const ts = dateInput as { toDate?: () => Date; seconds?: number };
+      const ts = dateInput as Extract<FirebaseTimestamp, object>;
       if (typeof ts.toDate === 'function') {
         return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
       }
@@ -107,7 +108,6 @@ export default function B2CDetailPage() {
       }
     }
     
-    // Jika berupa String (ISO) atau number
     return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
   };
 

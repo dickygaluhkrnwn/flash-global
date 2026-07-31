@@ -15,35 +15,44 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { cn } from "@/lib/utils";
+
+// KODE DIBERSIHKAN: Import murni dari order.ts tanpa mendefinisikan ulang
 import { FirebaseTimestamp } from "@/types/order";
 
+// KODE DIBERSIHKAN: Interface ini lebih cocok ditaruh di types/finance.ts, 
+// tapi untuk sementara kita benahi dulu field-fieldnya agar aman.
 export interface DepositRequest {
   id: string;
   userId: string;
   clientName: string;
   amount: number;
   proofUrl: string;
-  status: string;
+  status: string; // "Menunggu Verifikasi" | "Disetujui" | "Ditolak"
   createdAt: FirebaseTimestamp;
-  verifiedAt?: FirebaseTimestamp;
+  reviewedAt?: FirebaseTimestamp;
+  reviewedBy?: string;
 }
 
 // =========================================================================
-// UTILS LOKAL
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
 // =========================================================================
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-const getMillis = (ts: FirebaseTimestamp) => {
-  if (!ts) return 0;
-  if (typeof ts === 'object' && ts !== null) {
-    const objTs = ts as Record<string, unknown>;
-    if (typeof objTs.toMillis === 'function') return objTs.toMillis() as number;
-    if (typeof objTs.seconds === 'number') return objTs.seconds * 1000;
+
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
   }
-  return new Date(ts as string | number).getTime();
+  return new Date(timestamp as string | number).getTime();
 };
+
 const formatDate = (timestamp: FirebaseTimestamp) => {
-  if (!timestamp) return "-";
-  return new Date(getMillis(timestamp)).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const millis = getMillis(timestamp);
+  if (!millis) return "-";
+  return new Date(millis).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
 // =========================================================================
@@ -60,7 +69,8 @@ export default function VerifyDepositPage() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Pending"); 
+  // KODE DIBERSIHKAN: Sesuaikan dengan string di Firestore
+  const [filterStatus, setFilterStatus] = useState("Menunggu Verifikasi"); 
   const [sortOrder, setSortOrder] = useState("newest");
   
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error", text: string } | null>(null);
@@ -113,17 +123,21 @@ export default function VerifyDepositPage() {
     return result;
   }, [deposits, searchQuery, filterStatus, sortOrder]);
 
-  const handleVerifyDeposit = async (reqId: string, action: "Approve" | "Reject") => {
+  const handleVerifyDeposit = async (reqId: string, action: "Disetujui" | "Ditolak") => {
     setIsProcessing(true);
     try {
       const targetReq = deposits.find(d => d.id === reqId);
       if (!targetReq) throw new Error("Data Top-Up tidak ditemukan");
 
-      if (action === "Approve") {
+      if (action === "Disetujui") {
         const batch = writeBatch(db);
         
         const reqRef = doc(db, "deposit_requests", reqId);
-        batch.update(reqRef, { status: "Approved", verifiedAt: serverTimestamp() });
+        batch.update(reqRef, { 
+          status: "Disetujui", 
+          reviewedAt: serverTimestamp(),
+          reviewedBy: currentUser?.uid || "Admin" 
+        });
         
         const userRef = doc(db, "users", targetReq.userId);
         batch.update(userRef, { depositBalance: increment(targetReq.amount) });
@@ -143,8 +157,9 @@ export default function VerifyDepositPage() {
         showToast("success", "Top-Up disetujui! Saldo deposit klien berhasil ditambahkan.");
       } else {
         await updateDoc(doc(db, "deposit_requests", reqId), { 
-          status: "Rejected", 
-          verifiedAt: serverTimestamp() 
+          status: "Ditolak", 
+          reviewedAt: serverTimestamp(),
+          reviewedBy: currentUser?.uid || "Admin"
         });
         showToast("error", "Pengajuan Top-Up ditolak.");
       }
@@ -157,7 +172,7 @@ export default function VerifyDepositPage() {
     }
   };
 
-  const pendingCount = deposits.filter(d => d.status === "Pending").length;
+  const pendingCount = deposits.filter(d => d.status === "Menunggu Verifikasi").length;
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
     return (
@@ -239,9 +254,9 @@ export default function VerifyDepositPage() {
               <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
               <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full lg:w-auto bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-8 py-2.5 text-sm outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 shadow-sm appearance-none font-bold text-slate-700 transition-all hover:bg-white cursor-pointer min-w-[200px]">
                 <option value="All">Semua Status Deposit</option>
-                <option value="Pending">Menunggu Cek Bank (Pending)</option>
-                <option value="Approved">Saldo Masuk (Approved)</option>
-                <option value="Rejected">Setoran Ditolak (Rejected)</option>
+                <option value="Menunggu Verifikasi">Menunggu Cek Bank (Pending)</option>
+                <option value="Disetujui">Saldo Masuk (Approved)</option>
+                <option value="Ditolak">Setoran Ditolak (Rejected)</option>
               </select>
             </div>
             <div className="relative flex-1 lg:flex-none">
@@ -272,8 +287,8 @@ export default function VerifyDepositPage() {
             <div className="flex flex-col gap-4">
               <AnimatePresence>
                 {processedDeposits.map((d, idx) => {
-                  const isApproved = d.status === "Approved";
-                  const isRejected = d.status === "Rejected";
+                  const isApproved = d.status === "Disetujui";
+                  const isRejected = d.status === "Ditolak";
 
                   return (
                     <motion.div 
@@ -382,12 +397,12 @@ export default function VerifyDepositPage() {
                     </div>
 
                     {/* Tombol Action Approve/Reject */}
-                    {selectedDeposit.status === "Pending" && (
+                    {selectedDeposit.status === "Menunggu Verifikasi" && (
                       <div className="flex gap-3 pt-2">
-                        <AdminButton onClick={() => { if(confirm("Tolak bukti transfer Top-Up ini?")) { handleVerifyDeposit(selectedDeposit.id, "Reject"); } }} disabled={isProcessing} variant="danger" className="w-14 shrink-0 shadow-lg" title="Tolak Pengajuan">
+                        <AdminButton onClick={() => { if(confirm("Tolak bukti transfer Top-Up ini?")) { handleVerifyDeposit(selectedDeposit.id, "Ditolak"); } }} disabled={isProcessing} variant="danger" className="w-14 shrink-0 shadow-lg" title="Tolak Pengajuan">
                           <XCircle className="w-5 h-5" />
                         </AdminButton>
-                        <AdminButton onClick={() => handleVerifyDeposit(selectedDeposit.id, "Approve")} disabled={isProcessing} variant="success" className="flex-1 shadow-lg shadow-emerald-600/30 text-[13px]">
+                        <AdminButton onClick={() => handleVerifyDeposit(selectedDeposit.id, "Disetujui")} disabled={isProcessing} variant="success" className="flex-1 shadow-lg shadow-emerald-600/30 text-[13px]">
                           <CheckCircle2 className="w-5 h-5 mr-2" /> TERIMA & TAMBAH SALDO
                         </AdminButton>
                       </div>

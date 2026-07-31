@@ -20,34 +20,22 @@ import { cn } from "@/lib/utils";
 
 // --- IMPORT GLOBAL TYPES ---
 import { DriverData } from "@/types/admin";
+import { TopupRequest } from "@/types/finance"; // <-- KODE DIBERSIHKAN: Import dari SSOT
+import { FirebaseTimestamp } from "@/types/order";
 
-interface TopupRequest {
-  id: string;
-  userId: string;
-  clientName: string;
-  amount: number;
-  proofUrl: string;
-  status: "Pending" | "Disetujui" | "Ditolak";
-  createdAt: unknown; 
-  userType?: "Driver" | "B2B";
-}
-
-// 🚀 FUNGSI HELPER PENJINAK UNKNOWN TIMESTAMP (TANPA ANY)
-function parseUnknownDate(val: unknown): Date {
-  if (!val) return new Date();
-  
-  if (typeof val === 'object' && val !== null && 'toDate' in val) {
-    const obj = val as { toDate?: unknown };
-    if (typeof obj.toDate === 'function') {
-      return (val as { toDate: () => Date }).toDate();
-    }
+// =========================================================================
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
+// =========================================================================
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
   }
-  
-  if (val instanceof Date) return val;
-  if (typeof val === 'number' || typeof val === 'string') return new Date(val as string | number);
-  
-  return new Date();
-}
+  return new Date(timestamp as string | number).getTime();
+};
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Teal Accent untuk Top-Up)
@@ -78,23 +66,26 @@ export default function AdminWalletTopupsPage() {
     try {
       // Perlu ambil data wallets untuk identifikasi apakah user ini Driver atau B2B
       const driverSnap = await getDocs(collection(db, "driver_wallets"));
-      const allWallets = driverSnap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverData[];
+      // KODE DIBERSIHKAN: Safe typing untuk data Firestore
+      const allWallets: DriverData[] = driverSnap.docs.map(d => {
+        return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as DriverData;
+      });
 
       const topupQ = query(collection(db, "deposit_requests"), where("status", "==", "Pending"));
       const topupSnap = await getDocs(topupQ);
       
-      const topupList = topupSnap.docs.map(d => {
-        const data = d.data();
+      const topupList: TopupRequest[] = topupSnap.docs.map(d => {
+        const data = d.data() as Record<string, unknown>;
         const isDriver = allWallets.some(driver => driver.id === data.userId);
         return {
           id: d.id,
           ...data,
           userType: isDriver ? "Driver" : "B2B"
-        } as TopupRequest;
+        } as unknown as TopupRequest;
       });
 
-      // Sort by latest Date
-      topupList.sort((a, b) => parseUnknownDate(b.createdAt).getTime() - parseUnknownDate(a.createdAt).getTime());
+      // KODE DIBERSIHKAN: Sort by latest Date menggunakan getMillis (super aman)
+      topupList.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
       
       setTopups(topupList);
     } catch (error) {
@@ -275,7 +266,8 @@ export default function AdminWalletTopupsPage() {
             ) : (
               <AnimatePresence>
                 {processedData.map((req, idx) => {
-                  const ts = parseUnknownDate(req.createdAt);
+                  const millis = getMillis(req.createdAt);
+                  const ts = millis ? new Date(millis) : new Date();
                   const dateStr = ts.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
                   const timeStr = ts.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 

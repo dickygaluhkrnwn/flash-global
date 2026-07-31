@@ -9,7 +9,7 @@ import {
   Plus, User, Building2, UserSquare2, 
   ShieldAlert, Activity, Eye, Trash2, Clock, Filter,
   Users2, UserMinus, FileText
-} from "lucide-react";
+} from "lucide-react"; 
 
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from "firebase/firestore";

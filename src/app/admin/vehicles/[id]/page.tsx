@@ -17,11 +17,9 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { cn } from "@/lib/utils";
 
+// IMPORT GLOBAL TYPES
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
-
-// EXTEND TYPE UNTUK MENGAKOMODASI imageUrl
-type ExtendedVehicle = DynamicVehicle & { imageUrl?: string };
 
 export default function VehicleDetailPage() {
   const router = useRouter();
@@ -40,7 +38,8 @@ export default function VehicleDetailPage() {
   // Data Global Pricing Config
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
 
-  const [currentVehicle, setCurrentVehicle] = useState<Partial<ExtendedVehicle>>({
+  // KODE DIBERSIHKAN: Menggunakan Partial<DynamicVehicle> secara murni
+  const [currentVehicle, setCurrentVehicle] = useState<Partial<DynamicVehicle>>({
     name: "", id: "", category: "Mobil", isMotor: false, maxWeight: 100, baseFare: 0, minKm: 0, perKm: 0, insurancePercent: 0, imageUrl: "",
     dimS: { p: 20, l: 20, t: 20 }, dimM: { p: 40, l: 40, t: 40 }, dimL: { p: 50, l: 50, t: 50 }
   });
@@ -58,7 +57,7 @@ export default function VehicleDetailPage() {
           setPricingConfig(config);
 
           if (!isAddMode) {
-            const foundVehicle = config.customVehicles?.find(v => v.id === vehicleId) as ExtendedVehicle;
+            const foundVehicle = config.customVehicles?.find(v => v.id === vehicleId) as DynamicVehicle;
             if (foundVehicle) {
               const fallbackCategory = foundVehicle.category || (foundVehicle.isMotor ? "Motor" : "Mobil");
               setCurrentVehicle({
@@ -123,7 +122,8 @@ export default function VehicleDetailPage() {
 
     setIsSaving(true);
 
-    const vehicleData: ExtendedVehicle = {
+    // KODE DIBERSIHKAN: Menggunakan DynamicVehicle
+    const vehicleData: DynamicVehicle = {
       id: currentVehicle.id.toLowerCase().replace(/\s+/g, '-'),
       name: currentVehicle.name,
       category: currentVehicle.category as "Motor" | "Mobil" | "Truk",
@@ -142,7 +142,7 @@ export default function VehicleDetailPage() {
       vehicleData.dimL = currentVehicle.dimL;
     }
 
-    const updatedVehicles = [...(pricingConfig.customVehicles || [])] as ExtendedVehicle[];
+    const updatedVehicles = [...(pricingConfig.customVehicles || [])] as DynamicVehicle[];
     
     if (isAddMode) {
       if (updatedVehicles.find(v => v.id === vehicleData.id)) {

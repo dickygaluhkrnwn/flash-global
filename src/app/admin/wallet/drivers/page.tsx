@@ -53,7 +53,15 @@ export default function AdminWalletDriversPage() {
     setIsLoading(true);
     try {
       const driverSnap = await getDocs(collection(db, "driver_wallets"));
-      const allWallets = driverSnap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverData[];
+      
+      // KODE DIBERSIHKAN: Safe typing untuk ekstraksi data Firestore
+      const allWallets: DriverData[] = driverSnap.docs.map(d => {
+        const data = d.data() as Record<string, unknown>;
+        return {
+          id: d.id,
+          ...data
+        } as unknown as DriverData;
+      });
       
       const driversList = allWallets.filter(d => d.partnerType !== "FleetVehicle" && d.partnerType !== "FleetDriver");
       setDrivers(driversList);
@@ -397,7 +405,7 @@ export default function AdminWalletDriversPage() {
                       />
                     </div>
                     {mutasiType === "topup" && (
-                      <p className="text-[10px] text-blue-600 font-bold mt-2 text-center">Dana ini akan digunakan sebagai saldo Prabayar / Potongan Tagihan Otomatis.</p>
+                      <p className="text-[10px] text-emerald-600 font-bold mt-2 text-center">Dana ini akan digunakan sebagai saldo Prabayar / Potongan Tagihan Otomatis.</p>
                     )}
                   </div>
                   

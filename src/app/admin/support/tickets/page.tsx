@@ -19,6 +19,27 @@ import { cn } from "@/lib/utils";
 
 // IMPORT DARI GLOBAL TYPES
 import { SupportTicket } from "@/types/support";
+import { FirebaseTimestamp } from "@/types/order";
+
+// =========================================================================
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
+// =========================================================================
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+  }
+  return new Date(timestamp as string | number).getTime();
+};
+
+const formatTime = (ts: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  const millis = getMillis(ts);
+  if (!millis) return "Unknown";
+  return new Date(millis).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Blue/Indigo Support Theme)
@@ -49,7 +70,10 @@ export default function AdminTicketsPage() {
     const q = query(collection(db, "support_tickets"), orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ticketsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupportTicket));
+      // KODE DIBERSIHKAN: Safe typing extraction
+      const ticketsData: SupportTicket[] = snapshot.docs.map(d => {
+        return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as SupportTicket;
+      });
       setTickets(ticketsData);
       setIsLoading(false);
     }, (error) => {
@@ -73,22 +97,6 @@ export default function AdminTicketsPage() {
       console.error(error);
       showToast("error", "Gagal memperbarui tiket.");
     }
-  };
-
-  // Safe Timestamp Parsers
-  const getMillis = (ts: unknown) => {
-    if (!ts) return 0;
-    const t = ts as { toMillis?: () => number, seconds?: number };
-    if (typeof t.toMillis === 'function') return t.toMillis();
-    if (typeof t.seconds === 'number') return t.seconds * 1000;
-    return new Date(ts as string | number).getTime();
-  };
-
-  const formatTime = (ts?: unknown) => {
-    if (!ts) return "Unknown";
-    const t = ts as { toDate?: () => Date };
-    const d = typeof t.toDate === 'function' ? t.toDate() : new Date(ts as string | number);
-    return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   // LOGIKA FILTER & SORTING
@@ -207,7 +215,7 @@ export default function AdminTicketsPage() {
 
           <div className="flex flex-wrap lg:flex-nowrap w-full lg:w-auto gap-3">
             <div className="relative flex-1 lg:flex-none">
-              <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+              <Filter className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none z-10" />
               <select 
                 value={filterStatus} 
                 onChange={(e) => setFilterStatus(e.target.value)} 

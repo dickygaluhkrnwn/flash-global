@@ -114,7 +114,14 @@ export default function StaffManagementPage() {
       await setDoc(doc(db, "users", staffMockId), newStaffData);
       showToast("success", `Hak akses internal staf ${newStaff.name} berhasil didaftarkan.`);
       
-      const createdStaff = { uid: staffMockId, ...newStaffData, createdAt: new Date() } as UserType;
+      // KODE DIBERSIHKAN: Menambahkan type as UserType dengan fallback property yang wajib
+      const createdStaff = { 
+        uid: staffMockId, 
+        ...newStaffData, 
+        createdAt: new Date(),
+        role: newStaff.role as Role
+      } as unknown as UserType;
+      
       setUsers(prev => [createdStaff, ...prev]);
       
       setNewStaff({ name: "", email: "", phone: "", role: "staff" });

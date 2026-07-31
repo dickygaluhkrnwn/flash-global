@@ -52,30 +52,30 @@ export default function DomesticOrdersPage() {
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   
+  // KODE DIBERSIHKAN: Menggunakan Extract<FirebaseTimestamp, object> yang lebih Type-Safe
   const formatDate = (timestamp: FirebaseTimestamp) => {
     if (!timestamp) return "-";
-    let d: Date;
     if (typeof timestamp === 'object' && timestamp !== null) {
-      const objTs = timestamp as Record<string, unknown>;
-      if (typeof objTs.toDate === 'function') {
-        d = objTs.toDate() as Date;
-      } else {
-        d = new Date(timestamp as string | number);
+      const ts = timestamp as Extract<FirebaseTimestamp, object>;
+      if (typeof ts.toDate === 'function') {
+        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
       }
-    } else {
-      d = new Date(timestamp as string | number);
+      if (typeof ts.seconds === 'number') {
+        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
     }
-    return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return new Date(timestamp as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
-  const getMillis = (ts: FirebaseTimestamp) => {
-    if (!ts) return 0;
-    if (typeof ts === 'object' && ts !== null) {
-      const objTs = ts as Record<string, unknown>;
-      if (typeof objTs.toMillis === 'function') return objTs.toMillis() as number;
-      if (typeof objTs.seconds === 'number') return objTs.seconds * 1000;
+  // KODE DIBERSIHKAN: Menggunakan Extract<FirebaseTimestamp, object> yang lebih Type-Safe
+  const getMillis = (timestamp: FirebaseTimestamp) => {
+    if (!timestamp) return 0;
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const ts = timestamp as Extract<FirebaseTimestamp, object>;
+      if (typeof ts.toMillis === 'function') return ts.toMillis();
+      if (typeof ts.seconds === 'number') return ts.seconds * 1000;
     }
-    return new Date(ts as string | number).getTime();
+    return new Date(timestamp as string | number).getTime();
   };
 
   const processedOrders = useMemo(() => {

@@ -14,6 +14,7 @@ import { collection, onSnapshot, query, orderBy, where } from "firebase/firestor
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { OrderDetail } from "@/types/order"; // <-- KODE DIBERSIHKAN: Import OrderDetail
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Emerald/Finance Accent)
@@ -43,7 +44,9 @@ export default function FinanceVerificationHub() {
       let pending = 0;
       let revenue = 0;
       snapshot.docs.forEach(d => {
-        const data = d.data();
+        // KODE DIBERSIHKAN: Type Casting ke OrderDetail agar paymentStatus dan breakdown terdeteksi
+        const data = d.data() as OrderDetail;
+        
         if (data.paymentStatus === "Menunggu Verifikasi Finance") pending++;
         if (data.paymentStatus === "Lunas") {
           revenue += (data.finalGrandTotal || data.breakdown?.grandTotal || data.totalCost || 0);

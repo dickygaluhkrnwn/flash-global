@@ -19,7 +19,7 @@ import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { cn } from "@/lib/utils";
 
 // IMPORT GLOBAL TYPES
-import { PricingConfig } from "@/types/admin";
+import { PricingConfig, DriverData } from "@/types/admin"; // <-- KODE DIBERSIHKAN: Import DriverData
 import { DynamicVehicle } from "@/types/order";
 
 // ======================================================================
@@ -168,8 +168,8 @@ export default function AddDriverPage() {
 
       const docId = `PRT-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`;
       
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const payload: any = {
+      // KODE DIBERSIHKAN: Divalidasi secara ketat menggunakan Partial<DriverData>
+      const payload: Partial<DriverData> & { id: string } = {
         id: docId,
         name: formData.name || "Tanpa Nama",
         phone: formData.phone || "",

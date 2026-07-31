@@ -19,34 +19,24 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // --- IMPORT GLOBAL TYPES ---
 import { DriverData } from "@/types/admin";
+import { WithdrawalRequest } from "@/types/finance"; // <-- KODE DIBERSIHKAN: Import dari SSOT
+import { FirebaseTimestamp } from "@/types/order";
 
-interface WithdrawalRequest {
-  id: string;
-  driverId: string;
-  amount: number;
-  status: "Pending" | "Disetujui" | "Ditolak";
-  timestamp: unknown; 
-  driverName?: string; 
-  driverPhone?: string;
-  partnerType?: string;
-}
+// =========================================================================
+// UTILS LOKAL (Type-Safe Timestamp Extractor)
+// =========================================================================
+const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
-// 🚀 FUNGSI HELPER PENJINAK UNKNOWN TIMESTAMP
-function parseUnknownDate(val: unknown): Date {
-  if (!val) return new Date();
-  
-  if (typeof val === 'object' && val !== null && 'toDate' in val) {
-    const obj = val as { toDate?: unknown };
-    if (typeof obj.toDate === 'function') {
-      return (val as { toDate: () => Date }).toDate();
-    }
+const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
+  if (!timestamp) return 0;
+  if (timestamp instanceof Date) return timestamp.getTime();
+  if (typeof timestamp === 'object' && timestamp !== null) {
+    const ts = timestamp as Extract<FirebaseTimestamp, object>;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.seconds === 'number') return ts.seconds * 1000;
   }
-  
-  if (val instanceof Date) return val;
-  if (typeof val === 'number' || typeof val === 'string') return new Date(val as string | number);
-  
-  return new Date();
-}
+  return new Date(timestamp as string | number).getTime();
+};
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Red Accent untuk Withdrawal)
@@ -76,14 +66,17 @@ export default function AdminWalletWithdrawalsPage() {
     try {
       // 1. Tarik Data Wallets untuk Mapping Identitas
       const driverSnap = await getDocs(collection(db, "driver_wallets"));
-      const allWallets = driverSnap.docs.map(d => ({ id: d.id, ...d.data() })) as DriverData[];
+      // KODE DIBERSIHKAN: Safe Extraction untuk array Driver
+      const allWallets: DriverData[] = driverSnap.docs.map(d => {
+        return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as DriverData;
+      });
 
       // 2. Tarik Antrean Withdrawal
       const withdrawQ = query(collection(db, "withdrawal_requests"), where("status", "==", "Pending"));
       const withdrawSnap = await getDocs(withdrawQ);
       
-      const withdrawList = withdrawSnap.docs.map(d => {
-        const data = d.data();
+      const withdrawList: WithdrawalRequest[] = withdrawSnap.docs.map(d => {
+        const data = d.data() as Record<string, unknown>;
         const driverInfo = allWallets.find(driver => driver.id === data.driverId);
         return {
           id: d.id,
@@ -91,11 +84,11 @@ export default function AdminWalletWithdrawalsPage() {
           driverName: driverInfo?.name || "Sopir Tidak Diketahui",
           driverPhone: driverInfo?.phone || "-",
           partnerType: driverInfo?.partnerType || "Individual"
-        } as WithdrawalRequest;
+        } as unknown as WithdrawalRequest;
       });
 
-      // Sortir dari yang terlama ke terbaru (FIFO - First In First Out)
-      withdrawList.sort((a, b) => parseUnknownDate(a.timestamp).getTime() - parseUnknownDate(b.timestamp).getTime());
+      // KODE DIBERSIHKAN: Sortir dari yang terlama ke terbaru menggunakan getMillis
+      withdrawList.sort((a, b) => getMillis(a.timestamp) - getMillis(b.timestamp));
       
       setWithdrawals(withdrawList);
     } catch (error) {
@@ -132,9 +125,12 @@ export default function AdminWalletWithdrawalsPage() {
         
         // Verifikasi Ulang Saldo Terakhir agar tidak minus
         const wSnap = await getDocs(query(collection(db, "driver_wallets")));
-        const currentDriver = wSnap.docs.find(d => d.id === driverId)?.data();
+        // KODE DIBERSIHKAN: Safe typing
+        const currentDriverRaw = wSnap.docs.find(d => d.id === driverId)?.data() as Record<string, unknown> | undefined;
+        const currentDriverBalance = currentDriverRaw ? Number(currentDriverRaw.balance) : 0;
+        const currentDriverName = currentDriverRaw ? String(currentDriverRaw.name) : "Sopir";
         
-        if (!currentDriver || (currentDriver.balance || 0) < amount) {
+        if (!currentDriverRaw || currentDriverBalance < amount) {
            showToast("error", "Otorisasi Gagal! Saldo dompet sopir tidak mencukupi untuk penarikan ini.");
            setIsProcessing(false);
            return;
@@ -148,7 +144,7 @@ export default function AdminWalletWithdrawalsPage() {
         const logRef = doc(collection(db, "wallet_logs"));
         batch.set(logRef, {
           entityId: driverId,
-          entityName: currentDriver.name || "Sopir",
+          entityName: currentDriverName,
           entityType: "Driver",
           type: "withdraw",
           amount: amount,
@@ -177,8 +173,6 @@ export default function AdminWalletWithdrawalsPage() {
   );
 
   const totalAmountPending = withdrawals.reduce((sum, item) => sum + item.amount, 0);
-
-  const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val);
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_finance') {
     return (
@@ -277,7 +271,8 @@ export default function AdminWalletWithdrawalsPage() {
             ) : (
               <AnimatePresence>
                 {processedData.map((req, idx) => {
-                  const ts = parseUnknownDate(req.timestamp);
+                  const millis = getMillis(req.timestamp);
+                  const ts = millis ? new Date(millis) : new Date();
                   const dateStr = ts.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
                   const timeStr = ts.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 

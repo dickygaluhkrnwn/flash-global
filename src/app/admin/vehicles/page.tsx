@@ -22,9 +22,6 @@ import { cn } from "@/lib/utils";
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
 
-// EXTEND TYPE UNTUK MENGAKOMODASI imageUrl TANPA ERROR 'any'
-type ExtendedVehicle = DynamicVehicle & { imageUrl?: string };
-
 export default function AdminVehiclesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -82,15 +79,15 @@ export default function AdminVehiclesPage() {
   const vehiclesArray = pricingConfig.customVehicles || [];
 
   const processedData = vehiclesArray
-    .filter((v: ExtendedVehicle) => {
+    .filter((v: DynamicVehicle) => {
       const matchSearch = v.name.toLowerCase().includes(searchQuery.toLowerCase()) || v.id.toLowerCase().includes(searchQuery.toLowerCase());
       const vCat = v.category || (v.isMotor ? "Motor" : "Mobil");
       const matchType = filterType === "all" ? true : vCat.toLowerCase() === filterType.toLowerCase();
       return matchSearch && matchType;
     })
-    .sort((a: ExtendedVehicle, b: ExtendedVehicle) => {
-      if (sortBy === "weight_asc") return a.maxWeight - b.maxWeight;
-      if (sortBy === "weight_desc") return b.maxWeight - a.maxWeight;
+    .sort((a: DynamicVehicle, b: DynamicVehicle) => {
+      if (sortBy === "weight_asc") return (a.maxWeight || 0) - (b.maxWeight || 0);
+      if (sortBy === "weight_desc") return (b.maxWeight || 0) - (a.maxWeight || 0);
       if (sortBy === "name_asc") return a.name.localeCompare(b.name);
       return 0;
     });
@@ -234,7 +231,7 @@ export default function AdminVehiclesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <AnimatePresence>
-                {processedData.map((vehicle: ExtendedVehicle) => (
+                {processedData.map((vehicle: DynamicVehicle) => (
                   <motion.div key={vehicle.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                     <VehicleCard 
                       data={vehicle} 
@@ -256,7 +253,7 @@ export default function AdminVehiclesPage() {
 // ======================================================================
 // KOMPONEN CARD ARMADA DENGAN DUKUNGAN GAMBAR
 // ======================================================================
-function VehicleCard({ data, router, onDelete }: { data: ExtendedVehicle; router: AppRouterInstance; onDelete: () => void }) {
+function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router: AppRouterInstance; onDelete: () => void }) {
   const vCat = data.category || (data.isMotor ? "Motor" : "Mobil");
   
   // Custom 3D Icon styling berdasarkan kategori (Digunakan jika tidak ada gambar)
@@ -331,7 +328,7 @@ function VehicleCard({ data, router, onDelete }: { data: ExtendedVehicle; router
             <Scale className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-bold text-slate-700">Kapasitas Muatan</span>
           </div>
-          <span className="font-black text-slate-900 text-xl tracking-tight">{data.maxWeight} <span className="text-xs text-slate-500 font-bold uppercase">Kg</span></span>
+          <span className="font-black text-slate-900 text-xl tracking-tight">{data.maxWeight || 0} <span className="text-xs text-slate-500 font-bold uppercase">Kg</span></span>
         </div>
 
         <div className="space-y-3 pt-2 flex-1">
@@ -342,14 +339,14 @@ function VehicleCard({ data, router, onDelete }: { data: ExtendedVehicle; router
           
           {vCat === "Motor" ? (
             <div className="flex items-center justify-between text-[11px] font-bold gap-2">
-              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`S: ${data.dimS?.p}x${data.dimS?.l}x${data.dimS?.t}`}>
-                <span className="text-[#C5A059]">S:</span> {data.dimS?.p}x{data.dimS?.l}x{data.dimS?.t}
+              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`S: ${data.dimS?.p || 0}x${data.dimS?.l || 0}x${data.dimS?.t || 0}`}>
+                <span className="text-[#C5A059]">S:</span> {data.dimS?.p || 0}x{data.dimS?.l || 0}x{data.dimS?.t || 0}
               </div>
-              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`M: ${data.dimM?.p}x${data.dimM?.l}x${data.dimM?.t}`}>
-                <span className="text-[#C5A059]">M:</span> {data.dimM?.p}x{data.dimM?.l}x{data.dimM?.t}
+              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`M: ${data.dimM?.p || 0}x${data.dimM?.l || 0}x${data.dimM?.t || 0}`}>
+                <span className="text-[#C5A059]">M:</span> {data.dimM?.p || 0}x{data.dimM?.l || 0}x{data.dimM?.t || 0}
               </div>
-              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`L: ${data.dimL?.p}x${data.dimL?.l}x${data.dimL?.t}`}>
-                <span className="text-[#C5A059]">L:</span> {data.dimL?.p}x{data.dimL?.l}x{data.dimL?.t}
+              <div className="bg-slate-50/80 px-2 py-2 rounded-xl text-slate-600 border border-slate-100 shadow-sm flex-1 text-center truncate" title={`L: ${data.dimL?.p || 0}x${data.dimL?.l || 0}x${data.dimL?.t || 0}`}>
+                <span className="text-[#C5A059]">L:</span> {data.dimL?.p || 0}x{data.dimL?.l || 0}x{data.dimL?.t || 0}
               </div>
             </div>
           ) : vCat === "Truk" ? (

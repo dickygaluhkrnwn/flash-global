@@ -15,37 +15,9 @@ import { doc, getDoc } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 
-// ======================================================================
-// JURUS SHIELDING INTERFACE (Khusus untuk profil B2B yang kompleks)
-// ======================================================================
-export interface SafeB2BUser {
-  uid: string;
-  email?: string;
-  displayName?: string;
-  name?: string;
-  phoneNumber?: string;
-  phone?: string;
-  photoURL?: string;
-  role?: string;
-  isSuspended?: boolean;
-  createdAt?: unknown;
-  updatedAt?: unknown;
-  // B2B Specific Fields (dari BusinessTab)
-  picName?: string;
-  companyName?: string;
-  legalCompanyName?: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  npwp?: string;
-  industry?: string;
-  monthlyVolume?: string;
-  defaultAddress?: string;
-  contractStatus?: "Pending" | "Approved" | "Rejected";
-  b2bLimit?: number;
-  b2bRequestedAt?: unknown;
-  depositBalance?: number; // <-- Memastikan depositBalance terdaftar agar tidak error di baris 214
-  [key: string]: unknown; 
-}
+// IMPORT GLOBAL TYPES
+import { User as UserType } from "@/types/user";
+import { FirebaseTimestamp } from "@/types/order"; // <-- IMPORT TIPE FIREBASE TIMESTAMP
 
 export default function B2BDetailPage() {
   const router = useRouter();
@@ -53,7 +25,7 @@ export default function B2BDetailPage() {
   const userId = params.id as string;
   const { user: currentUser } = useAuthStore();
 
-  const [clientData, setClientData] = useState<SafeB2BUser | null>(null);
+  const [clientData, setClientData] = useState<UserType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -80,7 +52,8 @@ export default function B2BDetailPage() {
           uid: docSnap.id,
           ...data,
           displayName: data.displayName || data.name || "Klien B2B",
-        } as SafeB2BUser);
+          phoneNumber: data.phoneNumber || data.phone || "-" // <-- Handling legacy data
+        } as UserType);
 
       } catch (error) {
         console.error(error);
@@ -98,11 +71,12 @@ export default function B2BDetailPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const formatDate = (dateInput: unknown) => {
+  // KODE DIBERSIHKAN: Menggunakan FirebaseTimestamp dari global types
+  const formatDate = (dateInput: FirebaseTimestamp | unknown) => {
     if (!dateInput) return "-";
     
     if (typeof dateInput === 'object' && dateInput !== null) {
-      const ts = dateInput as { toDate?: () => Date; seconds?: number };
+      const ts = dateInput as Extract<FirebaseTimestamp, object>;
       if (typeof ts.toDate === 'function') {
         return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
       }
@@ -204,7 +178,7 @@ export default function B2BDetailPage() {
                 <Phone className="w-4 h-4 text-indigo-500 shrink-0" />
                 <div className="overflow-hidden">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">No. Telp Perusahaan</p>
-                  <p className="text-sm font-mono font-bold text-slate-700 truncate">{clientData.companyPhone || clientData.phoneNumber || clientData.phone || "-"}</p>
+                  <p className="text-sm font-mono font-bold text-slate-700 truncate">{clientData.companyPhone || clientData.phoneNumber || "-"}</p>
                 </div>
               </div>
             </div>

@@ -23,6 +23,7 @@ import { Quote } from "@/types/order";
 // Type Extension untuk menangani data lama dan data baru secara aman
 type QuoteWithDisplayId = Quote & { quoteId?: string };
 
+// KODE DIBERSIHKAN: Export default HARUS ada agar next build tidak crash
 export default function GlobalOrdersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();

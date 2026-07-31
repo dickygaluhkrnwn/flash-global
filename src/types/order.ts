@@ -28,6 +28,7 @@ export interface Order {
 
 export interface Quote {
   id: string; 
+  quoteId?: string; // <-- KODE DIBERSIHKAN: Tambahkan quoteId secara eksplisit
   userId: string;
   name: string;
   email: string;
@@ -93,6 +94,7 @@ export interface TrackingHistoryItem {
   date: string;
   description?: string;
   location?: string;
+  proofUrl?: string; // Tambahan dari DB
   [key: string]: unknown;
 }
 
@@ -257,6 +259,7 @@ export interface DynamicVehicle {
   dimS?: { p: number; l: number; t: number };
   dimM?: { p: number; l: number; t: number };
   dimL?: { p: number; l: number; t: number };
+  imageUrl?: string; 
 }
 
 // ----------------------------------------------------------------------
@@ -264,7 +267,7 @@ export interface DynamicVehicle {
 // ----------------------------------------------------------------------
 export interface OrderDetail {
   id: string;
-  category: string;
+  category?: string; // Optional karena di database utama kadang tidak ada
   userId?: string;
   email?: string;
   status: string;
@@ -273,6 +276,7 @@ export interface OrderDetail {
   paymentMethod?: string;
   createdAt?: FirebaseTimestamp;
   verifiedAt?: FirebaseTimestamp;
+  paidAt?: string | FirebaseTimestamp; // Tambahan dari DB
   resi?: string;
   quoteId?: string;
   origin?: LocationDetail | string;
@@ -282,12 +286,17 @@ export interface OrderDetail {
   destination?: string;
   serviceType?: string;
   vehicleName?: string;
+  vehicleId?: string; // Tambahan dari DB
   vehicle?: string;
   totalWeight?: number;
   weight?: number;
   totalDistance?: number;
+  driverId?: string; 
   driverName?: string;
   driverPhone?: string;
+  driverCoords?: Coordinates; // Tambahan dari DB
+  porterCount?: number; // Tambahan dari DB
+  isB2BApplied?: boolean; // Tambahan dari DB
   totalItemValue?: number;
   breakdown?: OrderBreakdown;
   finalGrandTotal?: number;

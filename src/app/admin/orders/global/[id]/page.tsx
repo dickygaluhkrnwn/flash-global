@@ -12,7 +12,7 @@ import {
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { Quote } from "@/types/order";
+import { Quote, FirebaseTimestamp } from "@/types/order"; 
 
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
@@ -95,15 +95,20 @@ export default function GlobalOrderDetailPage() {
 
   const formatRupiah = (val?: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
   
-  const getMillis = (ts: unknown) => {
-    if (!ts) return 0;
-    const t = ts as { seconds?: number; toMillis?: () => number };
-    if (typeof t.toMillis === 'function') return t.toMillis();
-    if (typeof t.seconds === 'number') return t.seconds * 1000;
-    return new Date(ts as string | number).getTime();
+  // KODE DIBERSIHKAN: Type-Safe FirebaseTimestamp Extract + Native Date Support
+  const getMillis = (timestamp: FirebaseTimestamp | Date) => {
+    if (!timestamp) return 0;
+    if (timestamp instanceof Date) return timestamp.getTime(); // <-- Support native Date
+    
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      const ts = timestamp as Extract<FirebaseTimestamp, object>;
+      if (typeof ts.toMillis === 'function') return ts.toMillis();
+      if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+    }
+    return new Date(timestamp as string | number).getTime();
   };
 
-  const formatDate = (ts: unknown) => {
+  const formatDate = (ts: FirebaseTimestamp | Date) => {
     const millis = getMillis(ts);
     if (!millis) return "-";
     return new Date(millis).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -137,7 +142,6 @@ export default function GlobalOrderDetailPage() {
   else if (quote.status.includes("Tolak") || quote.status.includes("Batal")) badgeVariant = "danger";
 
   // Identifikasi Display ID
-  // @ts-expect-error karena data lama mungkin ada quoteId di fieldnya
   const quoteDisplayId = quote.quoteId || quote.id;
   const displayId = quoteDisplayId.startsWith("FFW-") ? quoteDisplayId : `FFW-${quoteDisplayId.substring(0,6).toUpperCase()}`;
 
@@ -154,7 +158,7 @@ export default function GlobalOrderDetailPage() {
             <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               Order #{displayId}
             </h1>
-            <p className="text-xs font-bold text-slate-400 mt-1">Diajukan: {formatDate(quote.createdAt)}</p>
+            <p className="text-xs font-bold text-slate-400 mt-1">Diajukan: {formatDate(quote.createdAt!)}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -236,7 +240,7 @@ export default function GlobalOrderDetailPage() {
         {/* RIGHT COLUMN: SPECS & VENDOR */}
         <div className="space-y-6">
           
-          {/* CARGO SPECS (BUG FIX: bg-white/80 dipaksa hilang agar slate-900 tampil maksimal) */}
+          {/* CARGO SPECS */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-950 p-6 md:p-8 rounded-[2.5rem] relative overflow-hidden border border-slate-800 shadow-xl">
             <div className="absolute top-[-20%] right-[-20%] w-32 h-32 bg-[#C5A059] rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
             <h3 className="text-xs font-black text-white/80 uppercase tracking-widest flex items-center gap-2 mb-5 border-b border-white/10 pb-3 relative z-10">
