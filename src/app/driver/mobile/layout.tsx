@@ -1,35 +1,37 @@
-"use client"; // Wajib ditambahkan karena kita memanggil Hook yang mengakses GPS/Client Browser
+// src/app/driver/mobile/layout.tsx
+"use client"; 
 
 import { ReactNode } from "react";
 import BottomNav from "@/components/driver/BottomNav";
-import { useDriverLocation } from "@/hooks/useDriverLocation"; // Import Global GPS Tracker
+import { useDriverLocation } from "@/hooks/useDriverLocation"; 
 
 export default function DriverMobileLayout({ children }: { children: ReactNode }) {
-  
-  // 🚀 Aktifkan Mesin Pelacak Global di sini!
+  // 🚀 Aktifkan Mesin Pelacak Global
   useDriverLocation();
 
   return (
-    // Background luar menggunakan warna background-alt (light gray) dari globals.css
-    <div className="min-h-screen bg-[#F8F9FA] flex justify-center selection:bg-[#7A171D]/20 selection:text-[#7A171D]">
+    // Background paling luar (Body utama)
+    <div className="min-h-screen bg-[var(--background)] flex justify-center selection:bg-[#7A171D]/15 selection:text-[var(--brand-maroon)]">
       
       {/* 
-        Mobile Frame Wrapper:
-        Membatasi lebar maksimal agar seperti HP (max-w-md = 448px).
-        Menggunakan bg-white sebagai warna dasar area konten.
+        1. KANVAS MOBILE (FRAME)
+        HAPUS overflow-hidden! Biarkan elemen ini memanjang ke bawah secara natural 
+        agar browser HP (Safari/Chrome) mengenali native scroll.
       */}
-      <div className="w-full max-w-md bg-white min-h-screen relative shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-md bg-transparent min-h-screen relative shadow-[0_0_50px_rgba(0,0,0,0.05)] flex flex-col mx-auto">
         
         {/* 
-          Main Content Area:
-          Diberi padding-bottom (pb-20) agar konten terbawah tidak tertutup oleh BottomNav.
-          Menggunakan class no-scrollbar dari globals.css agar bersih.
+          2. KONTEN UTAMA
+          HAPUS overflow-y-auto! Biarkan dia scroll mengikuti window.
+          - pb-[100px] (padding bottom): Agar layar bisa di-scroll mentok 
+            sampai melewati BottomNav yang tingginya 72px + bottom-5.
+          - pt-safe: Aman dari poni/dynamic island iPhone.
         */}
-        <main className="flex-1 overflow-y-auto pb-20 no-scrollbar">
+        <main className="flex-1 pb-[100px] tap-highlight-transparent relative z-10 w-full pt-safe">
           {children}
         </main>
 
-        {/* Bottom Navigation Component */}
+        {/* 3. KOMPONEN MELAYANG (Berada di luar flow scroll karena 'fixed') */}
         <BottomNav />
         
       </div>

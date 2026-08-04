@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Wallet, ArrowUpCircle, ArrowDownCircle,  
   UserCircle, Building2, ShieldAlert, 
-  Activity, ArrowRight, Banknote, Landmark, ShieldCheck
+  Activity, ArrowRight, Banknote, Landmark, ShieldCheck,
+  Zap, RefreshCw
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -17,7 +18,7 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // =========================================================================
-// CUSTOM STYLES: APPLE GLASSMORPHISM (Emerald/Finance Accent)
+// CUSTOM STYLES: APPLE GLASSMORPHISM
 // =========================================================================
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
@@ -39,53 +40,82 @@ export default function AdminWalletHubPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchHubStats = async () => {
-      try {
-        // 1. Fetch Driver Wallets
-        const driverSnap = await getDocs(collection(db, "driver_wallets"));
-        let dBal = 0, dCount = 0;
-        driverSnap.forEach(d => {
-          const data = d.data();
-          if (data.partnerType !== "FleetVehicle" && data.partnerType !== "FleetDriver") {
-            dCount++;
-            dBal += (data.balance || 0);
-          }
-        });
+  // 🚀 STATE KHUSUS UNTUK DANA MERCHANT BALANCE
+  const [danaBalance, setDanaBalance] = useState<number | null>(null);
+  const [isDanaLoading, setIsDanaLoading] = useState(true);
+  const [danaError, setDanaError] = useState<string | null>(null);
 
-        // 2. Fetch B2B Wallets
-        const b2bQ = query(collection(db, "users"), where("role", "==", "b2b"));
-        const b2bSnap = await getDocs(b2bQ);
-        let bBal = 0;
-        b2bSnap.forEach(d => {
-          bBal += (d.data().depositBalance || 0);
-        });
+  const fetchHubStats = async () => {
+    try {
+      // 1. Fetch Driver Wallets
+      const driverSnap = await getDocs(collection(db, "driver_wallets"));
+      let dBal = 0, dCount = 0;
+      driverSnap.forEach(d => {
+        const data = d.data();
+        if (data.partnerType !== "FleetVehicle" && data.partnerType !== "FleetDriver") {
+          dCount++;
+          dBal += (data.balance || 0);
+        }
+      });
 
-        // 3. Fetch Pending Withdrawals
-        const withdrawQ = query(collection(db, "withdrawal_requests"), where("status", "==", "Pending"));
-        const withdrawSnap = await getDocs(withdrawQ);
+      // 2. Fetch B2B Wallets
+      const b2bQ = query(collection(db, "users"), where("role", "==", "b2b"));
+      const b2bSnap = await getDocs(b2bQ);
+      let bBal = 0;
+      b2bSnap.forEach(d => {
+        bBal += (d.data().depositBalance || 0);
+      });
 
-        // 4. Fetch Pending Topups
-        const topupQ = query(collection(db, "deposit_requests"), where("status", "==", "Pending"));
-        const topupSnap = await getDocs(topupQ);
+      // 3. Fetch Pending Withdrawals
+      const withdrawQ = query(collection(db, "withdrawal_requests"), where("status", "==", "Pending"));
+      const withdrawSnap = await getDocs(withdrawQ);
 
-        setStats({
-          driverBalance: dBal,
-          driverCount: dCount,
-          b2bBalance: bBal,
-          b2bCount: b2bSnap.size,
-          pendingWithdrawals: withdrawSnap.size,
-          pendingTopups: topupSnap.size
-        });
-      } catch (error) {
-        console.error("Gagal menarik statistik hub dompet:", error);
-      } finally {
-        setIsLoading(false);
+      // 4. Fetch Pending Topups
+      const topupQ = query(collection(db, "deposit_requests"), where("status", "==", "Pending"));
+      const topupSnap = await getDocs(topupQ);
+
+      setStats({
+        driverBalance: dBal,
+        driverCount: dCount,
+        b2bBalance: bBal,
+        b2bCount: b2bSnap.size,
+        pendingWithdrawals: withdrawSnap.size,
+        pendingTopups: topupSnap.size
+      });
+    // 🚀 PERBAIKAN: Gunakan variabel error dan beri tipe unknown
+    } catch (error: unknown) {
+      console.error("Gagal menarik statistik hub dompet:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 🚀 FUNGSI FETCH DANA MERCHANT BALANCE VIA API
+  const fetchDanaBalance = useCallback(async () => {
+    setIsDanaLoading(true);
+    setDanaError(null);
+    try {
+      const res = await fetch('/api/dana/check-balance');
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setDanaBalance(data.balance);
+      } else {
+        setDanaError(data.message || "Gagal memuat saldo DANA");
       }
-    };
-
-    fetchHubStats();
+    // 🚀 PERBAIKAN: Gunakan variabel error
+    } catch (error: unknown) {
+      console.error("Error Checking DANA Balance:", error);
+      setDanaError("Terjadi kesalahan jaringan saat mengecek DANA");
+    } finally {
+      setIsDanaLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchHubStats();
+    fetchDanaBalance(); // Tembak API DANA saat halaman dimuat
+  }, [fetchDanaBalance]);
 
   const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
@@ -135,12 +165,12 @@ export default function AdminWalletHubPage() {
       {/* 2. MAIN BENTO STATS */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         
-        {/* TOTAL ASSETS CARD */}
+        {/* TOTAL ASSETS CARD (FIREBASE DATABASE) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="md:col-span-12 lg:col-span-6 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-950 rounded-[2rem] p-8 shadow-[0_20px_40px_rgba(0,0,0,0.2)] relative overflow-hidden flex flex-col justify-center">
           <div className="absolute -top-20 -right-20 w-64 h-64 bg-emerald-500 rounded-full blur-[80px] opacity-30 pointer-events-none" />
           <div className="relative z-10">
             <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-emerald-400" /> Total Dana Mengendap (Aset)
+              <Wallet className="w-4 h-4 text-emerald-400" /> Total Dana Mengendap (Sistem)
             </p>
             <h2 className="text-4xl md:text-5xl font-black tracking-tight text-white font-mono mt-2 drop-shadow-md">
               {formatRupiah(totalAssets)}
@@ -182,8 +212,51 @@ export default function AdminWalletHubPage() {
             </div>
           </motion.div>
         </div>
-
       </div>
+
+      {/* 🚀 WIDGET DANA MERCHANT BALANCE */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-[2rem] p-6 md:p-8 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 border border-blue-700 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 mix-blend-overlay"></div>
+        <div className="absolute right-0 top-0 w-64 h-64 bg-blue-400 rounded-full blur-[100px] opacity-20 pointer-events-none" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-2">
+            <Zap className="w-6 h-6 text-blue-400" />
+            <h3 className="text-lg font-black text-white tracking-tight">Saldo Riil DANA Merchant</h3>
+          </div>
+          <p className="text-blue-200 text-[11px] uppercase tracking-widest font-bold">
+            Dana Likuid yang tersedia untuk ditarik Mitra
+          </p>
+        </div>
+
+        <div className="relative z-10 flex items-center gap-4 bg-blue-950/50 p-4 rounded-2xl border border-blue-800/50 min-w-[280px] justify-between shadow-inner w-full md:w-auto">
+          {isDanaLoading ? (
+            <div className="flex items-center gap-3">
+              <Activity className="w-5 h-5 text-blue-400 animate-spin" />
+              <span className="text-blue-300 font-mono font-bold animate-pulse">Menghubungkan DANA...</span>
+            </div>
+          ) : danaError ? (
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-5 h-5 text-red-400" />
+              <span className="text-red-300 font-bold text-xs truncate max-w-[150px]">{danaError}</span>
+            </div>
+          ) : (
+            <div>
+              <span className="text-blue-400 font-bold text-sm mr-1">Rp</span>
+              <span className="text-3xl font-black text-white font-mono tracking-tight">{danaBalance?.toLocaleString('id-ID')}</span>
+            </div>
+          )}
+
+          <button 
+            onClick={fetchDanaBalance} 
+            disabled={isDanaLoading}
+            className="p-2.5 bg-blue-800 hover:bg-blue-700 text-blue-200 rounded-xl transition-all disabled:opacity-50 active:scale-95"
+            title="Muat Ulang Saldo"
+          >
+            <RefreshCw className={`w-5 h-5 ${isDanaLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </motion.div>
 
       <div className="pt-4 border-t border-slate-200/60">
         <h3 className="text-lg font-black text-slate-900 mb-6 tracking-tight flex items-center gap-2">
@@ -288,7 +361,7 @@ export default function AdminWalletHubPage() {
               </div>
             </div>
             <h3 className="text-xl font-black text-slate-900 tracking-tight">Pencairan Dana (Withdrawal)</h3>
-            <p className="text-sm text-slate-500 font-medium mt-2 leading-relaxed">Tinjau antrean penarikan dana dari Sopir atau Vendor, transfer ke rekening mereka, dan setujui pemotongan saldo.</p>
+            <p className="text-sm text-slate-500 font-medium mt-2 leading-relaxed">Tinjau antrean penarikan dana dari Sopir atau Vendor, transfer otomatis via DANA Disbursement.</p>
           </div>
           <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aksi & Eksekusi</span>

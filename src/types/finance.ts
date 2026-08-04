@@ -157,7 +157,7 @@ export interface WithdrawalRequest {
   id: string;
   driverId: string;
   amount: number;
-  status: "Pending" | "Disetujui" | "Ditolak";
+  status: "Pending" | "Processing" | "Disetujui" | "Ditolak"; // <-- SUDAH DITAMBAHKAN "Processing"
   timestamp: FirebaseTimestamp; // <-- KITA AMANKAN DENGAN FIREBASETIMESTAMP
   driverName?: string; 
   driverPhone?: string;
@@ -186,5 +186,63 @@ export interface AdminPricingConfig {
   b2bDiscount: number;
   tarifPorter: number;
   customVehicles: AdminDynamicVehicle[];
+  [key: string]: unknown;
+}
+
+// ==========================================
+// INTEGRASI PAYMENT GATEWAY (DANA API & SNAP)
+// ==========================================
+export interface DanaResourceInfo {
+  type: string;
+  value: string;
+  [key: string]: unknown;
+}
+
+export interface DanaResponseBody {
+  resultInfo: {
+    resultStatus: string;
+    resultCodeId: string;
+    resultMsg: string;
+  };
+  merchantResourceInfoList?: DanaResourceInfo[];
+  [key: string]: unknown;
+}
+
+// 🚀 TAMBAHAN BARU UNTUK API CHECK-STATUS & INQUIRY
+export interface CheckStatusPayload {
+  withdrawalId: string;
+  driverId: string;
+  amount: number;
+}
+
+export interface DanaSnapInquiryResponse {
+  responseCode: string;
+  responseMessage?: string;
+  latestTransactionStatus: string;
+  [key: string]: unknown;
+}
+
+// 🚀 TAMBAHAN BARU UNTUK API INQUIRY & TOPUP DANA
+export interface DanaInquiryPayload {
+  partnerReferenceNo: string;
+  customerNumber: string;
+  amount: number;
+}
+
+export interface DanaInquiryResponse {
+  responseCode: string;
+  responseMessage?: string;
+  customerName?: string;
+  additionalInfo?: {
+    customerName?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+// 🚀 TAMBAHAN BARU UNTUK API TOPUP/DISBURSEMENT DANA
+export interface DanaTopupResponse {
+  responseCode: string;
+  responseMessage?: string;
   [key: string]: unknown;
 }

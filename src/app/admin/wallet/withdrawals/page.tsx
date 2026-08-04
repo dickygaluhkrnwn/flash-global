@@ -7,11 +7,11 @@ import {
   ArrowLeft, ArrowDownCircle, 
   UserCircle, CheckCircle2, AlertCircle, ShieldAlert, 
   Activity, Check, X, Clock, CalendarDays, Banknote,
-  Search
+  Search, Zap, RefreshCw 
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { collection, getDocs, doc, serverTimestamp, increment, query, where, writeBatch } from "firebase/firestore";
+import { collection, getDocs, doc, serverTimestamp, query, where, updateDoc } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
@@ -19,7 +19,7 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // --- IMPORT GLOBAL TYPES ---
 import { DriverData } from "@/types/admin";
-import { WithdrawalRequest } from "@/types/finance"; // <-- KODE DIBERSIHKAN: Import dari SSOT
+import { WithdrawalRequest } from "@/types/finance";
 import { FirebaseTimestamp } from "@/types/order";
 
 // =========================================================================
@@ -39,7 +39,7 @@ const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null 
 };
 
 // =========================================================================
-// CUSTOM STYLES: APPLE GLASSMORPHISM (Red Accent untuk Withdrawal)
+// CUSTOM STYLES: APPLE GLASSMORPHISM 
 // =========================================================================
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 const glassRow = "bg-white/80 backdrop-blur-xl border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_15px_rgba(0,0,0,0.03)] hover:bg-white hover:shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_25px_rgba(220,38,38,0.15)] transition-all duration-300 rounded-2xl";
@@ -64,15 +64,12 @@ export default function AdminWalletWithdrawalsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Tarik Data Wallets untuk Mapping Identitas
       const driverSnap = await getDocs(collection(db, "driver_wallets"));
-      // KODE DIBERSIHKAN: Safe Extraction untuk array Driver
       const allWallets: DriverData[] = driverSnap.docs.map(d => {
         return { id: d.id, ...(d.data() as Record<string, unknown>) } as unknown as DriverData;
       });
 
-      // 2. Tarik Antrean Withdrawal
-      const withdrawQ = query(collection(db, "withdrawal_requests"), where("status", "==", "Pending"));
+      const withdrawQ = query(collection(db, "withdrawal_requests"), where("status", "in", ["Pending", "Processing"]));
       const withdrawSnap = await getDocs(withdrawQ);
       
       const withdrawList: WithdrawalRequest[] = withdrawSnap.docs.map(d => {
@@ -87,11 +84,10 @@ export default function AdminWalletWithdrawalsPage() {
         } as unknown as WithdrawalRequest;
       });
 
-      // KODE DIBERSIHKAN: Sortir dari yang terlama ke terbaru menggunakan getMillis
       withdrawList.sort((a, b) => getMillis(a.timestamp) - getMillis(b.timestamp));
-      
       setWithdrawals(withdrawList);
-    } catch (error) {
+    // 🚀 PERBAIKAN: Gunakan error yang ter-assign untuk console
+    } catch (error: unknown) {
       console.error("Gagal menarik data pencairan:", error);
       showToast("error", "Gagal memuat antrean pencairan dana dari database.");
     } finally {
@@ -103,64 +99,161 @@ export default function AdminWalletWithdrawalsPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleReviewWithdrawal = async (reqId: string, driverId: string, amount: number, action: "Disetujui" | "Ditolak") => {
-    if (!confirm(`Yakin menandai pengajuan pencairan Rp ${amount.toLocaleString('id-ID')} ini sebagai ${action}? \n\nPastikan Anda sudah benar-benar men-transfer dana ke rekening tujuan jika Disetujui.`)) {
+
+  // =========================================================================
+  // LOGIC CHECK STATUS (INQUIRY STATUS TRANSAKSI NYANGKUT)
+  // =========================================================================
+  const handleCheckStatus = async (req: WithdrawalRequest) => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/dana/check-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          withdrawalId: req.id,
+          driverId: req.driverId,
+          amount: req.amount
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showToast("success", result.message);
+        fetchData(); 
+      } else {
+        showToast("error", `Gagal cek status: ${result.message}`);
+      }
+    // 🚀 PERBAIKAN: Gunakan error untuk console
+    } catch (error: unknown) {
+      console.error("Inquiry Error:", error);
+      showToast("error", "Terjadi kesalahan jaringan saat mengecek status DANA.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // =========================================================================
+  // 🚀 LOGIC UTAMA: REVIEW -> INQUIRY -> CONFIRM -> CHECK BALANCE -> TOP UP
+  // =========================================================================
+  const handleReviewWithdrawal = async (req: WithdrawalRequest, action: "Disetujui" | "Ditolak") => {
+    
+    // --- JALUR PENOLAKAN ---
+    if (action === "Ditolak") {
+      if (!confirm(`Yakin MENOLAK pengajuan pencairan Rp ${formatRupiah(req.amount)} atas nama ${req.driverName}?`)) return;
+      
+      setIsProcessing(true);
+      try {
+        const reqRef = doc(db, "withdrawal_requests", req.id);
+        await updateDoc(reqRef, { 
+          status: "Ditolak", 
+          reviewedAt: serverTimestamp(),
+          reviewedBy: currentUser?.uid || "Admin"
+        });
+        showToast("success", "Pengajuan berhasil ditolak.");
+        setWithdrawals(prev => prev.filter(w => w.id !== req.id));
+      // 🚀 PERBAIKAN: Tangkap unknown error
+      } catch (error: unknown) {
+        console.error("Penolakan Withdrawal Error:", error);
+        showToast("error", "Gagal menolak pengajuan.");
+      } finally {
+        setIsProcessing(false);
+      }
       return;
     }
 
+
+    // --- JALUR PERSETUJUAN DENGAN DANA TOP UP ---
     setIsProcessing(true);
     try {
-      const batch = writeBatch(db);
 
-      const reqRef = doc(db, "withdrawal_requests", reqId);
-      batch.update(reqRef, { 
-        status: action, 
-        reviewedAt: serverTimestamp(),
-        reviewedBy: currentUser?.uid || "Admin"
+      // 🚀 LANGKAH 1: ACCOUNT INQUIRY (Cek Nama & Keabsahan Nomor DANA)
+      const inquiryRes = await fetch('/api/dana/inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerReferenceNo: req.id,
+          customerNumber: req.driverPhone,
+          amount: req.amount
+        })
       });
 
-      // Jika disetujui, potong saldo wallet
-      if (action === "Disetujui") {
-        const walletRef = doc(db, "driver_wallets", driverId);
+      const inquiryData = await inquiryRes.json();
+
+      if (!inquiryRes.ok || !inquiryData.success) {
+        showToast("error", `Validasi DANA Gagal: ${inquiryData.message}`);
         
-        // Verifikasi Ulang Saldo Terakhir agar tidak minus
-        const wSnap = await getDocs(query(collection(db, "driver_wallets")));
-        // KODE DIBERSIHKAN: Safe typing
-        const currentDriverRaw = wSnap.docs.find(d => d.id === driverId)?.data() as Record<string, unknown> | undefined;
-        const currentDriverBalance = currentDriverRaw ? Number(currentDriverRaw.balance) : 0;
-        const currentDriverName = currentDriverRaw ? String(currentDriverRaw.name) : "Sopir";
-        
-        if (!currentDriverRaw || currentDriverBalance < amount) {
-           showToast("error", "Otorisasi Gagal! Saldo dompet sopir tidak mencukupi untuk penarikan ini.");
-           setIsProcessing(false);
-           return;
+        if (inquiryData.isTimeout) {
+          console.log("DANA Timeout: Siap untuk di-retry oleh admin.");
         }
-
-        batch.update(walletRef, {
-          balance: increment(-Math.abs(amount)),
-          lastMutasi: serverTimestamp()
-        });
-
-        const logRef = doc(collection(db, "wallet_logs"));
-        batch.set(logRef, {
-          entityId: driverId,
-          entityName: currentDriverName,
-          entityType: "Driver",
-          type: "withdraw",
-          amount: amount,
-          timestamp: serverTimestamp(),
-          adminNote: `Pencairan Dana (Disetujui) via Finance Hub`
-        });
+        
+        setIsProcessing(false);
+        return;
       }
 
-      await batch.commit();
+      // 🚀 LANGKAH 2: TAMPILKAN POP-UP KONFIRMASI NAMA (DANA VALID)
+      const confirmApprove = confirm(
+        `✅ AKUN DANA DITEMUKAN!\n\nNama Pemilik: ${inquiryData.customerName}\nNomor Tujuan: ${req.driverPhone}\nNominal Pencairan: Rp ${formatRupiah(req.amount)}\n*(Biaya admin DANA akan dibebankan ke kurir)*\n\nLanjutkan transfer otomatis?`
+      );
+      
+      if (!confirmApprove) {
+        setIsProcessing(false);
+        return;
+      }
 
-      showToast("success", `Pengajuan berhasil ${action}!`);
-      setWithdrawals(prev => prev.filter(w => w.id !== reqId));
+      // 🚀 LANGKAH 3: CEK SALDO DANA MERCHANT TERLEBIH DAHULU
+      const balanceRes = await fetch('/api/dana/check-balance');
+      const balanceData = await balanceRes.json();
 
-    } catch (error) {
-      console.error("Gagal review withdrawal:", error);
-      showToast("error", "Terjadi kesalahan sistem saat menyetujui pengajuan.");
+      if (!balanceRes.ok || !balanceData.success) {
+        showToast("error", `Gagal memvalidasi saldo merchant: ${balanceData.message}`);
+        setIsProcessing(false);
+        return; 
+      }
+
+      const currentDanaBalance = balanceData.balance;
+      
+      if (currentDanaBalance < req.amount) {
+        showToast("error", `Otorisasi Ditolak! Saldo DANA Merchant Anda (Rp ${formatRupiah(currentDanaBalance)}) tidak cukup untuk pencairan ini.`);
+        setIsProcessing(false);
+        return;
+      }
+
+      // 🚀 LANGKAH 4: EKSEKUSI TRANSFER (DANA TOP UP)
+      // Perubahan penting: Endpoint diubah ke /api/dana/topup
+      const response = await fetch('/api/dana/topup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          withdrawalId: req.id,
+          driverId: req.driverId,
+          amount: req.amount,
+          driverPhone: req.driverPhone
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // SUKSES ATAU PENDING (DANA TIMEOUT)
+        if (result.message.includes("Pending")) {
+          showToast("success", "DANA sedang memproses transaksi. Status ditahan.");
+          fetchData(); // Panggil ulang untuk mengubah statusnya jadi "Processing" di layar
+        } else {
+          showToast("success", `Dana berhasil dicairkan ke DANA (A.n ${inquiryData.customerName})!`);
+          setWithdrawals(prev => prev.filter(w => w.id !== req.id)); // Hapus dari UI
+        }
+      } else {
+        showToast("error", `Gagal: ${result.message}`);
+        if (result.message.includes("Akun DANA tidak valid")) {
+          setWithdrawals(prev => prev.filter(w => w.id !== req.id));
+        }
+      }
+
+    // 🚀 PERBAIKAN: Eksekusi variabel error yang di-catch
+    } catch (error: unknown) {
+      console.error("DANA Topup API Error:", error);
+      showToast("error", "Terjadi kesalahan jaringan saat memproses pencairan DANA.");
     } finally {
       setIsProcessing(false);
     }
@@ -207,15 +300,15 @@ export default function AdminWalletWithdrawalsPage() {
       {/* HEADER NAV */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push("/admin/wallet")} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-white transition-all shrink-0">
+          <button onClick={() => router.push("/admin/wallet")} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-white transition-all shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              Pencairan Dana (Withdrawals)
+              Pencairan DANA Otomatis
             </h1>
             <p className="text-slate-500 text-sm mt-0.5 font-medium flex items-center gap-2">
-              Eksekusi penarikan saldo mitra. <AdminBadge variant="danger" className="bg-red-100 text-red-700 border-red-200">Prioritas</AdminBadge>
+              Verifikasi & eksekusi pencairan saldo mitra via DANA Disbursement. <AdminBadge variant="danger" className="bg-blue-100 text-blue-700 border-blue-200">Real-Time</AdminBadge>
             </p>
           </div>
         </div>
@@ -226,15 +319,15 @@ export default function AdminWalletWithdrawalsPage() {
         {/* KIRI: STATS & SEARCH (Sticky Column) */}
         <div className="xl:col-span-4 space-y-6 lg:sticky lg:top-24">
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-8 shadow-[0_20px_40px_rgba(0,0,0,0.15)] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-red-500 rounded-full blur-[80px] opacity-20 pointer-events-none" />
-            <p className="text-red-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10 flex items-center gap-2">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500 rounded-full blur-[80px] opacity-20 pointer-events-none" />
+            <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2 relative z-10 flex items-center gap-2">
               <Banknote className="w-4 h-4" /> Antrean Transfer
             </p>
             <h2 className="text-5xl font-black tracking-tight text-white font-mono mt-2 drop-shadow-md relative z-10 flex items-center gap-3">
               {withdrawals.length} <span className="text-lg font-sans text-slate-400 font-bold uppercase tracking-widest mt-3">Sopir</span>
             </h2>
             <div className="mt-6 pt-6 border-t border-white/10 flex flex-col relative z-10 space-y-2">
-              <p className="text-white/50 text-[10px] uppercase font-bold tracking-widest">Estimasi Kebutuhan Dana Cair:</p>
+              <p className="text-white/50 text-[10px] uppercase font-bold tracking-widest">Total Tagihan Pencairan:</p>
               <p className="text-white font-black text-2xl font-mono">{formatRupiah(totalAmountPending)}</p>
             </div>
           </div>
@@ -247,13 +340,14 @@ export default function AdminWalletWithdrawalsPage() {
                 placeholder="Cari nama pemohon / nomor..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-4 py-3 text-sm outline-none focus:border-red-500 focus:ring-[3px] focus:ring-red-500/15 shadow-sm font-bold text-slate-700 transition-all hover:bg-white placeholder:text-slate-400 placeholder:font-medium"
+                className="w-full bg-white/60 backdrop-blur-md border border-white rounded-xl pl-11 pr-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-[3px] focus:ring-blue-500/15 shadow-sm font-bold text-slate-700 transition-all hover:bg-white placeholder:text-slate-400 placeholder:font-medium"
               />
             </div>
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex gap-3 shadow-inner">
-              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-amber-700 font-medium leading-relaxed">
-                Pastikan Anda melakukan transfer dana ke rekening pemohon <b>sebelum</b> menekan tombol <b className="text-amber-800">Verifikasi & Transfer</b> di sistem.
+            
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex gap-3 shadow-inner">
+              <Zap className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-800 font-medium leading-relaxed">
+                Pencairan dana terintegrasi <b>OTOMATIS</b> dengan DANA. Memilih <b>Transfer & Setuju</b> akan langsung memotong saldo Dompet Kurir & DANA Merchant Anda secara <i>real-time</i>.
               </p>
             </div>
           </div>
@@ -264,9 +358,9 @@ export default function AdminWalletWithdrawalsPage() {
           <div className="min-h-[500px] flex flex-col gap-4">
             {processedData.length === 0 ? (
               <div className={`${glassPanel} rounded-[2rem] flex flex-col items-center justify-center p-20 text-slate-400 font-medium h-full border border-dashed border-slate-300`}>
-                <CheckCircle2 className="w-16 h-16 mb-4 opacity-30 text-red-600" />
-                <h4 className="text-slate-700 font-black text-xl tracking-tight mb-2">Tidak Ada Antrean!</h4>
-                <p className="font-medium text-slate-500 text-center">Belum ada pengajuan pencairan dana dari mitra saat ini.</p>
+                <CheckCircle2 className="w-16 h-16 mb-4 opacity-30 text-blue-600" />
+                <h4 className="text-slate-700 font-black text-xl tracking-tight mb-2">Semua Bersih!</h4>
+                <p className="font-medium text-slate-500 text-center">Tidak ada antrean pencairan dana dari mitra saat ini.</p>
               </div>
             ) : (
               <AnimatePresence>
@@ -283,7 +377,7 @@ export default function AdminWalletWithdrawalsPage() {
                       className={`${glassRow} p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6 group border border-white shadow-md`}
                     >
                       <div className="flex items-start gap-4 w-full lg:w-[45%]">
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border shadow-sm bg-slate-100 text-slate-500 border-slate-200">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border shadow-sm bg-blue-50 text-blue-600 border-blue-100">
                           <UserCircle className="w-6 h-6" />
                         </div>
                         <div className="overflow-hidden">
@@ -301,32 +395,59 @@ export default function AdminWalletWithdrawalsPage() {
                       <div className="w-full lg:w-[55%] flex flex-col items-start lg:items-end gap-3 border-t border-slate-100 pt-4 lg:pt-0 lg:border-t-0">
                         <div className="text-left lg:text-right w-full flex lg:flex-col justify-between items-center lg:items-end">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Nominal Penarikan</p>
-                          <p className="text-2xl font-black tracking-tight font-mono text-red-600 flex items-center gap-2">
-                            <ArrowDownCircle className="w-5 h-5 text-red-400"/> -{formatRupiah(req.amount)}
+                          <p className="text-2xl font-black tracking-tight font-mono text-slate-800 flex items-center gap-2">
+                            <ArrowDownCircle className="w-5 h-5 text-blue-500"/> {formatRupiah(req.amount)}
                           </p>
                         </div>
                         
+                        {/* CONDITIONAL RENDERING TOMBOL BERDASARKAN STATUS */}
                         <div className="flex w-full justify-end gap-2 mt-2">
-                          <AdminButton 
-                            size="icon" variant="outline" 
-                            onClick={() => handleReviewWithdrawal(req.id, req.driverId, req.amount, "Ditolak")}
-                            disabled={isProcessing}
-                            className="h-10 w-10 shrink-0 text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50 hover:border-red-200 rounded-xl shadow-sm transition-colors disabled:opacity-50"
-                            title="Tolak Pengajuan"
-                          >
-                            <X className="w-5 h-5" />
-                          </AdminButton>
-                          <AdminButton 
-                            variant="primary" 
-                            onClick={() => handleReviewWithdrawal(req.id, req.driverId, req.amount, "Disetujui")}
-                            disabled={isProcessing}
-                            className="h-10 bg-slate-900 hover:bg-slate-800 border-slate-950 shadow-slate-900/30 text-white font-bold flex-1 lg:flex-none px-6 shadow-md transition-all disabled:opacity-50"
-                          >
-                            <Check className="w-4 h-4 mr-1.5 text-emerald-400" /> Transfer & Setuju
-                          </AdminButton>
+                          {req.status === "Processing" ? (
+                            <div className="flex items-center gap-3 w-full lg:w-auto">
+                              <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-3 py-2 rounded-xl border border-amber-200 shadow-inner">
+                                Menunggu DANA
+                              </p>
+                              <AdminButton 
+                                variant="outline" 
+                                onClick={() => handleCheckStatus(req)}
+                                disabled={isProcessing}
+                                className="h-10 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 shadow-sm rounded-xl"
+                              >
+                                {isProcessing ? (
+                                  <><Activity className="w-4 h-4 mr-1.5 animate-spin" /> Sinkronisasi...</>
+                                ) : (
+                                  <><RefreshCw className="w-4 h-4 mr-1.5" /> Sinkron Status</>
+                                )}
+                              </AdminButton>
+                            </div>
+                          ) : (
+                            <>
+                              <AdminButton 
+                                size="icon" variant="outline" 
+                                onClick={() => handleReviewWithdrawal(req, "Ditolak")}
+                                disabled={isProcessing}
+                                className="h-10 w-10 shrink-0 text-slate-400 hover:text-red-600 border-slate-200 hover:bg-red-50 hover:border-red-200 rounded-xl shadow-sm transition-colors disabled:opacity-50"
+                                title="Tolak Pengajuan"
+                              >
+                                <X className="w-5 h-5" />
+                              </AdminButton>
+                              <AdminButton 
+                                variant="primary" 
+                                onClick={() => handleReviewWithdrawal(req, "Disetujui")}
+                                disabled={isProcessing}
+                                className="h-10 bg-blue-600 hover:bg-blue-700 border-blue-700 shadow-blue-600/30 text-white font-bold flex-1 lg:flex-none px-6 shadow-md transition-all disabled:opacity-50"
+                              >
+                                {isProcessing ? (
+                                  <><Activity className="w-4 h-4 mr-1.5 animate-spin" /> Memproses...</>
+                                ) : (
+                                  <><Check className="w-4 h-4 mr-1.5" /> Transfer & Setuju</>
+                                )}
+                              </AdminButton>
+                            </>
+                          )}
                         </div>
+                        
                       </div>
-
                     </motion.div>
                   );
                 })}

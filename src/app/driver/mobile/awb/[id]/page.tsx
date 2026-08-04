@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom"; // 🚀 SOLUSI: React Portal
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Package, MapPin, Truck, Scale, 
-  CheckCircle2, AlertTriangle, Loader2, ArrowLeft, Navigation, ShieldCheck, Focus,
-  Camera, X, UploadCloud
+  CheckCircle2, AlertTriangle, ArrowLeft, Navigation, ShieldCheck, Focus,
+  Camera, X, UploadCloud, ChevronUp, ChevronDown
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -15,10 +16,19 @@ import { doc, updateDoc, arrayUnion, onSnapshot, increment, getDoc } from "fireb
 import { useAuthStore } from "@/store/useAuthStore";
 import { OrderDetail, LocationDetail, DeliveryItem } from "@/types/order"; 
 import { uploadToCloudinary } from "@/lib/cloudinary"; 
+import { cn } from "@/lib/utils";
+
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
-  loading: () => <div className="h-48 w-full bg-slate-100 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 font-bold text-xs">Memuat Peta Navigasi...</div>
+  loading: () => (
+    <div className="h-full w-full bg-slate-100 flex flex-col items-center justify-center">
+      <div className="w-10 h-10 border-4 border-slate-200 border-t-[var(--brand-maroon)] rounded-full animate-spin mb-3 shadow-sm"></div>
+      <span className="text-slate-400 font-black text-[10px] uppercase tracking-widest animate-pulse">Menyiapkan Satelit...</span>
+    </div>
+  )
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
@@ -30,16 +40,17 @@ export default function DriverAWBExecutionPage() {
   const orderId = params?.id as string;
   const { user } = useAuthStore();
 
+  const [mounted, setMounted] = useState(false); // State Portal
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [toast, setToast] = useState<{type: "success"|"error", msg: string} | null>(null);
 
   const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [isGettingGPS, setIsGettingGPS] = useState(false);
   const [mapCenterTick, setMapCenterTick] = useState(0); 
 
-  // 🚀 STATE BARU UNTUK PROOF OF DELIVERY (PoD)
+  const [isSheetExpanded, setIsSheetExpanded] = useState(true);
+
   const [showPoDForm, setShowPoDForm] = useState(false);
   const [podNote, setPodNote] = useState("");
   const [podFile, setPodFile] = useState<File | null>(null);
@@ -50,6 +61,11 @@ export default function DriverAWBExecutionPage() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  // Mencegah Hydration Mismatch sebelum render Portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!orderId) return;
@@ -107,13 +123,9 @@ export default function DriverAWBExecutionPage() {
     }
   };
 
-  // =======================================================================
-  // 🚀 MESIN TRANSAKSI & MUTASI SALDO
-  // =======================================================================
   const handleUpdateStatusWithGeotag = async (nextStatus: string, customDesc: string, defaultLocationLabel: string, proofUrl?: string) => {
     if (!order || !user) return;
     setIsUpdating(true);
-    setIsGettingGPS(true);
 
     try {
       let finalLocationLabel = defaultLocationLabel;
@@ -146,7 +158,6 @@ export default function DriverAWBExecutionPage() {
       const logDate = new Date().toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
       const uniqueId = Date.now().toString();
 
-      // 🚀 INJEKSI FOTO BUKTI & CATATAN KE DALAM LOG TRACKING
       const trackingLog: Record<string, unknown> = {
         id: uniqueId,
         status: nextStatus,
@@ -155,27 +166,19 @@ export default function DriverAWBExecutionPage() {
         location: finalLocationLabel
       };
 
-      if (proofUrl) {
-        trackingLog.proofUrl = proofUrl; // Simpan URL foto di database tracking
-      }
+      if (proofUrl) trackingLog.proofUrl = proofUrl;
 
       const payload: Record<string, unknown> = {
         status: nextStatus,
         trackingHistory: arrayUnion(trackingLog)
       };
 
-      if (finalCoords) {
-        payload.driverCoords = finalCoords;
-      }
+      if (finalCoords) payload.driverCoords = finalCoords;
 
-      // ==========================================================
-      // 🚀 LOGIKA PEMOTONGAN/PENAMBAHAN DOMPET JIKA ORDER SELESAI
-      // ==========================================================
       if (nextStatus === "Selesai") {
         payload.paymentStatus = "Lunas";
 
         const totalTagihan = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
-
         let appCommissionPercent = 20; 
         try {
           const pricingSnap = await getDoc(doc(db, "settings", "pricing"));
@@ -183,22 +186,17 @@ export default function DriverAWBExecutionPage() {
             const config = pricingSnap.data();
             if (config.customVehicles && Array.isArray(config.customVehicles)) {
               const vehicleMatch = config.customVehicles.find((v: unknown) => {
-                 if (typeof v === 'object' && v !== null && 'name' in v) {
-                   return (v as {name: string}).name === order.vehicleName;
-                 }
+                 if (typeof v === 'object' && v !== null && 'name' in v) return (v as {name: string}).name === order.vehicleName;
                  return false;
               });
-              
               if (vehicleMatch && typeof vehicleMatch === 'object' && 'appCommission' in vehicleMatch) {
                 const commission = (vehicleMatch as {appCommission?: number | string}).appCommission;
-                if (commission !== undefined) {
-                  appCommissionPercent = Number(commission);
-                }
+                if (commission !== undefined) appCommissionPercent = Number(commission);
               }
             }
           }
         } catch (err) {
-          console.warn("Gagal menarik config komisi, menggunakan default 20%", err);
+          console.warn("Gagal menarik config komisi", err);
         }
 
         const driverSharePercent = 100 - appCommissionPercent;
@@ -210,28 +208,18 @@ export default function DriverAWBExecutionPage() {
         
         const walletRef = doc(db, "driver_wallets", targetWalletId);
         const isB2B = order.isB2B === true;
-        let mutationAmount = 0;
-
-        if (isB2B) {
-          mutationAmount = driverShareNominal; 
-        } else {
-          mutationAmount = -Math.abs(appShareNominal);
-        }
+        const mutationAmount = isB2B ? driverShareNominal : -Math.abs(appShareNominal);
 
         if (mutationAmount !== 0) {
-          await updateDoc(walletRef, {
-            balance: increment(mutationAmount)
-          });
+          await updateDoc(walletRef, { balance: increment(mutationAmount) });
         }
       }
 
       await updateDoc(orderRef, payload);
-      showToast(`Status berhasil diperbarui ke: ${nextStatus}`);
+      showToast(`Status diperbarui: ${nextStatus}`);
 
       if (nextStatus === "Selesai") {
-        setTimeout(() => {
-          router.push("/driver/radar");
-        }, 2000);
+        setTimeout(() => router.push("/driver/radar"), 2500);
       }
 
     } catch (error) {
@@ -239,53 +227,46 @@ export default function DriverAWBExecutionPage() {
       showToast("Gagal memperbarui status pengiriman.", "error");
     } finally {
       setIsUpdating(false);
-      setIsGettingGPS(false);
     }
   };
 
-  // 🚀 FUNGSI KHUSUS UNTUK SUBMIT BUKTI PENGIRIMAN
   const submitProofOfDelivery = async (destAddr: string) => {
-    if (!podFile || !podNote.trim()) {
-      showToast("Foto bukti dan nama/catatan penerima wajib diisi!", "error");
-      return;
-    }
-
+    if (!podFile || !podNote.trim()) return showToast("Foto bukti dan catatan wajib diisi!", "error");
     setIsUpdating(true);
     try {
-      // 1. Upload Foto ke Cloudinary
       const uploadedUrl = await uploadToCloudinary(podFile);
-      
-      // 2. Kirim update status Selesai berserta URL foto dan Catatan
-      await handleUpdateStatusWithGeotag(
-        "Selesai", 
-        `Paket diterima oleh: ${podNote}`, // Masukkan catatan ke deskripsi tracking
-        destAddr,
-        uploadedUrl // Kirim URL foto
-      );
+      await handleUpdateStatusWithGeotag("Selesai", `Paket diterima oleh: ${podNote}`, destAddr, uploadedUrl);
     } catch (error) {
-      console.error("Gagal PoD:", error); // 🚀 PERBAIKAN: error digunakan disini
+      console.error("Gagal PoD:", error);
       showToast("Gagal mengunggah foto bukti.", "error");
       setIsUpdating(false);
     }
   };
 
+  // RENDER PENGAMAN SEBELUM PORTAL MOUNTED
+  if (!mounted) return null;
+
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#7A171D] animate-spin mb-3" />
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Memuat Manifes Pengiriman...</p>
-      </div>
+    return createPortal(
+      <div className="fixed inset-0 z-[999999] bg-[var(--background)] flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-[var(--brand-maroon)] rounded-full animate-spin shadow-sm"></div>
+        <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Memuat Manifes AWB...</p>
+      </div>,
+      document.body
     );
   }
 
   if (!order) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center text-center">
-        <AlertTriangle className="w-12 h-12 text-amber-500 mb-3" />
-        <h2 className="font-bold text-slate-800">Manifes Tidak Ditemukan</h2>
-        <p className="text-xs text-slate-500 mt-1 mb-5">Resi mungkin telah dihapus atau tidak valid.</p>
-        <button onClick={() => router.push("/driver/radar")} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-bold">Kembali ke Radar</button>
-      </div>
+    return createPortal(
+      <div className="fixed inset-0 z-[999999] bg-[var(--background)] p-6 flex flex-col items-center justify-center text-center">
+        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mb-4">
+          <AlertTriangle className="w-10 h-10 text-amber-500" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Manifes Tidak Valid</h2>
+        <p className="text-sm font-medium text-slate-500 mt-2 mb-6 max-w-[250px]">Resi mungkin telah dihapus oleh Admin atau sistem.</p>
+        <Button variant="secondary" onClick={() => router.push("/driver/radar")}>Kembali ke Radar</Button>
+      </div>,
+      document.body
     );
   }
 
@@ -298,222 +279,298 @@ export default function DriverAWBExecutionPage() {
   const receiverName = destObj?.receiverName || "Penerima";
   const receiverPhone = destObj?.receiverPhone || "-";
 
-  const mapOrigin = originObj?.lat && originObj?.lng ? { lat: originObj.lat, lng: originObj.lng } : null;
-  const mapDrops = destObj?.lat && destObj?.lng ? [{ id: "drop-1", address: destAddr, lat: destObj.lat, lng: destObj.lng }] : [];
+  const mapOrigin = originObj?.lat && originObj?.lng ? { lat: originObj.lat, lng: originObj.lng } : undefined;
+  const mapDrops = destObj?.lat && destObj?.lng 
+    ? [{ id: "drop-1", address: destAddr, lat: destObj.lat, lng: destObj.lng, detail: destObj.detail || "", receiverName, receiverPhone, receiverEmail: destObj.receiverEmail || "", items: destObj.items || [] }] 
+    : [];
 
   const currentMapLng = driverLocation?.lng || mapOrigin?.lng || mapDrops[0]?.lng || 116.116;
   const currentMapLat = driverLocation?.lat || mapOrigin?.lat || mapDrops[0]?.lat || -8.583;
 
-  return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans pb-28 flex flex-col relative">
-      <AnimatePresence>
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className={`fixed top-4 left-4 right-4 z-[99999] p-4 rounded-2xl shadow-xl flex items-center gap-3 backdrop-blur-md border ${toast.type === "success" ? "bg-emerald-500/90 border-emerald-400 text-white" : "bg-red-500/90 border-red-400 text-white"}`}>
-            {toast.type === "success" ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
-            <p className="text-sm font-bold leading-tight">{toast.msg}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="bg-slate-900 px-5 pt-8 pb-6 text-white rounded-b-3xl shadow-lg relative">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push("/driver/radar")} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors">
-            <ArrowLeft size={18} />
-          </button>
-          <span className="font-mono text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full uppercase">
-            {order.status}
-          </span>
-        </div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nomor Resi AWB</p>
-        <h1 className="text-xl font-black font-mono tracking-wider mt-0.5">#{order.id}</h1>
-      </div>
-
-      <main className="flex-1 p-5 space-y-4">
+  // 🚀 PORTAL KE DOCUMENT.BODY
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex justify-center bg-[var(--background)] sm:bg-slate-900/50 sm:backdrop-blur-sm transition-all duration-300">
+      
+      {/* KANVAS MOBILE (MAX-W-MD) */}
+      <main className="w-full max-w-md h-full bg-slate-100 relative flex flex-col overflow-hidden font-sans tap-highlight-transparent shadow-2xl sm:rounded-[2.5rem] sm:h-[90vh] sm:my-auto">
         
-        {(mapOrigin || mapDrops.length > 0) && (
-          <div className="bg-white rounded-3xl p-2 border border-slate-200 shadow-sm relative">
-            <button 
-              onClick={() => {
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition((pos) => {
-                    setDriverLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                    setMapCenterTick(prev => prev + 1); 
-                    showToast("Peta dipusatkan ke lokasi Anda saat ini");
-                  });
-                }
-              }}
-              className="absolute top-4 right-4 z-10 bg-white p-2 rounded-xl shadow-lg border border-slate-200 text-[#7A171D] hover:bg-slate-50 transition-transform active:scale-95"
-              title="Kembali ke Lokasi Saya"
-            >
-              <Focus className="w-5 h-5" />
-            </button>
-
-            <div className="w-full h-[300px] rounded-2xl overflow-hidden relative border border-slate-100 bg-slate-50">
-              <MapBase 
-                key={`map-${mapCenterTick}`} // 🚀 PERBAIKAN: Gunakan tick untuk trigger remount peta jika di-recenter
-                longitude={currentMapLng}
-                latitude={currentMapLat}
-                zoom={14}
-                interactive={true} 
-                originCoords={mapOrigin}
-                drops={mapDrops}
-                driverCoords={driverLocation}
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Layanan & Armada</span>
-            <span className="text-xs font-black text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg uppercase">{order.serviceType || "Reguler"} • {order.vehicleName || order.vehicle}</span>
-          </div>
-          <div className="relative pl-3 my-2">
-            <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-slate-200 border-dashed border-l-2 border-slate-300 z-0"></div>
-            <div className="space-y-4 relative z-10">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 bg-white p-0.5 rounded-full"><MapPin className="w-4 h-4 text-slate-400" /></div>
-                <div>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Titik Asal (Pickup)</p>
-                  <p className="font-bold text-slate-800 text-xs">{originAddr}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 bg-white p-0.5 rounded-full"><MapPin className="w-4 h-4 text-[#7A171D]" /></div>
-                <div>
-                  <p className="text-[9px] font-bold text-[#7A171D] uppercase tracking-wider mb-0.5">Titik Tujuan (Drop)</p>
-                  <p className="font-bold text-slate-800 text-xs">{destAddr}</p>
-                  <p className="text-[11px] text-slate-600 font-semibold mt-1">Penerima: <span className="text-slate-900 font-bold">{receiverName}</span> ({receiverPhone})</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
-          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Package className="w-4 h-4 text-[#7A171D]"/> Detail Muatan Kargo</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Total Berat</p>
-              <p className="text-sm font-black text-slate-800 mt-0.5 flex items-center gap-1"><Scale className="w-3.5 h-3.5 text-slate-400"/> {order.totalWeight || order.weight || 0} Kg</p>
-            </div>
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Estimasi Pendapatan</p>
-              <p className="text-sm font-black text-emerald-600 mt-0.5">{formatRupiah(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0)}</p>
-            </div>
-          </div>
-          {destObj?.items && destObj.items.length > 0 && (
-            <div className="pt-2 border-t border-slate-100 mt-2">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Item Barang:</p>
-              <div className="space-y-1.5">
-                {destObj.items.map((item: DeliveryItem, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center text-xs bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
-                    <span className="font-bold text-slate-700">{item.name || "-"}</span>
-                    <span className="font-mono text-slate-500">Qty: {item.value || 1} ({item.weightType || 'Kecil'})</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* GLOBAL TOAST (Diubah jadi absolute agar tertahan di dalam bingkai HP max-w-md) */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div initial={{ opacity: 0, y: -20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.95 }} className={cn(
+              "absolute top-safe mt-4 left-4 right-4 z-[100000] p-4 rounded-[1.25rem] shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex items-center gap-3 backdrop-blur-md border",
+              toast.type === "success" ? "bg-emerald-500/90 border-emerald-400 text-white" : "bg-red-500/90 border-red-400 text-white"
+            )}>
+              {toast.type === "success" ? <CheckCircle2 size={24} /> : <AlertTriangle size={24} />}
+              <p className="text-sm font-bold leading-tight tracking-tight">{toast.msg}</p>
+            </motion.div>
           )}
+        </AnimatePresence>
+
+        {/* 🚀 MAPBOX (Absolute inset-0 di dalam main) */}
+        <div className="absolute inset-0 z-0">
+          <MapBase 
+            key={`map-${mapCenterTick}`}
+            longitude={currentMapLng}
+            latitude={currentMapLat}
+            zoom={14}
+            interactive={true} 
+            originCoords={mapOrigin}
+            drops={mapDrops}
+            driverCoords={driverLocation || undefined}
+          />
         </div>
 
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
-          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-600"/> Update Status Logistik</h3>
-          <div className="space-y-3">
+        {/* 🚀 FLOATING TOP HEADER */}
+        <div className="absolute top-0 left-0 right-0 z-20 pt-safe px-4 mt-4 flex items-center justify-between pointer-events-none">
+          <button 
+            onClick={() => router.push("/driver/radar")} 
+            className="w-12 h-12 flex items-center justify-center bg-white/80 backdrop-blur-md border border-white rounded-[1.25rem] shadow-[0_4px_20px_rgba(0,0,0,0.1)] text-slate-800 pointer-events-auto active:scale-90 transition-transform"
+          >
+            <ArrowLeft size={22} strokeWidth={2.5} />
+          </button>
+
+          <div className="bg-white/80 backdrop-blur-md border border-white px-4 py-2 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] pointer-events-auto flex items-center gap-2">
+            <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
+            <span className="font-black text-slate-800 text-xs uppercase tracking-widest">{order.status}</span>
+          </div>
+        </div>
+
+        {/* 🚀 MAP CONTROLS (Fokus) */}
+        <div className="absolute top-24 right-4 z-20 pointer-events-none flex flex-col gap-3">
+          <button 
+            onClick={() => {
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                  setDriverLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                  setMapCenterTick(prev => prev + 1); 
+                  showToast("Peta difokuskan ke posisi Anda", "success");
+                });
+              }
+            }}
+            className="w-12 h-12 flex items-center justify-center bg-white/90 backdrop-blur-md border border-slate-100 rounded-2xl shadow-lg text-[var(--brand-maroon)] pointer-events-auto active:scale-90 transition-transform"
+          >
+            <Focus className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* 🚀 BOTTOM SHEET (Absolute di dalam main) */}
+        <motion.div 
+          animate={{ y: isSheetExpanded ? 0 : "65%" }}
+          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          className="absolute bottom-0 left-0 right-0 z-30 bg-white/90 backdrop-blur-3xl rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.15)] border-t border-white flex flex-col"
+          style={{ maxHeight: "85%" }}
+        >
+          {/* Drag Handle */}
+          <div onClick={() => setIsSheetExpanded(!isSheetExpanded)} className="w-full py-4 flex justify-center cursor-pointer shrink-0">
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-2" />
+          </div>
+          
+          <button onClick={() => setIsSheetExpanded(!isSheetExpanded)} className="absolute top-4 right-5 p-1.5 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors">
+            {isSheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+          </button>
+
+          {/* Header AWB */}
+          <div className="px-6 pb-4 border-b border-slate-100 shrink-0">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resi Pengiriman (AWB)</p>
+            <div className="flex justify-between items-end mt-0.5">
+              <h1 className="text-2xl font-black font-mono tracking-tight text-slate-900">#{order.id.substring(0,10)}</h1>
+              <p className="text-xl font-black text-emerald-600 tracking-tighter drop-shadow-sm">{formatRupiah(order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0)}</p>
+            </div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar pb-8">
+            
+            {/* Rute Perjalanan */}
+            <div className="relative pl-4">
+              <div className="absolute left-[19px] top-3 bottom-3 w-[3px] bg-slate-100 rounded-full z-0"></div>
+              <div className="absolute left-[19px] top-3 h-1/2 w-[3px] bg-gradient-to-b from-slate-300 to-transparent rounded-full z-0"></div>
+              
+              <div className="space-y-6 relative z-10">
+                <div className="flex items-start gap-4">
+                  <div className="mt-0.5 bg-white shadow-sm p-1.5 rounded-full border border-slate-200 z-10">
+                    <MapPin className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Penjemputan (Pickup)</p>
+                    <p className="font-bold text-slate-800 text-sm leading-snug">{originAddr}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="mt-0.5 bg-white shadow-sm p-1.5 rounded-full border border-slate-200 z-10">
+                    <MapPin className="w-4 h-4 text-[var(--brand-maroon)]" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-[var(--brand-maroon)] uppercase tracking-widest mb-1">Tujuan (Drop)</p>
+                    <p className="font-bold text-slate-800 text-sm leading-snug">{destAddr}</p>
+                    <div className="mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center gap-3">
+                      <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center shrink-0">
+                        <span className="text-xs font-black text-slate-500 uppercase">{receiverName.substring(0,2)}</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Penerima</p>
+                        <p className="text-xs font-black text-slate-800">{receiverName} <span className="font-medium text-slate-500">({receiverPhone})</span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Spesifikasi Kargo */}
+            <div>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-slate-500"/> Detail Kargo & Muatan
+              </h3>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-white/60 p-3 rounded-[1.25rem] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_10px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center">
+                  <Scale className="w-5 h-5 text-slate-400 mb-1" />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Berat</p>
+                  <p className="text-lg font-black text-slate-800 tracking-tight">{order.totalWeight || order.weight || 0} Kg</p>
+                </div>
+                <div className="bg-white/60 p-3 rounded-[1.25rem] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_4px_10px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center">
+                  <Truck className="w-5 h-5 text-slate-400 mb-1" />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Armada / Layanan</p>
+                  <p className="text-sm font-black text-slate-800 tracking-tight line-clamp-1">{order.vehicleName || order.vehicle}</p>
+                </div>
+              </div>
+
+              {destObj?.items && destObj.items.length > 0 && (
+                <div className="space-y-2">
+                  {destObj.items.map((item: DeliveryItem, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-sm bg-slate-50/80 px-4 py-3 rounded-2xl border border-slate-100">
+                      <span className="font-bold text-slate-700">{item.name || "-"}</span>
+                      <span className="font-mono text-slate-500 font-bold bg-white px-2 py-0.5 rounded-lg border shadow-sm">x{item.value || 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* AREA FORM PROOF OF DELIVERY (PoD) */}
+            <AnimatePresence>
+              {showPoDForm && order.status === "Dikirim" && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="bg-emerald-50/80 p-5 rounded-[1.5rem] border border-emerald-200/50 space-y-4 mb-2">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm font-black text-emerald-900 tracking-tight">Bukti Pengiriman (PoD)</h4>
+                      <button onClick={() => setShowPoDForm(false)} className="w-6 h-6 flex items-center justify-center bg-white rounded-full text-slate-400 shadow-sm"><X size={14}/></button>
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1.5 block">Siapa yang menerima?</label>
+                      <Input 
+                        type="text" 
+                        placeholder="Cth: Diterima Security (Pak Budi)" 
+                        value={podNote}
+                        onChange={(e) => setPodNote(e.target.value)}
+                        className="bg-white border-emerald-200 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1.5 block">Foto Barang & Lokasi Drop</label>
+                      <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handlePhotoCapture} className="hidden" />
+                      <div 
+                        onClick={() => cameraInputRef.current?.click()}
+                        className={cn(
+                          "border-2 border-dashed rounded-2xl h-32 flex flex-col items-center justify-center cursor-pointer transition-all active:scale-[0.98] tap-highlight-transparent overflow-hidden",
+                          podPreview ? 'border-emerald-500' : 'border-emerald-300 hover:border-emerald-500 bg-white/60'
+                        )}
+                      >
+                        {podPreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={podPreview} alt="Bukti" className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <Camera className="w-8 h-8 text-emerald-600 mb-2 opacity-50" />
+                            <p className="text-xs font-black text-emerald-800">Ambil Foto Bukti</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Info Order Selesai */}
+            {order.status === "Selesai" && (
+              <div className="bg-emerald-50/80 border border-emerald-200/50 p-6 rounded-[1.5rem] text-center">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
+                <p className="text-sm font-black text-emerald-900 tracking-tight">Pengiriman Sukses & Selesai</p>
+                <p className="text-[10px] font-bold text-emerald-700 mt-1 uppercase tracking-widest">Transaksi telah dicatat ke dalam dompet.</p>
+              </div>
+            )}
+          </div>
+
+          {/* FIXED ACTION BUTTONS DI BAWAH SHEET */}
+          <div className="px-6 py-4 bg-white/90 backdrop-blur-md border-t border-slate-100 pb-safe shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
             {order.status === "Menuju Lokasi Jemput" && (
-              <button 
+              <Button 
+                size="lg"
+                variant="secondary"
                 onClick={() => handleUpdateStatusWithGeotag("Sedang Diproses", "Kurir telah tiba di lokasi jemput dan barang sedang dimuat ke armada.", originAddr)}
                 disabled={isUpdating}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs transition-transform active:scale-95"
+                isLoading={isUpdating}
+                className="w-full flex items-center justify-center gap-2 border-slate-800 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
               >
-                {isUpdating ? <><Loader2 className="w-4 h-4 animate-spin"/> {isGettingGPS ? 'Mengunci GPS...' : 'Memperbarui...'}</> : <><Navigation className="w-4 h-4" /> Tiba di Lokasi Jemput (Pickup)</>}
-              </button>
+                {!isUpdating && <><Navigation className="w-5 h-5 text-blue-400" /> Tiba di Lokasi Jemput (Pickup)</>}
+              </Button>
             )}
 
-            {(order.status === "Menuju Lokasi Jemput" || order.status === "Sedang Diproses") && (
-              <button 
+            {(order.status === "Sedang Diproses") && (
+              <Button 
+                size="lg"
+                variant="primary"
                 onClick={() => handleUpdateStatusWithGeotag("Dikirim", "Paket telah dimuat dan sedang dalam perjalanan (In Transit) menuju alamat penerima.", "Dalam Perjalanan")}
                 disabled={isUpdating}
-                className="w-full bg-[#7A171D] hover:bg-[#5A0E13] text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs transition-transform active:scale-95"
+                isLoading={isUpdating}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-[var(--brand-maroon-light)] to-[var(--brand-maroon)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]"
               >
-                {isUpdating ? <><Loader2 className="w-4 h-4 animate-spin"/> {isGettingGPS ? 'Mengunci GPS...' : 'Memperbarui...'}</> : <><Truck className="w-4 h-4" /> Mulai Pengiriman (In Transit)</>}
-              </button>
+                {!isUpdating && <><Truck className="w-5 h-5 text-amber-300" /> Mulai Pengiriman (In Transit)</>}
+              </Button>
             )}
 
-            {/* 🚀 FORM PROOF OF DELIVERY (TAMPIL JIKA STATUS DIKIRIM) */}
             {order.status === "Dikirim" && !showPoDForm && (
-              <button 
+              <Button 
+                size="lg"
+                variant="primary"
                 onClick={() => setShowPoDForm(true)}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 text-xs transition-transform active:scale-95"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-600 border-emerald-700 shadow-emerald-600/30"
               >
-                <CheckCircle2 className="w-4 h-4" /> Selesaikan Pesanan (Delivered)
-              </button>
+                <ShieldCheck className="w-5 h-5" /> Selesaikan Pengiriman
+              </Button>
             )}
 
             {order.status === "Dikirim" && showPoDForm && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <h4 className="text-sm font-black text-slate-800">Bukti Pengiriman (PoD)</h4>
-                  <button onClick={() => setShowPoDForm(false)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
-                </div>
-                
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Nama Penerima / Catatan</label>
-                  <input 
-                    type="text" 
-                    placeholder="Cth: Diterima oleh Pak Budi (Security)" 
-                    value={podNote}
-                    onChange={(e) => setPodNote(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:border-emerald-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Foto Barang / Lokasi</label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    capture="environment" // 🚀 Minta HP langsung buka kamera belakang
-                    ref={cameraInputRef} 
-                    onChange={handlePhotoCapture} 
-                    className="hidden" 
-                  />
-                  <div 
-                    onClick={() => cameraInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${podPreview ? 'border-emerald-400' : 'border-slate-300 hover:border-emerald-400 bg-white'}`}
-                  >
-                    {podPreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={podPreview} alt="Bukti" className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <Camera className="w-8 h-8 text-slate-400 mb-2" />
-                        <p className="text-xs font-bold text-slate-600">Ambil Foto Bukti</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => submitProofOfDelivery(destAddr)}
-                  disabled={isUpdating || !podFile || !podNote.trim()}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 text-xs disabled:opacity-50 transition-colors shadow-lg shadow-emerald-600/20"
-                >
-                  {isUpdating ? <><Loader2 className="w-4 h-4 animate-spin"/> Memproses...</> : <><UploadCloud className="w-4 h-4" /> Kirim Bukti & Selesai</>}
-                </button>
-              </motion.div>
+              <Button 
+                size="lg"
+                variant="primary"
+                onClick={() => submitProofOfDelivery(destAddr)}
+                disabled={isUpdating || !podFile || !podNote.trim()}
+                isLoading={isUpdating}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-600 border-emerald-700 shadow-emerald-600/30"
+              >
+                {!isUpdating && <><UploadCloud className="w-5 h-5" /> Kirim Bukti & Selesai</>}
+              </Button>
             )}
-
+            
             {order.status === "Selesai" && (
-              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-1" />
-                <p className="text-xs font-bold text-emerald-700">Pengiriman Ini Telah Selesai</p>
-                <p className="text-[10px] text-emerald-600 mt-0.5">Transaksi telah dicatat ke dalam dompet.</p>
-              </div>
+              <Button 
+                size="lg"
+                variant="outline"
+                onClick={() => router.push("/driver/radar")}
+                className="w-full flex items-center justify-center gap-2 bg-white"
+              >
+                Kembali ke Bursa Radar
+              </Button>
             )}
           </div>
-        </div>
+        </motion.div>
       </main>
-    </div>
+    </div>,
+    document.body // 🚀 PORTAL KE LUAR DARI <main> LAYOUT UTAMA
   );
 }

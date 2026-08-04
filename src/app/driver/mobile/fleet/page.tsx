@@ -6,11 +6,13 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/store/useAuthStore";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Users, Truck, Loader2 } from "lucide-react";
+import { Users, Truck } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // --- IMPORT KOMPONEN TAB ---
 import DriverTab from "./components/DriverTab";
-import VehicleTab from "./components/VehicleTab"; // <-- INI YANG BARU DITAMBAHKAN
+import VehicleTab from "./components/VehicleTab"; 
+import Header from "@/components/driver/Header"; // 🚀 Import Smart Header kita
 
 export default function FleetManagementPage() {
   const router = useRouter();
@@ -52,9 +54,9 @@ export default function FleetManagementPage() {
   // LOADING SCREEN SEBELUM GUARD SELESAI
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center font-sans">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-        <p className="text-sm font-bold text-slate-500 mt-4 animate-pulse uppercase tracking-widest">
+      <div className="min-h-screen bg-[var(--background)] flex flex-col items-center justify-center font-sans">
+        <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin shadow-sm mb-3"></div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
           Otorisasi Vendor...
         </p>
       </div>
@@ -62,48 +64,49 @@ export default function FleetManagementPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] font-sans pb-24 flex flex-col">
+    // Gunakan tap-highlight-transparent agar no blue box saat klik tab
+    <div className="min-h-screen font-sans pb-24 flex flex-col relative tap-highlight-transparent">
       
-      {/* HEADER */}
-      <div className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-xl border-b border-slate-100 px-5 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => router.push("/driver/dashboard")} 
-            className="p-2 bg-slate-50 rounded-full text-slate-500 hover:bg-slate-100 transition-colors border border-slate-200"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-lg font-black text-slate-900 leading-none">Manajemen Armada</h1>
-            <p className="text-[10px] font-bold text-blue-600 mt-1 uppercase tracking-widest">Portal Vendor PT</p>
-          </div>
-        </div>
-      </div>
+      {/* 🚀 SMART HEADER */}
+      <Header 
+        title="Manajemen Armada" 
+        showBack={true} 
+        partnerType="Vendor" 
+      />
 
-      <main className="p-5 flex-1 flex flex-col">
+      <main className="p-4 md:p-5 relative z-10 flex-1 flex flex-col pt-24">
         
-        {/* DUAL-TAB SWITCHER */}
-        <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 mb-6 relative">
+        {/* 🚀 DUAL-TAB SWITCHER (APPLE SEGMENTED CONTROL) */}
+        <div className="flex bg-slate-200/60 p-1.5 rounded-[1.25rem] shadow-inner border border-slate-300/50 mb-6 relative">
           <button 
             onClick={() => setActiveTab("drivers")} 
-            className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "drivers" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
+            className={cn(
+              "flex-1 py-3 text-xs font-black transition-colors rounded-[1rem] relative z-10 flex items-center justify-center gap-2", 
+              activeTab === "drivers" ? "text-slate-800 drop-shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
           >
-            <Users size={18} /> Sopir PT
-          </button>
-          <button 
-            onClick={() => setActiveTab("vehicles")} 
-            className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl relative z-10 flex items-center justify-center gap-2 ${activeTab === "vehicles" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
-          >
-            <Truck size={18} /> Truk Fisik
+            <Users size={16} /> Data Sopir PT
           </button>
           
-          {/* ANIMATED PILL BACKGROUND */}
-          <div 
-            className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-blue-600 rounded-xl shadow-md transition-all duration-300 ease-out ${activeTab === "drivers" ? "left-1.5" : "left-[calc(50%+4px)]"}`}
+          <button 
+            onClick={() => setActiveTab("vehicles")} 
+            className={cn(
+              "flex-1 py-3 text-xs font-black transition-colors rounded-[1rem] relative z-10 flex items-center justify-center gap-2", 
+              activeTab === "vehicles" ? "text-slate-800 drop-shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <Truck size={16} /> Fisik Truk PT
+          </button>
+          
+          {/* Slider Animasi iOS */}
+          <motion.div 
+            className="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white rounded-[1rem] shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-100 z-0"
+            animate={{ left: activeTab === "drivers" ? "6px" : "calc(50% + 0px)" }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
           />
         </div>
 
-        {/* CONTENT AREA */}
+        {/* 🚀 CONTENT AREA (Pindah antar Tab) */}
         <div className="flex-1 relative">
           <AnimatePresence mode="wait">
             
@@ -111,20 +114,24 @@ export default function FleetManagementPage() {
             {activeTab === "drivers" ? (
               <motion.div 
                 key="tab-drivers"
-                initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, x: -10, filter: "blur(4px)" }} 
+                animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} 
+                exit={{ opacity: 0, x: 10, filter: "blur(4px)" }} 
+                transition={{ duration: 0.25, ease: "easeOut" }}
               >
-                {/* MEMANGGIL KOMPONEN TAB SOPIR */}
+                {/* KOMPONEN TAB SOPIR */}
                 <DriverTab />
               </motion.div>
-
             ) : (
-
               /* KONTEN TAB TRUK FISIK */
               <motion.div 
                 key="tab-vehicles"
-                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, x: 10, filter: "blur(4px)" }} 
+                animate={{ opacity: 1, x: 0, filter: "blur(0px)" }} 
+                exit={{ opacity: 0, x: -10, filter: "blur(4px)" }} 
+                transition={{ duration: 0.25, ease: "easeOut" }}
               >
-                {/* MEMANGGIL KOMPONEN TAB TRUK YANG BARU SAJA KITA BUAT */}
+                {/* KOMPONEN TAB TRUK */}
                 <VehicleTab />
               </motion.div>
             )}
