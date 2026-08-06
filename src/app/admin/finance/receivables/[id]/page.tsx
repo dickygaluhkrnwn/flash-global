@@ -20,7 +20,7 @@ import { useReactToPrint } from "react-to-print";
 import { InvoiceA4Template } from "@/components/shared/InvoiceA4Template";
 
 // MENGGUNAKAN GLOBAL TYPES
-import { UnpaidOrder, B2BClientDebt } from "@/types/finance"; // <-- KODE DIBERSIHKAN: Import langsung
+import { UnpaidOrder, B2BClientDebt } from "@/types/finance"; 
 import { OrderDetail, LocationDetail, FirebaseTimestamp } from "@/types/order";
 
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
@@ -74,7 +74,15 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
         b2bOrderSnap.forEach(docObj => {
           const data = docObj.data() as OrderDetail;
           
-          if (data.paymentStatus !== "Lunas") {
+          // 🚀 FIX FATAL LOGIC: Filter Positif seperti di halaman utama
+          const isTrueDebt = 
+            data.paymentStatus === "Piutang B2B" || 
+            data.paymentStatus === "Menunggu Verifikasi Finance" || 
+            data.paymentStatus === "Ditolak";
+            
+          const isNotCancelled = data.status !== "Dibatalkan" && data.paymentStatus !== "Dibatalkan" && data.paymentStatus !== "Refund Selesai";
+
+          if (isTrueDebt && isNotCancelled) {
             const originObj = typeof data.origin === 'object' && data.origin !== null ? data.origin as LocationDetail : null;
             const originAddress = originObj?.address ? String(originObj.address) : (typeof data.origin === 'string' ? String(data.origin) : "-");
             
@@ -82,7 +90,6 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
             const weight = Number(data.totalWeight || data.weight || 0);
             const vehicle = data.vehicleName ? String(data.vehicleName) : (data.vehicle ? String(data.vehicle) : "Kargo Logistik");
             
-            // KODE DIBERSIHKAN: Safe Date Parsing menggunakan FirebaseTimestamp global tanpa 'any'
             const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
               if (!timestamp) return 0;
               if (timestamp instanceof Date) return timestamp.getTime();
@@ -204,11 +211,11 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
           paymentMethod: "Bank Transfer B2B (Settled)",
           paidAt: serverTimestamp(),
           trackingHistory: arrayUnion({
-             id: uniqueId,
-             status: "Piutang B2B Dilunaskan",
-             date: logDate,
-             description: "Pembayaran tagihan termin Piutang (Net 30) telah dibayarkan penuh dan disetujui oleh Finance.",
-             location: "Pusat Keuangan Flash Global"
+              id: uniqueId,
+              status: "Piutang B2B Dilunaskan",
+              date: logDate,
+              description: "Pembayaran tagihan termin Piutang (Net 30) telah dibayarkan penuh dan disetujui oleh Finance.",
+              location: "Pusat Keuangan Flash Global"
           })
         });
       });

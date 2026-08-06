@@ -7,11 +7,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Wallet, ArrowDownCircle, ArrowUpCircle, CheckCircle2, AlertCircle, 
   ShieldAlert, ArrowLeft, Banknote, 
-  Upload, Building2, QrCode, Copy, X
+  Upload, Building2, QrCode, Copy, X, Smartphone
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { doc, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDoc } from "firebase/firestore";
+// 🚀 FIX IMPORT: Tambahkan writeBatch dan increment
+import { doc, collection, addDoc, serverTimestamp, query, where, onSnapshot, getDoc, writeBatch, increment } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -37,10 +38,11 @@ const getSafeMillis = (ts: unknown): number => {
 
 interface LedgerLog {
   id: string;
-  type: "Withdrawal" | "TopUp";
+  type: "Withdrawal" | "TopUp" | "Income" | "Deduction";
   amount: number;
-  status: "Pending" | "Processing" | "Disetujui" | "Ditolak";
+  status: "Pending" | "Processing" | "Disetujui" | "Ditolak" | "Success";
   timestamp: unknown; 
+  description?: string;
 }
 
 interface PaymentMethod {
@@ -66,9 +68,13 @@ export default function DriverWalletPage() {
   const [partnerType, setPartnerType] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   
+  // 🚀 STATE UNTUK LOGS
   const [withdrawLogs, setWithdrawLogs] = useState<LedgerLog[]>([]);
   const [topupLogs, setTopupLogs] = useState<LedgerLog[]>([]);
-  const historyLogs = [...withdrawLogs, ...topupLogs].sort((a, b) => getSafeMillis(b.timestamp) - getSafeMillis(a.timestamp));
+  const [mutationLogs, setMutationLogs] = useState<LedgerLog[]>([]);
+  
+  // Gabungkan semua riwayat dan urutkan dari yang terbaru
+  const historyLogs = [...withdrawLogs, ...topupLogs, ...mutationLogs].sort((a, b) => getSafeMillis(b.timestamp) - getSafeMillis(a.timestamp));
   
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null); 
   
@@ -76,7 +82,13 @@ export default function DriverWalletPage() {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showTopupModal, setShowTopupModal] = useState(false); 
 
+  // 🚀 FASE 2: STATE BARU UNTUK METODE PENARIKAN (MANUAL VS DANA)
+  const [withdrawMethod, setWithdrawMethod] = useState<"Manual_Bank" | "DANA_API">("Manual_Bank");
   const [withdrawAmount, setWithdrawAmount] = useState<number | "">("");
+  const [wdBankName, setWdBankName] = useState("");
+  const [wdAccountNumber, setWdAccountNumber] = useState("");
+  const [wdAccountName, setWdAccountName] = useState("");
+
   const [topupAmount, setTopupAmount] = useState<number | "">("");
   const [topupFile, setTopupFile] = useState<File | null>(null);
   const [topupPreview, setTopupPreview] = useState<string | null>(null);
@@ -96,6 +108,7 @@ export default function DriverWalletPage() {
   useEffect(() => {
     if (!user) return;
 
+    // 1. Tarik Saldo
     const walletRef = doc(db, "driver_wallets", user.uid);
     const unsubWallet = onSnapshot(walletRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -107,20 +120,43 @@ export default function DriverWalletPage() {
       setIsLoading(false);
     });
 
+    // 2. Tarik Riwayat Pengajuan Penarikan
     const withdrawQ = query(collection(db, "withdrawal_requests"), where("driverId", "==", user.uid));
     const unsubWithdrawals = onSnapshot(withdrawQ, (snapshot) => {
       const logs: LedgerLog[] = snapshot.docs.map(doc => ({
-        id: doc.id, type: "Withdrawal", ...doc.data()
+        id: doc.id, type: "Withdrawal", description: "Pengajuan Penarikan Dana", ...doc.data()
       })) as LedgerLog[];
       setWithdrawLogs(logs);
     });
 
+    // 3. Tarik Riwayat Pengajuan Top-up
     const topupQ = query(collection(db, "deposit_requests"), where("userId", "==", user.uid));
     const unsubTopups = onSnapshot(topupQ, (snapshot) => {
       const logs: LedgerLog[] = snapshot.docs.map(doc => ({
-        id: doc.id, type: "TopUp", ...doc.data()
+        id: doc.id, type: "TopUp", description: "Pengisian Saldo Dompet", ...doc.data()
       })) as LedgerLog[];
       setTopupLogs(logs);
+    });
+
+    // 4. Tarik Mutasi Asli dari Wallet Logs
+    const logsQ = query(collection(db, "wallet_logs"), where("userId", "==", user.uid));
+    const unsubLogs = onSnapshot(logsQ, (snapshot) => {
+      const logs: LedgerLog[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        let uiType: LedgerLog["type"] = "Income";
+        if (data.type === "deduction") uiType = "Deduction";
+        else if (data.type === "deposit" || data.type === "credit_payment") uiType = "Income";
+
+        return {
+          id: doc.id,
+          type: uiType,
+          amount: data.amount,
+          status: "Success",
+          timestamp: data.createdAt,
+          description: data.description || (uiType === "Income" ? "Pendapatan Order" : "Pemotongan Saldo")
+        };
+      });
+      setMutationLogs(logs);
     });
 
     const fetchPaymentConfig = async () => {
@@ -138,10 +174,11 @@ export default function DriverWalletPage() {
       unsubWallet();
       unsubWithdrawals();
       unsubTopups();
+      unsubLogs(); 
     };
   }, [user]);
 
-  // LOGIKA PENGAJUAN PENARIKAN DANA
+  // 🚀 LOGIKA PENGAJUAN PENARIKAN DANA DENGAN METHOD & PEMOTONGAN SALDO
   const handleWithdrawRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !withdrawAmount) return;
@@ -150,18 +187,58 @@ export default function DriverWalletPage() {
     if (amount < 50000) return showToast("error", "Minimal penarikan adalah Rp 50.000");
     if (amount > balance) return showToast("error", "Saldo tidak mencukupi untuk nominal tersebut.");
 
+    // Validasi ekstra berdasarkan metode
+    if (withdrawMethod === "Manual_Bank") {
+      if (!wdBankName.trim() || !wdAccountNumber.trim() || !wdAccountName.trim()) {
+        return showToast("error", "Lengkapi data rekening bank Anda.");
+      }
+    } else {
+      if (!wdAccountNumber.trim()) {
+        return showToast("error", "Masukkan nomor HP DANA Anda.");
+      }
+      // DANA selalu pakai format nomor HP
+      if (wdAccountNumber.length < 9) return showToast("error", "Nomor DANA tidak valid.");
+    }
+
     setIsProcessing(true);
     try {
-      await addDoc(collection(db, "withdrawal_requests"), {
+      const payload: Record<string, unknown> = {
         driverId: user.uid,
         amount: amount,
         status: "Pending",
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        method: withdrawMethod,
+        accountNumber: wdAccountNumber
+      };
+
+      if (withdrawMethod === "Manual_Bank") {
+        payload.bankName = wdBankName;
+        payload.accountName = wdAccountName;
+      }
+
+      // 🚀 SUB-ROADMAP LANGKAH 1: KUNCI SALDO (BATCH WRITE)
+      const batch = writeBatch(db);
+      
+      // 1. Buat record request penarikan
+      const newWithdrawRef = doc(collection(db, "withdrawal_requests"));
+      batch.set(newWithdrawRef, payload);
+
+      // 2. Langsung potong saldo dari driver_wallets
+      const walletRef = doc(db, "driver_wallets", user.uid);
+      batch.update(walletRef, {
+        balance: increment(-amount),
+        lastMutasi: serverTimestamp()
       });
+
+      // Commit transaksinya!
+      await batch.commit();
 
       showToast("success", "Pengajuan penarikan dana berhasil dikirim!");
       setShowWithdrawModal(false);
       setWithdrawAmount("");
+      setWdBankName("");
+      setWdAccountNumber("");
+      setWdAccountName("");
     } catch (error) {
       console.error(error);
       showToast("error", "Gagal mengirim pengajuan penarikan.");
@@ -221,8 +298,8 @@ export default function DriverWalletPage() {
     }
   };
 
-  const getStatusBadge = (status: "Pending" | "Processing" | "Disetujui" | "Ditolak") => {
-    if (status === "Disetujui") return "bg-emerald-50 text-emerald-600 border-emerald-200";
+  const getStatusBadge = (status: string) => {
+    if (status === "Disetujui" || status === "Success") return "bg-emerald-50 text-emerald-600 border-emerald-200";
     if (status === "Ditolak") return "bg-red-50 text-red-600 border-red-200";
     if (status === "Processing") return "bg-blue-50 text-blue-600 border-blue-200 animate-pulse";
     return "bg-amber-50 text-amber-600 border-amber-200";
@@ -285,6 +362,7 @@ export default function DriverWalletPage() {
                           type="number" 
                           required 
                           min="50000"
+                          max={balance}
                           value={withdrawAmount} 
                           onChange={(e) => setWithdrawAmount(e.target.value === "" ? "" : Number(e.target.value))} 
                           className={cn(
@@ -296,14 +374,62 @@ export default function DriverWalletPage() {
                       </div>
                       <p className="text-[9px] text-slate-400 font-bold mt-2 uppercase tracking-widest pl-2">Minimal penarikan Rp 50.000</p>
                     </div>
-                    
-                    {partnerType === "FleetDriver" && (
+
+                    {partnerType === "FleetDriver" && vendorName ? (
                       <div className="bg-red-50/80 backdrop-blur-sm border border-red-200 p-4 rounded-[1.25rem] flex gap-3 shadow-sm">
                         <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
                         <p className="text-[10px] text-red-800 font-bold leading-relaxed">
                           Anda terdaftar sebagai <b className="font-black">Sopir Vendor PT {vendorName}</b>. Dana yang ditarik akan ditransfer ke rekening Perusahaan.
                         </p>
                       </div>
+                    ) : (
+                      <>
+                        <div className="bg-slate-100/80 p-1 rounded-2xl flex relative shadow-inner mb-4">
+                          <button 
+                            type="button" 
+                            onClick={() => setWithdrawMethod("Manual_Bank")}
+                            className={cn("flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2", withdrawMethod === "Manual_Bank" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
+                          >
+                            <Building2 className="w-3.5 h-3.5" /> Transfer Bank
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => setWithdrawMethod("DANA_API")}
+                            className={cn("flex-1 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2", withdrawMethod === "DANA_API" ? "bg-blue-50 text-blue-700 shadow-sm border border-blue-100" : "text-slate-500")}
+                          >
+                            <Smartphone className="w-3.5 h-3.5" /> Saldo DANA
+                          </button>
+                        </div>
+
+                        <AnimatePresence mode="wait">
+                          {withdrawMethod === "Manual_Bank" ? (
+                            <motion.div key="manual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                              <div>
+                                <label className="text-[10px] font-black text-slate-500 mb-1.5 block uppercase tracking-widest">Nama Bank</label>
+                                <Input required placeholder="Cth: BCA / Mandiri / BNI" value={wdBankName} onChange={(e) => setWdBankName(e.target.value)} className="bg-white rounded-xl" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-black text-slate-500 mb-1.5 block uppercase tracking-widest">Nomor Rekening</label>
+                                <Input required type="number" placeholder="Cth: 1234567890" value={wdAccountNumber} onChange={(e) => setWdAccountNumber(e.target.value)} className="bg-white rounded-xl font-mono font-bold tracking-widest" />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-black text-slate-500 mb-1.5 block uppercase tracking-widest">Atas Nama (Sesuai Buku Tabungan)</label>
+                                <Input required placeholder="Cth: Budi Santoso" value={wdAccountName} onChange={(e) => setWdAccountName(e.target.value.toUpperCase())} className="bg-white rounded-xl uppercase" />
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.div key="dana" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+                              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">
+                                <label className="text-[10px] font-black text-blue-800 mb-2 block uppercase tracking-widest flex items-center gap-1.5">
+                                  <Smartphone className="w-3.5 h-3.5"/> Nomor HP Terdaftar di DANA
+                                </label>
+                                <Input required type="number" placeholder="Cth: 08123456789" value={wdAccountNumber} onChange={(e) => setWdAccountNumber(e.target.value)} className="bg-white rounded-xl font-mono font-black text-lg tracking-widest text-blue-900 border-blue-200 focus-visible:ring-blue-500/20" />
+                                <p className="text-[9px] text-blue-600/70 font-bold mt-2 leading-relaxed">Dana akan ditransfer secara instan oleh sistem ke akun DANA Anda setelah disetujui.</p>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
                     )}
                   </form>
                 </div>
@@ -556,29 +682,31 @@ export default function DriverWalletPage() {
             historyLogs.map((log) => {
               const millis = getSafeMillis(log.timestamp);
               const dateStr = millis > 0 ? new Date(millis).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Baru saja";
-              const isTopup = log.type === "TopUp";
+              const isIncome = log.type === "TopUp" || log.type === "Income";
 
               return (
                 <div key={log.id} className="glass-card bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm flex items-center justify-between gap-3 relative overflow-hidden active:scale-[0.98] transition-transform cursor-default">
                   {/* Indikator Warna Status */}
                   <div className={cn(
                     "absolute left-0 top-0 bottom-0 w-1.5",
-                    log.status === 'Disetujui' ? 'bg-emerald-500' : log.status === 'Ditolak' ? 'bg-red-500' : log.status === 'Processing' ? 'bg-blue-500' : 'bg-amber-400'
+                    log.status === 'Disetujui' || log.status === 'Success' ? 'bg-emerald-500' : 
+                    log.status === 'Ditolak' ? 'bg-red-500' : 
+                    log.status === 'Processing' ? 'bg-blue-500' : 'bg-amber-400'
                   )}></div>
                   
                   <div className="flex-1 pl-3">
-                    <p className="text-sm font-black text-slate-800 flex items-center gap-1.5 tracking-tight mb-0.5">
-                      {isTopup ? <ArrowUpCircle className="w-4 h-4 text-emerald-500" /> : <ArrowDownCircle className={cn("w-4 h-4", partnerType === "Vendor" ? "text-blue-600" : "text-[#7A171D]")} />}
-                      {isTopup ? 'Top Up Deposit' : 'Tarik Tunai'}
+                    <p className="text-sm font-black text-slate-800 flex items-center gap-1.5 tracking-tight mb-0.5 line-clamp-1">
+                      {isIncome ? <ArrowUpCircle className="w-4 h-4 text-emerald-500 shrink-0" /> : <ArrowDownCircle className={cn("w-4 h-4 shrink-0", partnerType === "Vendor" ? "text-blue-600" : "text-[#7A171D]")} />}
+                      {log.description || (isIncome ? 'Pendapatan Saldo' : 'Potongan Saldo')}
                     </p>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{dateStr}</p>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-1.5">
-                    <p className={cn("text-sm font-black font-mono tracking-tight", isTopup ? 'text-emerald-600' : partnerType === "Vendor" ? 'text-blue-600' : 'text-[#7A171D]')}>
-                      {isTopup ? '+' : '-'} {formatRupiah(log.amount)}
+                  <div className="text-right flex flex-col items-end gap-1.5 shrink-0">
+                    <p className={cn("text-sm font-black font-mono tracking-tight", isIncome ? 'text-emerald-600' : partnerType === "Vendor" ? 'text-blue-600' : 'text-[#7A171D]')}>
+                      {isIncome ? '+' : '-'} {formatRupiah(log.amount)}
                     </p>
                     <span className={cn("px-2 py-0.5 border text-[9px] font-black uppercase tracking-wider rounded-md", getStatusBadge(log.status))}>
-                      {log.status === "Pending" ? "Menunggu" : log.status === "Processing" ? "Proses Bank" : log.status}
+                      {log.status === "Pending" ? "Menunggu" : log.status === "Processing" ? "Proses Bank" : log.status === "Success" ? "Selesai" : log.status}
                     </span>
                   </div>
                 </div>

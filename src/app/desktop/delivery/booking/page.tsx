@@ -134,10 +134,25 @@ function BookingForm() {
 
           const qDebt = query(collection(db, "orders"), where("userId", "==", user.uid), where("isB2BApplied", "==", true));
           const debtSnap = await getDocs(qDebt);
+          
           let totalHutang = 0;
           debtSnap.forEach(d => {
             const oData = d.data();
-            if (oData.paymentStatus !== "Lunas") totalHutang += (oData.finalGrandTotal || oData.breakdown?.grandTotal || oData.totalCost || 0);
+            
+            // 🚀 FIX FATAL LOGIC: Terapkan Filter Positif Utang (Sama persis seperti page Finance)
+            const isTrueDebt = 
+              oData.paymentStatus === "Piutang B2B" || 
+              oData.paymentStatus === "Menunggu Verifikasi Finance" || 
+              oData.paymentStatus === "Ditolak";
+              
+            const isNotCancelled = 
+              oData.status !== "Dibatalkan" && 
+              oData.paymentStatus !== "Dibatalkan" && 
+              oData.paymentStatus !== "Refund Selesai";
+
+            if (isTrueDebt && isNotCancelled) {
+              totalHutang += (oData.finalGrandTotal || oData.breakdown?.grandTotal || oData.totalCost || 0);
+            }
           });
           setB2bOutstanding(totalHutang);
         }
@@ -157,7 +172,6 @@ function BookingForm() {
             const sortedVehicles = (pData.customVehicles as DynamicVehicle[]).sort((a, b) => a.maxWeight - b.maxWeight);
             setVehicles(sortedVehicles);
             
-            // Auto-select kendaraan jika ada param dari Landing Page
             const paramVehicleId = searchParams.get("vehicle");
             if (paramVehicleId && paramVehicleId !== "auto") {
               const matched = sortedVehicles.find(v => v.id === paramVehicleId);
@@ -347,6 +361,8 @@ function BookingForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentStep !== 4) return;
+    
     if (!user?.uid) return;
     if (isOverweight) { setErrorMsg(`Total estimasi berat (${totalWeight.toFixed(1)} Kg) melebihi kapasitas ${selectedVehicle?.name}.`); return; }
     if (routeDistanceKm === 0) { setErrorMsg(`Rute belum ditemukan. Pastikan alamat jemput dan tujuan sudah dipin pada peta satelit.`); return; }
@@ -360,7 +376,29 @@ function BookingForm() {
     
     try {
       const resiInduk = `FLG-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
-      const dropsWithResi = drops.map((drop, idx) => ({ ...drop, resi: `${resiInduk}-${idx+1}` }));
+      
+      const dropsWithResi = drops.map((drop, idx) => ({ 
+        id: drop.id || `DROP-${idx}`,
+        address: drop.address || "",
+        detail: drop.detail || "",
+        receiverName: drop.receiverName || "",
+        receiverPhone: drop.receiverPhone || "",
+        receiverEmail: drop.receiverEmail || "",
+        lat: drop.lat || 0,
+        lng: drop.lng || 0,
+        resi: `${resiInduk}-${idx+1}`,
+        items: drop.items.map(item => ({
+          id: item.id || `ITM-${idx}`,
+          name: item.name || "Paket Kargo",
+          weightType: item.weightType || "Kecil",
+          dimType: item.dimType || "S",
+          weightVal: Number(item.weightVal) || 0,
+          length: Number(item.length) || 0,
+          width: Number(item.width) || 0,
+          height: Number(item.height) || 0,
+          value: Number(item.value) || 0
+        }))
+      }));
 
       let finalStatus = "Menunggu Pembayaran";
       let finalPaymentStatus = "Belum Bayar";
@@ -376,12 +414,38 @@ function BookingForm() {
 
       const batch = writeBatch(db);
       const newOrderRef = doc(collection(db, "orders"));
+      
       batch.set(newOrderRef, {
-        userId: user.uid, resi: resiInduk, origin: { ...originData, ...originCoords }, destinations: dropsWithResi, 
-        serviceType: selectedService, vehicleId: selectedVehicle?.id, vehicleName: selectedVehicle?.name, 
-        totalWeight, totalDistance: routeDistanceKm, isB2BApplied: isB2BClient,
-        breakdown: { deliveryFee: baseDeliveryCost, insuranceFee: finalInsuranceCost, porterFee: porterCost, tollFee: Number(tollFee), b2bDiscount: b2bDiscountAmount, grandTotal }, 
-        status: finalStatus, paymentStatus: finalPaymentStatus, paymentMethod: finalPaymentMethod, createdAt: serverTimestamp(), porterCount 
+        userId: user.uid, 
+        resi: resiInduk, 
+        origin: { 
+          address: originData.address || "", 
+          detail: originData.detail || "",
+          senderName: originData.senderName || "",
+          senderPhone: originData.senderPhone || "",
+          lat: originCoords?.lat || 0, 
+          lng: originCoords?.lng || 0 
+        }, 
+        destinations: dropsWithResi, 
+        serviceType: selectedService || "Instan", 
+        vehicleId: selectedVehicle?.id || "motor", 
+        vehicleName: selectedVehicle?.name || "Motor", 
+        totalWeight: Number(totalWeight) || 0, 
+        totalDistance: Number(routeDistanceKm) || 0, 
+        isB2BApplied: isB2BClient,
+        breakdown: { 
+          deliveryFee: Number(baseDeliveryCost) || 0, 
+          insuranceFee: Number(finalInsuranceCost) || 0, 
+          porterFee: Number(porterCost) || 0, 
+          tollFee: Number(tollFee) || 0, 
+          b2bDiscount: Number(b2bDiscountAmount) || 0, 
+          grandTotal: Number(grandTotal) || 0 
+        }, 
+        status: finalStatus, 
+        paymentStatus: finalPaymentStatus, 
+        paymentMethod: finalPaymentMethod, 
+        createdAt: serverTimestamp(), 
+        porterCount: Number(porterCount) || 0 
       });
 
       if (isB2BClient && isDepositSufficient) {
@@ -389,17 +453,21 @@ function BookingForm() {
         batch.update(userRef, { depositBalance: increment(-grandTotal) });
         const logRef = doc(collection(db, "wallet_logs"));
         batch.set(logRef, {
-          entityId: user.uid, entityName: user.companyName || user.displayName || "Klien B2B", entityType: "B2B",
-          type: "payment", amount: grandTotal, timestamp: serverTimestamp(), adminNote: `Pembayaran otomatis AWB #${resiInduk}`
+          userId: user.uid,
+          amount: grandTotal,
+          type: "credit_payment",
+          description: `Pembayaran otomatis potong saldo deposit AWB #${resiInduk}`,
+          createdAt: serverTimestamp()
         });
       }
 
       await batch.commit();
       router.push(isB2BClient ? "/dashboard" : "/pembayaran");
 
-    } catch (error) { 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) { 
       console.error("Kesalahan sistem submit order", error); 
-      setErrorMsg("Gagal memproses pesanan. Periksa koneksi Anda."); 
+      setErrorMsg(`Gagal memproses pesanan. ${error.message || "Periksa koneksi Anda."}`); 
     } finally { 
       setIsLoading(false); 
     }
@@ -477,12 +545,12 @@ function BookingForm() {
 
             {/* FORM CONTAINER (Bento Box) */}
             <div className="glass-card rounded-[2.5rem] p-6 md:p-8 min-h-[500px] flex flex-col relative overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-              <form id="booking-form" onSubmit={handleSubmit} className="flex-grow">
+              <div className="flex-grow flex flex-col">
                 <AnimatePresence mode="wait">
                   
                   {/* STEP 1: ARMADA */}
                   {currentStep === 1 && (
-                    <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
+                    <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6 flex-grow">
                       <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="text-2xl font-black text-slate-900">Pilih Armada</h2>
                         <p className="text-sm text-slate-500 font-medium">Pilih jenis layanan dan kapasitas armada yang sesuai dengan muatan kargo Anda.</p>
@@ -497,7 +565,7 @@ function BookingForm() {
 
                   {/* STEP 2: PENJEMPUTAN */}
                   {currentStep === 2 && (
-                    <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
+                    <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6 flex-grow">
                       <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="text-2xl font-black text-slate-900">Informasi Penjemputan</h2>
                         <p className="text-sm text-slate-500 font-medium">Tentukan titik awal pengambilan barang. Pin peta otomatis menyesuaikan.</p>
@@ -511,7 +579,7 @@ function BookingForm() {
 
                   {/* STEP 3: TUJUAN */}
                   {currentStep === 3 && (
-                    <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
+                    <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6 flex-grow">
                       <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="text-2xl font-black text-slate-900">Lokasi Tujuan & Kargo</h2>
                         <p className="text-sm text-slate-500 font-medium">Tambahkan satu atau beberapa lokasi tujuan beserta detail penerima dan barang.</p>
@@ -525,9 +593,9 @@ function BookingForm() {
                     </motion.div>
                   )}
 
-                  {/* STEP 4: EKSTRA */}
+                  {/* STEP 4: EKSTRA (FORM BERADA DISINI) */}
                   {currentStep === 4 && (
-                    <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6">
+                    <motion.form id="booking-form" onSubmit={handleSubmit} key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="space-y-6 flex-grow">
                       <div className="mb-6 border-b border-slate-100 pb-4">
                         <h2 className="text-2xl font-black text-slate-900">Layanan Ekstra</h2>
                         <p className="text-sm text-slate-500 font-medium">Tambahkan perlindungan asuransi, jasa kuli (porter), dan antisipasi biaya tol.</p>
@@ -537,32 +605,32 @@ function BookingForm() {
                         porterCount={porterCount} setPorterCount={setPorterCount} tarifPerPorter={tarifPerPorter}
                         tollFee={tollFee} setTollFee={setTollFee} handleInfoClick={handleInfoClick}
                       />
-                    </motion.div>
+                    </motion.form>
                   )}
                 </AnimatePresence>
-              </form>
 
-              {/* ACTION BUTTONS (BOTTOM OF FORM) */}
-              <div className="mt-10 pt-6 border-t border-slate-200/50 flex items-center justify-between relative z-10">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={handlePrevStep} 
-                  disabled={currentStep === 1 || isLoading}
-                  className={cn("h-12 px-6 rounded-2xl", currentStep === 1 && "opacity-0 pointer-events-none")}
-                >
-                  <ChevronLeft className="w-5 h-5 mr-1" /> Kembali
-                </Button>
-                
-                {currentStep < 4 ? (
-                  <Button type="button" variant="primary" onClick={handleNextStep} className="h-12 px-8 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),0_8px_16px_rgba(122,23,29,0.2)]">
-                    Lanjut <ChevronRight className="w-5 h-5 ml-1" />
+                {/* ACTION BUTTONS (BOTTOM OF FORM) */}
+                <div className="mt-10 pt-6 border-t border-slate-200/50 flex items-center justify-between relative z-10 shrink-0">
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    onClick={handlePrevStep} 
+                    disabled={currentStep === 1 || isLoading}
+                    className={cn("h-12 px-6 rounded-2xl", currentStep === 1 && "opacity-0 pointer-events-none")}
+                  >
+                    <ChevronLeft className="w-5 h-5 mr-1" /> Kembali
                   </Button>
-                ) : (
-                  <Button type="submit" form="booking-form" isLoading={isLoading} variant="gold" className="h-12 px-8 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_16px_rgba(197,160,89,0.3)] border border-[#A68345]">
-                    Pesan Sekarang <CheckCircle2 className="w-5 h-5 ml-1" />
-                  </Button>
-                )}
+                  
+                  {currentStep < 4 ? (
+                    <Button type="button" variant="primary" onClick={handleNextStep} className="h-12 px-8 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),0_8px_16px_rgba(122,23,29,0.2)]">
+                      Lanjut <ChevronRight className="w-5 h-5 ml-1" />
+                    </Button>
+                  ) : (
+                    <Button type="submit" form="booking-form" isLoading={isLoading} variant="gold" className="h-12 px-8 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_16px_rgba(197,160,89,0.3)] border border-[#A68345]">
+                      Pesan Sekarang <CheckCircle2 className="w-5 h-5 ml-1" />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -668,4 +736,4 @@ export default function DesktopBookingPage() {
       </Suspense> 
     </main>
   );
-} 
+}

@@ -12,16 +12,16 @@ export interface TimelineItem {
 
 export default function OrderTimeline({ timelineData, orderStatus }: { timelineData: TimelineItem[], orderStatus: string }) {
   return (
-    <div className="glass-card rounded-[2.5rem] p-6 md:p-8 relative overflow-hidden">
+    <div className="relative overflow-hidden w-full h-full flex flex-col">
       {/* Background Watermark & Glow */}
       <div className="absolute top-0 right-0 p-6 opacity-[0.02] pointer-events-none"><MapPinned className="w-48 h-48" /></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-48 h-48 bg-[#7A171D] rounded-full blur-[100px] opacity-10 pointer-events-none z-0"></div>
       
-      <h3 className="text-sm font-black text-slate-900 mb-8 flex items-center gap-2 relative z-10">
+      <h3 className="text-sm font-black text-slate-900 mb-8 flex items-center gap-2 relative z-10 shrink-0">
         <Truck className="w-4 h-4 text-[#7A171D]" /> Riwayat Manifes
       </h3>
       
-      <div className="relative pl-3 md:pl-4 z-10">
+      <div className="relative pl-3 md:pl-4 z-10 flex-1 flex flex-col justify-start">
         {/* Garis vertikal dengan gradasi fading */}
         <div className="absolute top-4 bottom-8 left-[17px] md:left-[21px] w-0.5 bg-gradient-to-b from-slate-300 via-slate-200 to-transparent"></div>
         
@@ -55,7 +55,7 @@ export default function OrderTimeline({ timelineData, orderStatus }: { timelineD
                   </h4>
                   <p className="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{item.date}</p>
                   
-                  <div className="bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-100 shadow-sm inline-block min-w-full md:min-w-[80%]">
+                  <div className="bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-100 shadow-sm inline-block min-w-full md:min-w-[80%] hover:bg-white transition-colors">
                     <p className="text-xs text-slate-600 font-semibold leading-relaxed">{item.description}</p>
                     
                     {item.location && (
@@ -72,4 +72,4 @@ export default function OrderTimeline({ timelineData, orderStatus }: { timelineD
       </div>
     </div>
   );
-} 
+}

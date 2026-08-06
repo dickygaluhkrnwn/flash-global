@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, MapPin, User, Phone, 
   Weight, Box, DollarSign, CheckCircle2, AlertCircle, Clock,
-  Truck, Building2, UserPlus, X, Camera, Map, FileText
+  Truck, Building2, UserPlus, X, Camera, Map, FileText, PieChart, Focus
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
@@ -20,6 +21,8 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { OrderDetail, LocationDetail, TrackingHistoryItem, DeliveryItem } from "@/types/order";
 import { DriverData } from "@/types/admin";
 
+const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
+
 export default function DomesticOrderDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   
@@ -27,6 +30,9 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   const [drivers, setDrivers] = useState<DriverData[]>([]);
   const [rawAllPartners, setRawAllPartners] = useState<DriverData[]>([]);
   
+  // 🚀 STATE BARU UNTUK FASE 2: PROFIT SHARING
+  const [appCommissionPercent, setAppCommissionPercent] = useState(20);
+
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
@@ -39,7 +45,6 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
     status: "", location: "Pusat Logistik Flash Global", description: "", timeMode: "auto", customDate: ""
   });
 
-  const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,6 +60,26 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                              data.status === "Menuju Lokasi Jemput" ? "Sedang Diproses" : 
                              data.status === "Sedang Diproses" ? "Dikirim" : "Selesai";
           setStatusForm(prev => ({ ...prev, status: nextStatus }));
+
+          const vehicleName = data.vehicleName || data.vehicle;
+          try {
+            const pricingRef = doc(db, "settings", "pricing");
+            const pricingSnap = await getDoc(pricingRef);
+            if (pricingSnap.exists()) {
+              const pData = pricingSnap.data() as Record<string, unknown>;
+              if (pData.customVehicles && Array.isArray(pData.customVehicles)) {
+                const match = pData.customVehicles.find((v: Record<string, unknown>) => {
+                  return (typeof v === 'object' && v !== null && v.name === vehicleName);
+                });
+                if (match && typeof match === 'object' && 'appCommission' in match) {
+                  setAppCommissionPercent(Number(match.appCommission) || 20);
+                }
+              }
+            }
+          } catch (pricingError) {
+            console.warn("Gagal menarik config komisi", pricingError);
+          }
+
         } else {
           showToast("error", "Data pesanan tidak ditemukan.");
           setTimeout(() => router.push("/admin/orders/domestic"), 2000);
@@ -197,9 +222,6 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
 
   if (!order) return null;
 
-  // =========================================================================
-  // SAFE DATA EXTRACTION (KODE DIBERSIHKAN DARI CASTING LIAR)
-  // =========================================================================
   const originObj = typeof order.origin === 'object' && order.origin !== null ? (order.origin as LocationDetail) : null;
   const originAddr = String(originObj?.address || (typeof order.origin === 'string' ? order.origin : ""));
   const originName = String(originObj?.senderName || order.senderName || "Pengirim");
@@ -212,8 +234,6 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
 
   const orderItems = destObj?.items && Array.isArray(destObj.items) ? destObj.items : [];
 
-  const isPaymentVerified = order.paymentStatus === "Lunas" || order.isB2BApplied; 
-  
   const bd = order.breakdown || { deliveryFee: 0, insuranceFee: 0, porterFee: 0, tollFee: 0, b2bDiscount: 0, grandTotal: 0 };
   const deliveryFee = Number(bd.deliveryFee || 0);
   const insuranceFee = Number(bd.insuranceFee || 0);
@@ -224,8 +244,16 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   const discountPromoAmount = Number(order.discountPromoAmount || 0);
   const porterCount = Number(order.porterCount || 1);
   const grandTotal = Number(order.finalGrandTotal || bd.grandTotal || order.totalCost || 0);
-  
   const receiptUrl = order.receiptUrl ? String(order.receiptUrl) : null;
+
+  const paymentMethodStr = String(order.paymentMethod || "Transfer Bank");
+  const isCOD = paymentMethodStr.toLowerCase().includes("tunai") || paymentMethodStr.toLowerCase().includes("cod");
+  const methodLabel = isCOD ? "Tunai (COD)" : "Non-Tunai (Transfer/QRIS/B2B)";
+  const isPaymentVerified = order.paymentStatus === "Lunas" || order.isB2BApplied; 
+
+  const driverSharePercent = Math.max(0, 100 - appCommissionPercent);
+  const appShareNominal = (grandTotal * appCommissionPercent) / 100;
+  const driverShareNominal = (grandTotal * driverSharePercent) / 100;
 
   return (
     <div className="space-y-6 pb-10 max-w-7xl mx-auto">
@@ -243,7 +271,6 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
               <button onClick={() => setProofModalUrl(null)} className="absolute -top-14 right-0 bg-white/10 text-white rounded-full p-2 hover:bg-white/30 hover:scale-110 transition-all border border-white/20 backdrop-blur-md">
                 <X className="w-6 h-6" />
               </button>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={proofModalUrl} alt="Bukti File" className="rounded-3xl max-h-[85vh] w-auto shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/20" />
             </motion.div>
           </div>
@@ -260,7 +287,12 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
             <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
               Detail Manifes Domestik
             </h1>
-            <p className="text-[10px] font-bold text-[#7A171D] uppercase tracking-widest">Resi: {order.resi || order.id}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] font-bold text-[#7A171D] uppercase tracking-widest px-2 py-0.5 bg-[#7A171D]/10 rounded border border-[#7A171D]/20">
+                RESI
+              </span>
+              <p className="text-sm font-mono font-black text-slate-700 select-all tracking-tight">{order.resi || order.id}</p>
+            </div>
           </div>
         </div>
         <AdminBadge variant={order.status.includes("Selesai") ? "success" : "brand"} className="text-sm px-4 py-1.5 shadow-sm">
@@ -270,7 +302,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* KIRI: INFORMASI RUTE & BARANG */}
+        {/* KIRI: INFORMASI RUTE, BARANG, & BUKTI OPERASIONAL */}
         <div className="lg:col-span-8 space-y-6">
           
           {/* Card 1: Rute Perjalanan */}
@@ -308,6 +340,79 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
               </div>
             </div>
           </div>
+
+          {/* 🚀 FASE 4: SECTION BUKTI OPERASIONAL (PROOF OF WORK) */}
+          {(order.pickupProofUrl || order.deliveryProofUrl) && (
+            <div className={`${glassPanel} rounded-[2rem] p-8`}>
+              <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Focus className="w-4 h-4"/> Bukti Operasional (Proof of Work)</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Bukti Pickup */}
+                {order.pickupProofUrl ? (
+                  <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-[1.5rem] flex flex-col gap-3 shadow-inner">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <ArrowLeft className="w-4 h-4 text-blue-600 rotate-45" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Penjemputan</p>
+                        <p className="text-xs font-black text-blue-900 leading-none mt-0.5">Proof of Pickup (PoP)</p>
+                      </div>
+                    </div>
+                    <div className="w-full h-32 rounded-xl overflow-hidden border-2 border-white shadow-sm cursor-pointer group relative bg-slate-200" onClick={() => setProofModalUrl(order.pickupProofUrl as string)}>
+                      <img src={order.pickupProofUrl} alt="Bukti Pickup" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-blue-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Camera className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl shadow-sm border border-blue-100">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Catatan Kurir</p>
+                      <p className="text-xs font-bold text-slate-700 italic">&quot;{order.pickupNote || "Tidak ada catatan."}&quot;</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100 border-dashed p-6 rounded-[1.5rem] flex flex-col items-center justify-center text-center">
+                    <Camera className="w-8 h-8 text-slate-300 mb-2" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Proof of Pickup</p>
+                    <p className="text-xs font-medium text-slate-500">Belum ada foto.</p>
+                  </div>
+                )}
+
+                {/* Bukti Delivery */}
+                {order.deliveryProofUrl ? (
+                  <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-[1.5rem] flex flex-col gap-3 shadow-inner">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                        <ArrowLeft className="w-4 h-4 text-emerald-600 -rotate-135" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Pengiriman Selesai</p>
+                        <p className="text-xs font-black text-emerald-900 leading-none mt-0.5">Proof of Delivery (PoD)</p>
+                      </div>
+                    </div>
+                    <div className="w-full h-32 rounded-xl overflow-hidden border-2 border-white shadow-sm cursor-pointer group relative bg-slate-200" onClick={() => setProofModalUrl(order.deliveryProofUrl as string)}>
+                      <img src={order.deliveryProofUrl} alt="Bukti Delivery" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-emerald-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Camera className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl shadow-sm border border-emerald-100">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Penerima & Catatan</p>
+                      <p className="text-xs font-bold text-slate-700 italic">&quot;{order.deliveryNote || "Tidak ada catatan."}&quot;</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50 border border-slate-100 border-dashed p-6 rounded-[1.5rem] flex flex-col items-center justify-center text-center">
+                    <Camera className="w-8 h-8 text-slate-300 mb-2" />
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Proof of Delivery</p>
+                    <p className="text-xs font-medium text-slate-500">Belum ada foto.</p>
+                  </div>
+                )}
+                
+              </div>
+            </div>
+          )}
 
           {/* Card 2: List Items & Spesifikasi */}
           <div className={`${glassPanel} rounded-[2rem] p-8`}>
@@ -385,7 +490,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                           {log.proofUrl && (
                             <div className="mt-4">
                               <AdminButton onClick={() => setProofModalUrl(log.proofUrl as string)} variant="outline" size="sm" className="h-9 text-[10px] bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm">
-                                <Camera className="w-3.5 h-3.5 mr-2" /> Lihat Foto Bukti PoD
+                                <Camera className="w-3.5 h-3.5 mr-2" /> Lihat Foto Bukti
                               </AdminButton>
                             </div>
                           )}
@@ -402,18 +507,26 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
         {/* KANAN: FINANCIAL & DRIVER (ACTION PANEL) */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* Status Pembayaran & Breakdown */}
+          {/* Card Keuangan & Profit Sharing */}
           <div className={`${glassPanel} rounded-[2.5rem] p-8`}>
-            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><DollarSign className="w-4 h-4"/> Rincian Biaya</h2>
+            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <DollarSign className="w-4 h-4"/> Keuangan & Profit Sharing
+            </h2>
             
-            {/* Status Bayar */}
-            <div className="flex items-center justify-between bg-white/60 p-3 rounded-xl border border-white mb-6 shadow-sm">
-              <span className="text-xs font-bold text-slate-500">Status Pembayaran</span>
-              <AdminBadge variant={isPaymentVerified ? "success" : "warning"} className="text-[9px]">{order.paymentStatus || "Belum Dibayar"}</AdminBadge>
+            {/* Status & Method */}
+            <div className="flex flex-col gap-2 bg-white/60 p-4 rounded-[1.25rem] border border-white mb-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Metode Bayar</span>
+                <AdminBadge variant={isCOD ? "warning" : "info"} className="text-[9px] shadow-sm">{methodLabel}</AdminBadge>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status Pelunasan</span>
+                <AdminBadge variant={isPaymentVerified ? "success" : "danger"} className="text-[9px] shadow-sm">{order.paymentStatus || "Belum Dibayar"}</AdminBadge>
+              </div>
             </div>
 
             {/* Breakdown Terformat Aman */}
-            <div className="space-y-3 text-xs font-bold text-slate-600">
+            <div className="space-y-3 text-xs font-bold text-slate-600 mb-4">
               <div className="flex justify-between"><span>Biaya Pengiriman</span><span>{formatRupiah(deliveryFee)}</span></div>
               {insuranceFee > 0 && <div className="flex justify-between text-emerald-600"><span>Asuransi Barang</span><span>+{formatRupiah(insuranceFee)}</span></div>}
               {porterFee > 0 && <div className="flex justify-between text-emerald-600"><span>Jasa Porter (x{porterCount})</span><span>+{formatRupiah(porterFee)}</span></div>}
@@ -422,12 +535,57 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
               {discountPromoAmount > 0 && <div className="flex justify-between text-[#7A171D]"><span>Diskon Promo</span><span>-{formatRupiah(discountPromoAmount)}</span></div>}
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-200/60">
+            <div className="py-4 border-y border-slate-200/60 mb-5">
               <div className="flex justify-between items-end">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Ongkos Kirim</span>
                 <span className="text-2xl font-black text-slate-900 tracking-tight">{formatRupiah(grandTotal)}</span>
               </div>
             </div>
+
+            {/* Profit Sharing Visual */}
+            <div className="bg-slate-50 p-4 rounded-[1.25rem] border border-slate-100 mb-2">
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><PieChart className="w-3.5 h-3.5"/> Skema Bagi Hasil</h3>
+              
+              <div className="flex justify-between items-end mb-2">
+                <div>
+                  <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Porsi Sopir ({driverSharePercent}%)</p>
+                  <p className="text-sm font-black text-emerald-600 leading-none">{formatRupiah(driverShareNominal)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-bold text-[#7A171D] uppercase tracking-widest mb-0.5">Komisi App ({appCommissionPercent}%)</p>
+                  <p className="text-sm font-black text-[#7A171D] leading-none">{formatRupiah(appShareNominal)}</p>
+                </div>
+              </div>
+              <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-slate-200 shadow-inner">
+                <div className="h-full bg-emerald-500" style={{ width: `${driverSharePercent}%` }}></div>
+                <div className="h-full bg-[#7A171D]" style={{ width: `${appCommissionPercent}%` }}></div>
+              </div>
+            </div>
+
+            {/* Status Settlement Logic */}
+            {order.status === "Selesai" ? (
+              <div className="mt-4 bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-start gap-3 shadow-inner">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-black text-emerald-800 tracking-tight">Settle Otomatis Berhasil</p>
+                  <p className="text-[10px] font-bold text-emerald-600 mt-0.5 leading-relaxed">
+                    {isCOD
+                      ? `Saldo deposit sopir telah DIPOTONG sebesar komisi aplikasi (${formatRupiah(appShareNominal)}).`
+                      : `Saldo deposit sopir telah DITAMBAH sebesar hak sopir (${formatRupiah(driverShareNominal)}).`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-inner">
+                <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-black text-amber-800 tracking-tight">Menunggu Penyelesaian Order</p>
+                  <p className="text-[10px] font-bold text-amber-700 mt-0.5 leading-relaxed">
+                    Sistem akan mengeksekusi pembagian hasil ke saldo dompet saat status order menjadi &quot;Selesai&quot;.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {receiptUrl && (
               <AdminButton onClick={() => setProofModalUrl(receiptUrl)} variant="outline" className="w-full mt-6 text-[10px] bg-white border-slate-200 shadow-sm hover:text-[#7A171D]">
@@ -461,9 +619,9 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
                   onClick={() => setShowDriverModal(true)} 
                   variant="primary" 
                   className="w-full shadow-[0_8px_20px_rgba(122,23,29,0.2)]"
-                  disabled={!isPaymentVerified}
+                  disabled={!isPaymentVerified && !isCOD} 
                 >
-                  {isPaymentVerified ? "Tugaskan Kurir Sekarang" : "Menunggu Pembayaran"}
+                  {isPaymentVerified || isCOD ? "Tugaskan Kurir Sekarang" : "Menunggu Pembayaran"}
                 </AdminButton>
               </div>
             )}

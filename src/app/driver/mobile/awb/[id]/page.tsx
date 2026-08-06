@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom"; // 🚀 SOLUSI: React Portal
+import { createPortal } from "react-dom"; 
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -12,7 +12,7 @@ import {
 import dynamic from "next/dynamic";
 
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, arrayUnion, onSnapshot, increment, getDoc } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, onSnapshot, increment, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { OrderDetail, LocationDetail, DeliveryItem } from "@/types/order"; 
 import { uploadToCloudinary } from "@/lib/cloudinary"; 
@@ -40,7 +40,7 @@ export default function DriverAWBExecutionPage() {
   const orderId = params?.id as string;
   const { user } = useAuthStore();
 
-  const [mounted, setMounted] = useState(false); // State Portal
+  const [mounted, setMounted] = useState(false); 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -51,6 +51,14 @@ export default function DriverAWBExecutionPage() {
 
   const [isSheetExpanded, setIsSheetExpanded] = useState(true);
 
+  // 🚀 FASE 2: STATE PROOF OF PICKUP (POP)
+  const [showPoPForm, setShowPoPForm] = useState(false);
+  const [popNote, setPopNote] = useState("");
+  const [popFile, setPopFile] = useState<File | null>(null);
+  const [popPreview, setPopPreview] = useState<string | null>(null);
+  const cameraPickupRef = useRef<HTMLInputElement>(null);
+
+  // 🚀 FASE 2: STATE PROOF OF DELIVERY (POD)
   const [showPoDForm, setShowPoDForm] = useState(false);
   const [podNote, setPodNote] = useState("");
   const [podFile, setPodFile] = useState<File | null>(null);
@@ -62,7 +70,6 @@ export default function DriverAWBExecutionPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Mencegah Hydration Mismatch sebelum render Portal
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -115,6 +122,16 @@ export default function DriverAWBExecutionPage() {
     };
   }, [order?.status, orderId]);
 
+  // HANDLER KAMERA PICKUP
+  const handlePickupPhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setPopFile(file);
+      setPopPreview(URL.createObjectURL(file));
+    }
+  };
+
+  // HANDLER KAMERA DELIVERY
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -123,7 +140,14 @@ export default function DriverAWBExecutionPage() {
     }
   };
 
-  const handleUpdateStatusWithGeotag = async (nextStatus: string, customDesc: string, defaultLocationLabel: string, proofUrl?: string) => {
+  // 🚀 FASE 2: UPDATE FUNGSI GEOTAG UNTUK MENERIMA TIPE PROOF
+  const handleUpdateStatusWithGeotag = async (
+    nextStatus: string, 
+    customDesc: string, 
+    defaultLocationLabel: string, 
+    proofUrl?: string,
+    proofType?: "pickup" | "delivery"
+  ) => {
     if (!order || !user) return;
     setIsUpdating(true);
 
@@ -166,20 +190,37 @@ export default function DriverAWBExecutionPage() {
         location: finalLocationLabel
       };
 
+      // Simpan di tracking history timeline
       if (proofUrl) trackingLog.proofUrl = proofUrl;
+      if (proofType === "pickup") trackingLog.note = popNote;
+      if (proofType === "delivery") trackingLog.note = podNote;
 
       const payload: Record<string, unknown> = {
         status: nextStatus,
         trackingHistory: arrayUnion(trackingLog)
       };
 
+      // 🚀 FASE 2: Simpan juga ke Root Document Order biar Admin gampang nyari
+      if (proofType === "pickup") {
+        payload.pickupProofUrl = proofUrl;
+        payload.pickupNote = popNote;
+      } else if (proofType === "delivery") {
+        payload.deliveryProofUrl = proofUrl;
+        payload.deliveryNote = podNote;
+      }
+
       if (finalCoords) payload.driverCoords = finalCoords;
 
       if (nextStatus === "Selesai") {
-        payload.paymentStatus = "Lunas";
+        if (order.paymentStatus === "Piutang B2B" || order.paymentStatus === "Menunggu Verifikasi Finance") {
+          // JANGAN UBAH
+        } else {
+          payload.paymentStatus = "Lunas";
+        }
 
         const totalTagihan = order.finalGrandTotal || order.breakdown?.grandTotal || order.totalCost || 0;
         let appCommissionPercent = 20; 
+        
         try {
           const pricingSnap = await getDoc(doc(db, "settings", "pricing"));
           if (pricingSnap.exists()) {
@@ -206,12 +247,38 @@ export default function DriverAWBExecutionPage() {
         let targetWalletId: string = String(user.uid);
         if (order.driverId) targetWalletId = String(order.driverId); 
         
-        const walletRef = doc(db, "driver_wallets", targetWalletId);
-        const isB2B = order.isB2B === true;
-        const mutationAmount = isB2B ? driverShareNominal : -Math.abs(appShareNominal);
+        const paymentMethodStr = String(order.paymentMethod || "Transfer Bank");
+        const isCOD = paymentMethodStr.toLowerCase().includes("tunai") || paymentMethodStr.toLowerCase().includes("cod");
+        
+        let mutationAmount = 0;
+        let logDescription = "";
+        let logType: "deposit" | "deduction" = "deposit";
+
+        if (isCOD) {
+          mutationAmount = -Math.abs(appShareNominal);
+          logDescription = `Potongan Komisi Order #${order.resi || order.id.substring(0,8)} (Tunai/COD)`;
+          logType = "deduction";
+        } else {
+          mutationAmount = Math.abs(driverShareNominal);
+          logDescription = `Pendapatan Order #${order.resi || order.id.substring(0,8)} (${order.paymentMethod})`;
+          logType = "deposit";
+        }
 
         if (mutationAmount !== 0) {
-          await updateDoc(walletRef, { balance: increment(mutationAmount) });
+          const walletRef = doc(db, "driver_wallets", targetWalletId);
+          await updateDoc(walletRef, { 
+            balance: increment(mutationAmount),
+            lastMutasi: serverTimestamp() 
+          });
+
+          await addDoc(collection(db, "wallet_logs"), {
+            userId: targetWalletId,
+            amount: Math.abs(mutationAmount), 
+            type: logType,
+            description: logDescription,
+            recordedBy: "System Auto-Settle",
+            createdAt: serverTimestamp()
+          });
         }
       }
 
@@ -230,12 +297,28 @@ export default function DriverAWBExecutionPage() {
     }
   };
 
+  // 🚀 FASE 2: FUNGSI SUBMIT PICKUP
+  const submitProofOfPickup = async (originAddr: string) => {
+    if (!popFile || !popNote.trim()) return showToast("Foto bukti dan catatan wajib diisi!", "error");
+    setIsUpdating(true);
+    try {
+      const uploadedUrl = await uploadToCloudinary(popFile);
+      await handleUpdateStatusWithGeotag("Sedang Diproses", `Barang telah di-pickup: ${popNote}`, originAddr, uploadedUrl, "pickup");
+      setShowPoPForm(false);
+    } catch (error) {
+      console.error("Gagal PoP:", error);
+      showToast("Gagal mengunggah foto bukti pickup.", "error");
+      setIsUpdating(false);
+    }
+  };
+
+  // FUNGSI SUBMIT DELIVERY
   const submitProofOfDelivery = async (destAddr: string) => {
     if (!podFile || !podNote.trim()) return showToast("Foto bukti dan catatan wajib diisi!", "error");
     setIsUpdating(true);
     try {
       const uploadedUrl = await uploadToCloudinary(podFile);
-      await handleUpdateStatusWithGeotag("Selesai", `Paket diterima oleh: ${podNote}`, destAddr, uploadedUrl);
+      await handleUpdateStatusWithGeotag("Selesai", `Paket diterima oleh: ${podNote}`, destAddr, uploadedUrl, "delivery");
     } catch (error) {
       console.error("Gagal PoD:", error);
       showToast("Gagal mengunggah foto bukti.", "error");
@@ -243,7 +326,6 @@ export default function DriverAWBExecutionPage() {
     }
   };
 
-  // RENDER PENGAMAN SEBELUM PORTAL MOUNTED
   if (!mounted) return null;
 
   if (isLoading) {
@@ -287,14 +369,11 @@ export default function DriverAWBExecutionPage() {
   const currentMapLng = driverLocation?.lng || mapOrigin?.lng || mapDrops[0]?.lng || 116.116;
   const currentMapLat = driverLocation?.lat || mapOrigin?.lat || mapDrops[0]?.lat || -8.583;
 
-  // 🚀 PORTAL KE DOCUMENT.BODY
   return createPortal(
     <div className="fixed inset-0 z-[999999] flex justify-center bg-[var(--background)] sm:bg-slate-900/50 sm:backdrop-blur-sm transition-all duration-300">
       
-      {/* KANVAS MOBILE (MAX-W-MD) */}
       <main className="w-full max-w-md h-full bg-slate-100 relative flex flex-col overflow-hidden font-sans tap-highlight-transparent shadow-2xl sm:rounded-[2.5rem] sm:h-[90vh] sm:my-auto">
         
-        {/* GLOBAL TOAST (Diubah jadi absolute agar tertahan di dalam bingkai HP max-w-md) */}
         <AnimatePresence>
           {toast && (
             <motion.div initial={{ opacity: 0, y: -20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.95 }} className={cn(
@@ -307,7 +386,6 @@ export default function DriverAWBExecutionPage() {
           )}
         </AnimatePresence>
 
-        {/* 🚀 MAPBOX (Absolute inset-0 di dalam main) */}
         <div className="absolute inset-0 z-0">
           <MapBase 
             key={`map-${mapCenterTick}`}
@@ -317,11 +395,10 @@ export default function DriverAWBExecutionPage() {
             interactive={true} 
             originCoords={mapOrigin}
             drops={mapDrops}
-            driverCoords={driverLocation || undefined}
+            driverCoords={driverLocation || undefined} 
           />
         </div>
 
-        {/* 🚀 FLOATING TOP HEADER */}
         <div className="absolute top-0 left-0 right-0 z-20 pt-safe px-4 mt-4 flex items-center justify-between pointer-events-none">
           <button 
             onClick={() => router.push("/driver/radar")} 
@@ -336,7 +413,6 @@ export default function DriverAWBExecutionPage() {
           </div>
         </div>
 
-        {/* 🚀 MAP CONTROLS (Fokus) */}
         <div className="absolute top-24 right-4 z-20 pointer-events-none flex flex-col gap-3">
           <button 
             onClick={() => {
@@ -354,14 +430,12 @@ export default function DriverAWBExecutionPage() {
           </button>
         </div>
 
-        {/* 🚀 BOTTOM SHEET (Absolute di dalam main) */}
         <motion.div 
           animate={{ y: isSheetExpanded ? 0 : "65%" }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           className="absolute bottom-0 left-0 right-0 z-30 bg-white/90 backdrop-blur-3xl rounded-t-[2.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.15)] border-t border-white flex flex-col"
           style={{ maxHeight: "85%" }}
         >
-          {/* Drag Handle */}
           <div onClick={() => setIsSheetExpanded(!isSheetExpanded)} className="w-full py-4 flex justify-center cursor-pointer shrink-0">
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-2" />
           </div>
@@ -370,7 +444,6 @@ export default function DriverAWBExecutionPage() {
             {isSheetExpanded ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
           </button>
 
-          {/* Header AWB */}
           <div className="px-6 pb-4 border-b border-slate-100 shrink-0">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Resi Pengiriman (AWB)</p>
             <div className="flex justify-between items-end mt-0.5">
@@ -379,10 +452,8 @@ export default function DriverAWBExecutionPage() {
             </div>
           </div>
 
-          {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar pb-8">
             
-            {/* Rute Perjalanan */}
             <div className="relative pl-4">
               <div className="absolute left-[19px] top-3 bottom-3 w-[3px] bg-slate-100 rounded-full z-0"></div>
               <div className="absolute left-[19px] top-3 h-1/2 w-[3px] bg-gradient-to-b from-slate-300 to-transparent rounded-full z-0"></div>
@@ -418,7 +489,6 @@ export default function DriverAWBExecutionPage() {
               </div>
             </div>
 
-            {/* Spesifikasi Kargo */}
             <div>
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                 <Package className="w-3.5 h-3.5 text-slate-500"/> Detail Kargo & Muatan
@@ -448,6 +518,54 @@ export default function DriverAWBExecutionPage() {
               )}
             </div>
 
+            {/* 🚀 FASE 2: AREA FORM PROOF OF PICKUP (PoP) */}
+            <AnimatePresence>
+              {showPoPForm && order.status === "Menuju Lokasi Jemput" && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                  <div className="bg-blue-50/80 p-5 rounded-[1.5rem] border border-blue-200/50 space-y-4 mb-2">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm font-black text-blue-900 tracking-tight">Bukti Penjemputan (Pickup)</h4>
+                      <button onClick={() => setShowPoPForm(false)} className="w-6 h-6 flex items-center justify-center bg-white rounded-full text-slate-400 shadow-sm"><X size={14}/></button>
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-1.5 block">Catatan Kondisi Barang</label>
+                      <Input 
+                        type="text" 
+                        placeholder="Cth: Barang aman, packing kayu" 
+                        value={popNote}
+                        onChange={(e) => setPopNote(e.target.value)}
+                        className="bg-white border-blue-200 focus-visible:ring-blue-500/20 focus-visible:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-blue-700 uppercase tracking-widest mb-1.5 block">Ambil Foto Pickup (Live Camera)</label>
+                      {/* 🚀 SIHIR LIVE CAMERA (capture="environment") */}
+                      <input type="file" accept="image/*" capture="environment" ref={cameraPickupRef} onChange={handlePickupPhotoCapture} className="hidden" />
+                      <div 
+                        onClick={() => cameraPickupRef.current?.click()}
+                        className={cn(
+                          "border-2 border-dashed rounded-2xl h-32 flex flex-col items-center justify-center cursor-pointer transition-all active:scale-[0.98] tap-highlight-transparent overflow-hidden",
+                          popPreview ? 'border-blue-500' : 'border-blue-300 hover:border-blue-500 bg-white/60'
+                        )}
+                      >
+                        {popPreview ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={popPreview} alt="Bukti Pickup" className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <Camera className="w-8 h-8 text-blue-600 mb-2 opacity-50" />
+                            <p className="text-xs font-black text-blue-800">Buka Kamera</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* AREA FORM PROOF OF DELIVERY (PoD) */}
             <AnimatePresence>
               {showPoDForm && order.status === "Dikirim" && (
@@ -470,7 +588,8 @@ export default function DriverAWBExecutionPage() {
                     </div>
 
                     <div>
-                      <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1.5 block">Foto Barang & Lokasi Drop</label>
+                      <label className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1.5 block">Foto Drop & Penerima (Live Camera)</label>
+                      {/* 🚀 SIHIR LIVE CAMERA (capture="environment") */}
                       <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} onChange={handlePhotoCapture} className="hidden" />
                       <div 
                         onClick={() => cameraInputRef.current?.click()}
@@ -485,7 +604,7 @@ export default function DriverAWBExecutionPage() {
                         ) : (
                           <>
                             <Camera className="w-8 h-8 text-emerald-600 mb-2 opacity-50" />
-                            <p className="text-xs font-black text-emerald-800">Ambil Foto Bukti</p>
+                            <p className="text-xs font-black text-emerald-800">Buka Kamera</p>
                           </>
                         )}
                       </div>
@@ -495,7 +614,6 @@ export default function DriverAWBExecutionPage() {
               )}
             </AnimatePresence>
 
-            {/* Info Order Selesai */}
             {order.status === "Selesai" && (
               <div className="bg-emerald-50/80 border border-emerald-200/50 p-6 rounded-[1.5rem] text-center">
                 <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto mb-2" />
@@ -505,18 +623,31 @@ export default function DriverAWBExecutionPage() {
             )}
           </div>
 
-          {/* FIXED ACTION BUTTONS DI BAWAH SHEET */}
           <div className="px-6 py-4 bg-white/90 backdrop-blur-md border-t border-slate-100 pb-safe shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.03)]">
-            {order.status === "Menuju Lokasi Jemput" && (
+            
+            {/* 🚀 FASE 2: TOMBOL PICKUP -> BUKA FORM PICKUP DULU */}
+            {order.status === "Menuju Lokasi Jemput" && !showPoPForm && (
               <Button 
                 size="lg"
                 variant="secondary"
-                onClick={() => handleUpdateStatusWithGeotag("Sedang Diproses", "Kurir telah tiba di lokasi jemput dan barang sedang dimuat ke armada.", originAddr)}
-                disabled={isUpdating}
-                isLoading={isUpdating}
+                onClick={() => setShowPoPForm(true)}
                 className="w-full flex items-center justify-center gap-2 border-slate-800 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
               >
-                {!isUpdating && <><Navigation className="w-5 h-5 text-blue-400" /> Tiba di Lokasi Jemput (Pickup)</>}
+                <Navigation className="w-5 h-5 text-blue-400" /> Tiba di Lokasi Jemput (Pickup)
+              </Button>
+            )}
+
+            {/* 🚀 FASE 2: TOMBOL SUBMIT PICKUP JIKA FORM TERBUKA */}
+            {order.status === "Menuju Lokasi Jemput" && showPoPForm && (
+              <Button 
+                size="lg"
+                variant="primary"
+                onClick={() => submitProofOfPickup(originAddr)}
+                disabled={isUpdating || !popFile || !popNote.trim()}
+                isLoading={isUpdating}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-blue-500 to-blue-600 border-blue-700 shadow-blue-600/30"
+              >
+                {!isUpdating && <><UploadCloud className="w-5 h-5" /> Unggah & Lanjutkan</>}
               </Button>
             )}
 
@@ -571,6 +702,6 @@ export default function DriverAWBExecutionPage() {
         </motion.div>
       </main>
     </div>,
-    document.body // 🚀 PORTAL KE LUAR DARI <main> LAYOUT UTAMA
+    document.body 
   );
 }

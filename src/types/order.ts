@@ -94,7 +94,11 @@ export interface TrackingHistoryItem {
   date: string;
   description?: string;
   location?: string;
-  proofUrl?: string; // Tambahan dari DB
+  
+  // 🚀 FASE 1: LIVE PROOF DI SETIAP TITIK TIMELINE
+  proofUrl?: string; // Link foto live camera (Bisa pas pickup / delivered)
+  note?: string;     // Catatan khusus dari kurir pas foto diambil
+  
   [key: string]: unknown;
 }
 
@@ -224,6 +228,12 @@ export interface DashboardOrder {
   resi?: string; 
   trackingHistory?: TrackingHistoryItem[]; 
 
+  // 🚀 FASE 1: BUKTI DARI KURIR DI DASHBOARD
+  pickupProofUrl?: string;
+  pickupNote?: string;
+  deliveryProofUrl?: string;
+  deliveryNote?: string;
+
   // --- DATA KLIEN ---
   senderName?: string;
   receiverName?: string;
@@ -306,5 +316,12 @@ export interface OrderDetail {
   discountPromoAmount?: number;
   trackingHistory?: TrackingHistoryItem[];
   receiptUrl?: string | null;
+
+  // 🚀 FASE 1: DETAIL AWB PUNYA DATA PROOF
+  pickupProofUrl?: string;
+  pickupNote?: string;
+  deliveryProofUrl?: string;
+  deliveryNote?: string;
+
   [key: string]: unknown; // Extra fields
 }

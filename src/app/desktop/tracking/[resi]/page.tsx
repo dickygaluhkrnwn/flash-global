@@ -56,7 +56,7 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
   
   const [liveDriverCoords, setLiveDriverCoords] = useState<Coordinates | null>(null);
 
-  // 🚀 STATE UNTUK MODAL FOTO BUKTI (PoD)
+  // 🚀 STATE UNTUK MODAL FOTO BUKTI (PoD & PoP)
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
 
   const getCoords = (locationData: unknown): Coordinates | null => {
@@ -295,7 +295,11 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
           status: (item.status as string) || "",
           date: (item.date as string) || "",
           description: (item.description as string) || "",
+          
+          // 🚀 FASE 3: AMBIL PROOF URL DAN CATATAN
           proofUrl: item.proofUrl as string | undefined, 
+          note: item.note as string | undefined,
+
           icon: getIconForStatus((item.status as string) || ""),
           isCurrent: idx === 0, 
           isCompleted: true,
@@ -316,7 +320,8 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
         icon: getIconForStatus(trackingData.status || "Menunggu Pembayaran"),
         isCompleted: true,
         isCurrent: true,
-        proofUrl: undefined 
+        proofUrl: undefined,
+        note: undefined
       }
     ];
   };
@@ -351,8 +356,6 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
 
       <div className="max-w-[1300px] mx-auto relative z-10">
         
-        {/* Tombol Back Dihapus Sesuai Permintaan */}
-
         {isLoading ? (
           <div className="min-h-[500px] flex flex-col items-center justify-center glass-card rounded-[3rem] border border-white shadow-sm relative overflow-hidden mt-10">
              <div className="absolute top-0 right-0 w-64 h-64 bg-[#7A171D]/5 rounded-full blur-[80px] pointer-events-none" />
@@ -551,26 +554,41 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
                                 </div>
                                 <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed mb-4">{item.description}</p>
                                 
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/80 backdrop-blur-sm w-fit px-3 py-2 rounded-[0.75rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
-                                    <MapPin className="w-3.5 h-3.5 text-[#C5A059]" /> {item.displayLocation}
+                                <div className="flex flex-col gap-3">
+                                  {/* INFO LOKASI & GEOTAG */}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-white/80 backdrop-blur-sm w-fit px-3 py-2 rounded-[0.75rem] border border-white shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+                                      <MapPin className="w-3.5 h-3.5 text-[#C5A059]" /> {item.displayLocation}
+                                    </div>
+                                    
+                                    {item.isGeotagged && (
+                                      <div className="flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 w-fit px-2.5 py-1.5 rounded-[0.5rem] uppercase tracking-widest shadow-sm">
+                                        <CheckCircle2 className="w-3.5 h-3.5" /> GPS Valid
+                                      </div>
+                                    )}
                                   </div>
-                                  
-                                  {item.isGeotagged && (
-                                    <div className="flex items-center gap-1 text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-200 w-fit px-2.5 py-1.5 rounded-[0.5rem] uppercase tracking-widest shadow-sm">
-                                      <CheckCircle2 className="w-3.5 h-3.5" /> GPS Valid
+
+                                  {/* 🚀 FASE 3: TOMBOL PREVIEW FOTO BUKTI & CATATAN PENGIRIMAN */}
+                                  {(item.proofUrl || item.note) && (
+                                    <div className="flex flex-wrap items-center gap-2 mt-2 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                                      {item.proofUrl && (
+                                        <button 
+                                          onClick={() => setProofModalUrl(item.proofUrl as string)}
+                                          className="flex items-center gap-1.5 text-[10px] font-black text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border border-blue-800 transition-all px-3 py-2 rounded-[0.75rem] uppercase tracking-widest shadow-[0_4px_10px_rgba(37,99,235,0.3)] active:scale-95"
+                                        >
+                                          <Camera className="w-3.5 h-3.5" /> Lihat Bukti
+                                        </button>
+                                      )}
+                                      {item.note && (
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Catatan Kurir</p>
+                                          {/* 🚀 PERBAIKAN: Escape quote mark */}
+                                          <p className="text-xs font-black text-slate-700 leading-snug line-clamp-2 italic">&quot;{item.note}&quot;</p>
+                                        </div>
+                                      )}
                                     </div>
                                   )}
-                                  
-                                  {/* 🚀 TOMBOL PREVIEW FOTO BUKTI PENGIRIMAN */}
-                                  {item.proofUrl && (
-                                    <button 
-                                      onClick={() => setProofModalUrl(item.proofUrl as string)}
-                                      className="flex items-center gap-1.5 text-[9px] font-black text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 border border-blue-800 transition-all px-3 py-2 rounded-[0.75rem] uppercase tracking-widest shadow-[0_4px_10px_rgba(37,99,235,0.3)] active:scale-95"
-                                    >
-                                      <Camera className="w-3.5 h-3.5" /> Lihat Bukti
-                                    </button>
-                                  )}
+
                                 </div>
                               </div>
                               
@@ -590,4 +608,4 @@ export default function TrackingResultPage({ params }: { params: { resi: string 
       </div>
     </main>
   );
-} 
+}

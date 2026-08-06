@@ -157,11 +157,18 @@ export interface WithdrawalRequest {
   id: string;
   driverId: string;
   amount: number;
-  status: "Pending" | "Processing" | "Disetujui" | "Ditolak"; // <-- SUDAH DITAMBAHKAN "Processing"
-  timestamp: FirebaseTimestamp; // <-- KITA AMANKAN DENGAN FIREBASETIMESTAMP
+  status: "Pending" | "Processing" | "Disetujui" | "Ditolak"; 
+  timestamp: FirebaseTimestamp; 
   driverName?: string; 
   driverPhone?: string;
   partnerType?: string;
+  
+  // 🚀 FASE 1: PENAMBAHAN FIELD METODE PENARIKAN & REKENING TUJUAN
+  method?: "Manual_Bank" | "DANA_API"; // Jalur penarikan
+  accountNumber?: string;              // Nomor Rekening atau Nomor HP DANA
+  bankName?: string;                   // Khusus untuk metode Manual_Bank
+  accountName?: string;                // Atas Nama Rekening/DANA
+  danaReferenceId?: string;            // ID Pelacakan API DANA (Jika pakai DANA_API)
 }
 
 // ----------------------------------------------------------------------

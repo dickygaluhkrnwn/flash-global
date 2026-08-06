@@ -3,10 +3,10 @@ import {
   Package, Truck, Plane, ChevronRight, 
   CreditCard, Star, Search, Navigation, 
   Clock, Printer, Building2, ShieldCheck,
-  MapPin, CheckCircle2, AlertCircle,
-  MessageCircle
+  AlertCircle, CheckCircle2, MessageCircle,
+  MapPin
 } from "lucide-react";
-import { DashboardOrder } from "@/types/order";
+import { DashboardOrder, LocationDetail } from "@/types/order";
 import { Badge } from "@/components/ui/Badge";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     return <Clock className="w-3.5 h-3.5" />;
   };
 
-  const displayPrice = order.finalPrice || order.price;
+  const displayPrice = order.finalPrice || order.price || 0;
   const isB2B = order.statusSub === "Piutang B2B";
 
   // =======================================================================
@@ -47,6 +47,29 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
   const detailPath = order.category === "internasional" 
     ? `/dashboard/forwarding/${order.id}` 
     : `/dashboard/${order.id}`;
+
+  // =======================================================================
+  // SAFE EXTRACTION UNTUK ORIGIN & DESTINATION BIAR GAK CRASH
+  // =======================================================================
+  let originText = "-";
+  if (typeof order.origin === 'object' && order.origin !== null) {
+    const orgObj = order.origin as LocationDetail;
+    originText = String(orgObj.address || orgObj.senderName || "Lokasi Penjemputan");
+  } else if (typeof order.origin === 'string') {
+    originText = order.origin;
+  }
+
+  let destText = "-";
+  if (typeof order.destination === 'object' && order.destination !== null) {
+    const destObj = order.destination as LocationDetail;
+    destText = String(destObj.address || destObj.receiverName || "Lokasi Pengiriman");
+  } else if (typeof order.destination === 'string') {
+    destText = order.destination;
+  }
+  
+  // Clean up display text (Ambil kota pertamanya saja agar tidak terlalu panjang di card)
+  const displayOrigin = originText.split(",")[0];
+  const displayDest = destText.split(",")[0];
 
   // =======================================================================
   // LOGIKA CERDAS: MENYESUAIKAN TOMBOL AKSI BERDASARKAN STATUS & ROLE B2B
@@ -75,7 +98,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
             <Printer className="w-4 h-4" /> Cetak AWB
           </button>
           <button 
-            onClick={(e) => { e.stopPropagation(); router.push(`p/tracking/${order.resi}`); }} 
+            onClick={(e) => { e.stopPropagation(); router.push(`/tracking/${order.resi || order.id}`); }} 
             className="flex-1 sm:flex-none px-4 py-3 bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_4px_10px_rgba(16,185,129,0.2)] active:scale-95 border border-emerald-700 flex items-center justify-center gap-2"
           >
             <Search className="w-4 h-4" /> Lacak Cepat
@@ -88,7 +111,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
     if (order.status === "Dikirim" || order.status.includes("Transit")) {
       return (
         <button 
-          onClick={(e) => { e.stopPropagation(); router.push(`/tracking/${order.resi}`); }} 
+          onClick={(e) => { e.stopPropagation(); router.push(`/tracking/${order.resi || order.id}`); }} 
           className="flex-1 sm:flex-none px-5 py-3 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white rounded-xl text-xs font-black transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_4px_10px_rgba(37,99,235,0.2)] active:scale-95 border border-blue-700 flex items-center justify-center gap-2"
         >
           <Navigation className="w-4 h-4" /> Lacak Live Radar
@@ -146,7 +169,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         </div>
         
         {/* Apple Glass Style Status Pill */}
-        <div className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border backdrop-blur-md", getStatusStyles(order.status))}>
+        <div className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border backdrop-blur-md shadow-sm", getStatusStyles(order.status))}>
           {getStatusIcon(order.status)}
           {order.status}
         </div>
@@ -170,18 +193,18 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
           <div className="flex items-center gap-2 mb-2 w-full">
             <MapPin className="w-4 h-4 text-slate-300 shrink-0 hidden sm:block" />
             <h3 className="font-black text-slate-900 text-base md:text-lg tracking-tight truncate max-w-full flex items-center gap-2">
-              <span className="truncate max-w-[120px] sm:max-w-[200px]" title={order.origin}>{order.origin.split(",")[0]}</span>
+              <span className="truncate max-w-[120px] sm:max-w-[200px]" title={originText}>{displayOrigin}</span>
               <ChevronRight className="w-4 h-4 text-slate-300 shrink-0"/> 
-              <span className="truncate max-w-[120px] sm:max-w-[200px]" title={order.destination}>{order.destination.split(",")[0]}</span>
+              <span className="truncate max-w-[120px] sm:max-w-[200px]" title={destText}>{displayDest}</span>
             </h3>
           </div>
           
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
             <span className="bg-slate-100/80 backdrop-blur-sm px-2.5 py-1 rounded-md text-slate-600 font-mono border border-slate-200/60 shadow-sm">
-              {order.resi}
+              {order.resi || `ORD-${order.id.substring(0,6)}`}
             </span>
             <span className="text-slate-300">•</span>
-            <span className="text-slate-500">{order.weight} Kg</span>
+            <span className="text-slate-500">{order.weight || 0} Kg</span>
             
             {/* Tag Khusus B2B Corporate Net 30 */}
             {isB2B && (
@@ -223,7 +246,7 @@ export default function OrderCard({ order, formatIDR, handleWAConfirm }: Props) 
         <div className="flex items-center gap-2 w-full sm:w-auto text-[10px] uppercase tracking-widest font-black px-3.5 py-2 rounded-xl bg-white border border-slate-200 shadow-sm transition-colors group-hover:border-slate-300">
           <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span className={cn("truncate max-w-[250px]", isB2B ? "text-indigo-600" : "text-slate-500")}>
-            {order.statusSub || `Dibuat pada ${order.date}`}
+            {order.statusSub || `Dibuat pada ${order.date || "-"}`}
           </span>
         </div>
         

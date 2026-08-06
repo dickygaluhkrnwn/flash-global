@@ -45,7 +45,18 @@ export default function FinanceReceivablesPage() {
         b2bOrderSnap.forEach(docObj => {
           const data = docObj.data() as OrderDetail;
           
-          if (data.paymentStatus !== "Lunas") {
+          // 🚀 FIX FATAL LOGIC: Filter Positif. 
+          // Jangan gunakan (paymentStatus !== "Lunas"). Karena orderan Batal juga masuk!
+          // Filter ketat: HANYA yang berstatus Piutang, Menunggu Verifikasi, atau Ditolak.
+          const isTrueDebt = 
+            data.paymentStatus === "Piutang B2B" || 
+            data.paymentStatus === "Menunggu Verifikasi Finance" || 
+            data.paymentStatus === "Ditolak";
+            
+          // Pastikan juga status pesanan utamanya BUKAN Dibatalkan.
+          const isNotCancelled = data.status !== "Dibatalkan" && data.paymentStatus !== "Dibatalkan" && data.paymentStatus !== "Refund Selesai";
+
+          if (isTrueDebt && isNotCancelled) {
             const userId = data.userId;
             if (!userId) return; 
 
@@ -61,7 +72,7 @@ export default function FinanceReceivablesPage() {
             const weight = Number(data.totalWeight || data.weight || 0);
             const vehicle = data.vehicleName ? String(data.vehicleName) : (data.vehicle ? String(data.vehicle) : "Kargo Logistik");
             
-            // KODE DIBERSIHKAN: Safe Date Parsing menggunakan FirebaseTimestamp global
+            // Safe Date Parsing
             const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
               if (!timestamp) return 0;
               if (timestamp instanceof Date) return timestamp.getTime();
@@ -84,7 +95,6 @@ export default function FinanceReceivablesPage() {
                  primaryDest = data.destinations.length > 1 ? `${data.destinations.length} Titik Drop` : String(data.destinations[0].address || "Tujuan");
             }
 
-            // KODE DIBERSIHKAN: Menggunakan UnpaidOrder asli tanpa Extended
             const orderDetail: UnpaidOrder = {
               id: String(docObj.id),
               date: dateStr,

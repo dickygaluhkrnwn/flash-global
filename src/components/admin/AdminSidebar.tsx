@@ -241,10 +241,11 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isWalletMenuOpen ? "max-h-[300px] mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
                   {/* Exact match untuk Dashboard utama */}
                   <SubMenuButton href="/admin/wallet" label="Pusat Kas (Hub)" isActive={pathname === "/admin/wallet"} />
-                  <SubMenuButton href="/admin/wallet/drivers" label="Buku Kas Mitra" isActive={pathname.includes("/wallet/drivers")} />
+                  {/* 🚀 PERBAIKAN: Menu drivers diganti labelnya karena udah mencakup Pencairan */}
+                  <SubMenuButton href="/admin/wallet/drivers" label="Buku Kas & Pencairan" isActive={pathname.includes("/wallet/drivers")} />
                   <SubMenuButton href="/admin/wallet/clients" label="Deposit Korporat" isActive={pathname.includes("/wallet/clients")} />
                   <SubMenuButton href="/admin/wallet/topups" label="Validasi Top-Up" isActive={pathname.includes("/wallet/topups")} />
-                  <SubMenuButton href="/admin/wallet/withdrawals" label="Pencairan Dana (WD)" isActive={pathname.includes("/wallet/withdrawals")} />
+                  {/* 🚀 PERBAIKAN: Menu withdrawals DIHAPUS karena udah digabung ke Command Center */}
                 </div>
               </div>
             )}
