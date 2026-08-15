@@ -22,6 +22,11 @@
     --brand-gold-light: #DFBE7B;
   }
 
+  /* 🚀 TAMBAHAN: Smooth scroll untuk efek navigasi Landing Page yang elegan */
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
   }
@@ -39,7 +44,7 @@
   }
   
   /* ======================================================================
-     APPLE GLASSMORPHISM PREMIUM UTILITIES 
+     APPLE GLASSMORPHISM PREMIUM UTILITIES (BAWAAN PORTAL)
      ====================================================================== */
   
   /* Efek Kartu Utama (Bento Box) */
@@ -60,6 +65,29 @@
   .glass-gold {
     @apply bg-[#C5A059]/10 backdrop-blur-lg border border-[#C5A059]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)];
   }
+
+  /* ======================================================================
+     🚀 NEW: VERCEL/DISCORD VIBES (KHUSUS LANDING PAGE)
+     ====================================================================== */
+
+  /* Text Gradient Khas Tech Startup (Warna Maroon ke Gold) */
+  .text-gradient-brand {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[var(--brand-maroon)] via-[var(--brand-maroon-light)] to-[var(--brand-gold)];
+  }
+
+  /* Efek Cahaya Pendar (Glow) di Background */
+  .glow-blob {
+    @apply absolute rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-float pointer-events-none;
+  }
+
+  /* Bento Grid Glass Khusus Landing Page (Lebih sharp dan interaktif) */
+  .glass-bento {
+    @apply bg-white/40 backdrop-blur-2xl border border-white/60 shadow-bento hover:shadow-bento-hover hover:-translate-y-1 transition-all duration-500;
+  }
+
+  /* ======================================================================
+     SCROLLBAR & NATIVE APP FEEL UTILITIES 
+     ====================================================================== */
 
   /* Utility untuk menyembunyikan scrollbar tapi tetap bisa di-scroll */
   .no-scrollbar::-webkit-scrollbar {
@@ -84,10 +112,6 @@
   .client-scrollbar:hover::-webkit-scrollbar-thumb {
     @apply bg-slate-300;
   }
-
-  /* ======================================================================
-     NATIVE APP FEEL UTILITIES 
-     ====================================================================== */
   
   /* Hilangkan efek kotak biru saat tap di Android/iOS */
   .tap-highlight-transparent {

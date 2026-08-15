@@ -1,18 +1,36 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Inter, Bricolage_Grotesque } from "next/font/google"; // 🚀 TAMBAHAN: Import Google Fonts
 // PERBAIKAN: Gunakan relative path khusus untuk file CSS global
 import "./globals.css"; 
 import AuthProvider from "@/components/AuthProvider";
-import { Analytics } from "@vercel/analytics/next"; // <-- TAMBAHAN VERCEL ANALYTICS
+import { Analytics } from "@vercel/analytics/next";
 
-// Inisialisasi font lokal Geist Sans
+// ==========================================
+// INISIALISASI FONT GOOGLE (Untuk Landing Page & UI Modern)
+// ==========================================
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
+  display: "swap",
+  // Bricolage sangat bagus di weight tebal untuk Headline
+});
+
+// ==========================================
+// INISIALISASI FONT LOKAL (Bawaan Portal Internal)
+// ==========================================
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
   weight: "100 900",
 });
 
-// Inisialisasi font lokal Geist Mono (untuk resi, kode, angka harga)
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -55,10 +73,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      {/* Inject variabel font ke body, gunakan geistSans sebagai default font, 
-        serta tambahkan antialiased agar teks dan ikon super tajam 
+      {/* 
+        Inject semua variabel font (Lokal & Google) ke body.
+        Gunakan antialiased agar teks dan ikon super tajam ala UI Apple.
       */}
-      <body className={`${geistSans.className} ${geistSans.variable} ${geistMono.variable} antialiased bg-[var(--background)] text-[var(--foreground)]`}>
+      <body className={`
+        ${geistSans.className} 
+        ${geistSans.variable} 
+        ${geistMono.variable} 
+        ${inter.variable} 
+        ${bricolage.variable} 
+        antialiased bg-[var(--background)] text-[var(--foreground)]
+      `}>
         {/* Bungkus seluruh aplikasi dengan provider otentikasi global */}
         <AuthProvider>
           {children}
