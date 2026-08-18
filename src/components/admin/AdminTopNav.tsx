@@ -15,9 +15,35 @@ export default function AdminTopNav() {
   const { user } = useAuthStore();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // 1. Logic Breadcrumbs: Memecah URL menjadi array nama rute
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  
+  // Helper cerdas untuk menyesuaikan URL (Hilangkan /admin jika di production sub-domain)
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path; 
+    }
+    return `/admin${path}`; 
+  };
+
+  // 1. Logic Breadcrumbs: Diperbarui agar kebal terhadap Sub-Domain
   const generateBreadcrumbs = () => {
-    const paths = pathname.split("/").filter((path) => path);
+    // Normalisasi pathname: hilangkan kata '/admin' di awal agar konsisten antara localhost dan production
+    const normalizedPath = pathname.startsWith("/admin") ? pathname.replace(/^\/admin/, "") : pathname;
+    const paths = normalizedPath.split("/").filter((path) => path);
+
+    // Jika beranda (kosong), tampilkan tulisan Dashboard
+    if (paths.length === 0) {
+      return (
+        <div className="flex items-center">
+          <span className="text-sm font-semibold text-[#7A171D] transition-colors">
+            Dashboard
+          </span>
+        </div>
+      );
+    }
+
     return paths.map((path, index) => {
       const isLast = index === paths.length - 1;
       // Format text: hilangkan dash dan kapitalisasi huruf pertama
@@ -40,7 +66,8 @@ export default function AdminTopNav() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.push("/admin/login");
+      // [BUG FIX]: Redirect menggunakan helper getAdminUrl agar tidak nyangkut di /admin/login saat production
+      router.push(getAdminUrl("/login"));
     } catch (error) {
       console.error("Gagal logout:", error);
     }
@@ -51,6 +78,9 @@ export default function AdminTopNav() {
     return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
   };
 
+  // =========================================================================
+  // UI AREA: TIDAK DISENTUH (TETAP MENGGUNAKAN APPLE GLASS GEN-Z)
+  // =========================================================================
   return (
     <header className="w-full flex items-center justify-between mb-8 relative z-40">
       

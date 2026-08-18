@@ -9,29 +9,15 @@ import { useAuthStore, StoreUser } from "@/store/useAuthStore";
 import { ShieldAlert } from "lucide-react";
 import { Role } from "@/types/user";
 
-// Daftar rute PUBLIC client yang butuh login (TANPA /desktop atau /mobile)
-const CLIENT_PROTECTED_ROUTES = [
-  "/dashboard",
-  "/settings",
-  "/pembayaran",
-  "/delivery/booking",
-  "/forwarding/quote",
-];
-
-// Daftar rute PUBLIC driver yang butuh login
-const DRIVER_PROTECTED_ROUTES = [
-  "/driver/dashboard",
-  "/driver/wallet",
-  "/driver/profile",
-  "/driver/radar", // Tambahan untuk Fase 4
-  "/driver/awb",   // Tambahan untuk Fase 4
-  "/driver/fleet"
-];
-
-// Grouping Roles (Memisahkan driver ke ekosistemnya sendiri)
 const ADMIN_ROLES: Role[] = ['superadmin', 'admin_finance', 'admin_operational', 'staff'];
 const CLIENT_ROLES: Role[] = ['b2c', 'b2b'];
 const DRIVER_ROLES: Role[] = ['driver'];
+
+// Daftar Rute Publik (Auth) yang boleh diakses tamu di semua portal
+const PUBLIC_AUTH_ROUTES = [
+  "/login", "/register", "/forgot-password",
+  "/admin/login", "/driver/login", "/driver/register"
+];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, login, logout, isHydrated } = useAuthStore();
@@ -40,18 +26,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const router = useRouter();
 
-  // Deteksi Rute Saat Ini
-  const isClientProtectedRoute = CLIENT_PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const isClientLoginRoute = pathname === "/login"; 
-  
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isAdminLoginRoute = pathname === "/admin/login";
-  
-  const isDriverRoute = pathname.startsWith("/driver");
-  const isDriverProtectedRoute = DRIVER_PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const isDriverAuthRoute = pathname === "/driver/login" || pathname === "/driver/register";
+  // ==========================================
+  // DETEKSI ZONA PORTAL (HOST & PATH)
+  // ==========================================
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
 
-  // 1. Firebase Listener: Mengecek Sesi Auth & Ambil Role dari Firestore
+  // Menentukan user sedang membuka portal yang mana
+  const isLandingPortal = hostname === 'flashglobalslogistik.com' || hostname === 'www.flashglobalslogistik.com';
+  const isAdminPortal = hostname.includes('admin.flashglobalslogistik.com') || (isLocalhost && pathname.startsWith('/admin'));
+  const isDriverPortal = hostname.includes('driver.flashglobalslogistik.com') || (isLocalhost && pathname.startsWith('/driver'));
+  // Klien adalah web.flash... ATAU localhost selain admin/driver/landing
+  const isClientPortal = hostname.includes('web.flashglobalslogistik.com') || (isLocalhost && !isAdminPortal && !isDriverPortal && !pathname.startsWith('/landing'));
+
+  const isPublicAuthRoute = PUBLIC_AUTH_ROUTES.includes(pathname);
+
+  // 1. Firebase Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -67,14 +57,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             if (mappedRole === "business") mappedRole = "b2b";
             if (mappedRole === "admin_cs" || mappedRole === "admin_ops") mappedRole = "admin_operational";
 
-            // 🚀 STEP 2: INJEKSI CITY & PARTNER TYPE (Khusus Driver)
-            // Deteksi kota dari alamat default, domisili, atau setting regional
-            let detectedCity = "Pusat"; // Fallback default
-            if (userData.regional?.city) {
-              detectedCity = userData.regional.city;
-            } else if (userData.domisili) {
-              detectedCity = userData.domisili;
-            }
+            let detectedCity = "Pusat";
+            if (userData.regional?.city) detectedCity = userData.regional.city;
+            else if (userData.domisili) detectedCity = userData.domisili;
 
             login({
               uid: firebaseUser.uid,
@@ -82,23 +67,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               displayName: userData.displayName || userData.name || firebaseUser.displayName || "Pengguna",
               photoURL: firebaseUser.photoURL || undefined,
               role: mappedRole as Role,
-              
-              // Data Regional & Geofencing
               regional: userData.regional || undefined,
               city: detectedCity,
-              
-              // Data Kapasitas Order (Khusus Driver)
               partnerType: userData.partnerType || undefined,
-
               createdAt: userData.createdAt || new Date(),
               updatedAt: userData.updatedAt || new Date(),
             } as StoreUser);
 
           } else {
-            // ANTI-RACE CONDITION: Cek apakah user sedang berada di jalur driver
-            const isRegisteringDriver = window.location.pathname.startsWith("/driver");
-
-            // Jika document user belum ada, set role sementara sesuai jalur pendaftarannya
+            // Jika dokumen user belum ada, set role sementara sesuai portal
+            const isRegisteringDriver = isDriverPortal;
             login({
               uid: firebaseUser.uid,
               email: firebaseUser.email || "",
@@ -119,80 +97,90 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     });
 
     return () => unsubscribe();
-  }, [login, logout]);
+  }, [login, logout, isDriverPortal]);
 
-  // 2. Route Guard: Logika Pengalihan Berdasarkan Role
+  // 2. Route Guard Berbasis Zona Portal
   useEffect(() => {
     if (initializing || !isHydrated) return;
 
-    // JIKA BELUM LOGIN
+    // A. Biarkan Landing Page bebas diakses siapa saja
+    if (isLandingPortal) return;
+
+    // B. JIKA BELUM LOGIN
     if (!user) {
-      if (isAdminRoute && !isAdminLoginRoute) {
-        router.push("/admin/login");
-      } else if (isDriverRoute && !isDriverAuthRoute) {
-        router.push("/driver/login");
-      } else if (isClientProtectedRoute && !isClientLoginRoute) {
-        router.push("/login"); 
+      if (!isPublicAuthRoute) {
+        if (isLocalhost) {
+          if (isAdminPortal) router.push('/admin/login');
+          else if (isDriverPortal) router.push('/driver/login');
+          else router.push('/login');
+        } else {
+          router.push('/login'); // Di sub-domain, login selalu di root /login
+        }
       }
       return;
     }
 
-    // JIKA SUDAH LOGIN (Cek Role)
+    // C. JIKA SUDAH LOGIN
     const isUserAdmin = ADMIN_ROLES.includes(user.role);
     const isUserClient = CLIENT_ROLES.includes(user.role);
     const isUserDriver = DRIVER_ROLES.includes(user.role);
 
-    if (isUserAdmin) {
-      // Admin nyasar ke halaman selain admin atau mencoba login ulang
-      if (!isAdminRoute || isAdminLoginRoute) {
-         router.push("/admin"); 
-      }
-    } else if (isUserDriver) {
-      // Driver nyasar ke halaman admin/client atau mencoba login/register ulang
-      if (!isDriverRoute || isDriverAuthRoute) {
-         router.push("/driver/dashboard");
-      }
-    } else if (isUserClient) {
-      // Client nyasar ke halaman admin/driver atau mencoba login ulang
-      if (isAdminRoute || isDriverRoute || isClientLoginRoute) {
-        router.push("/dashboard"); 
+    // Cross-Portal Redirects (Mencegah user nyasar ke portal yang salah)
+    if (isUserAdmin && !isAdminPortal) {
+      if (isLocalhost) router.push('/admin');
+      else window.location.href = 'https://admin.flashglobalslogistik.com';
+      return;
+    }
+    if (isUserDriver && !isDriverPortal) {
+      if (isLocalhost) router.push('/driver');
+      else window.location.href = 'https://driver.flashglobalslogistik.com';
+      return;
+    }
+    if (isUserClient && !isClientPortal) {
+      if (isLocalhost) router.push('/dashboard');
+      else window.location.href = 'https://web.flashglobalslogistik.com/dashboard';
+      return;
+    }
+
+    // Jika sudah di portal yang BENAR tapi malah mau buka halaman LOGIN lagi -> Tendang ke Dashboard
+    if (isPublicAuthRoute) {
+      if (isLocalhost) {
+        if (isUserAdmin) router.push('/admin');
+        else if (isUserDriver) router.push('/driver');
+        else router.push('/dashboard');
+      } else {
+        // Di dalam sub-domain production, root dashboard cukup menggunakan "/" atau "/dashboard"
+        if (isClientPortal) router.push('/dashboard');
+        else router.push('/'); // Admin dan Driver dashboard-nya ada di root sub-domain
       }
     }
 
-  }, [initializing, isHydrated, user, pathname, router, isClientProtectedRoute, isAdminRoute, isAdminLoginRoute, isClientLoginRoute, isDriverRoute, isDriverAuthRoute]);
+  }, [initializing, isHydrated, user, pathname, router, isLandingPortal, isAdminPortal, isDriverPortal, isClientPortal, isPublicAuthRoute]);
 
-  // Tampilkan loading saat initial load
+  // Loading Screen
   if (initializing || !isHydrated) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <div className="w-10 h-10 border-4 border-gray-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-500 font-bold animate-pulse">Memverifikasi Akses...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
+        <div className="w-10 h-10 border-4 border-slate-200 border-t-brand-maroon rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-bold animate-pulse">Memverifikasi Otoritas Zona...</p>
       </div>
     );
   }
 
-  // Tampilkan blokir UI sementara sebelum router.push dieksekusi oleh useEffect 
-  // (Mencegah "kebocoran" UI dari komponen halaman yang diproteksi)
-  const isUnauthorizedAdmin = !user && isAdminRoute && !isAdminLoginRoute;
-  const isUnauthorizedClient = !user && isClientProtectedRoute && !isClientLoginRoute;
-  const isUnauthorizedDriver = !user && isDriverProtectedRoute && !isDriverAuthRoute;
+  // Blokir UI Jika Race Condition / Kebocoran State
+  const isUnauthorized = !user && !isPublicAuthRoute && !isLandingPortal;
+  const isWrongPortal = user && (
+    (ADMIN_ROLES.includes(user.role) && !isAdminPortal) ||
+    (DRIVER_ROLES.includes(user.role) && !isDriverPortal) ||
+    (CLIENT_ROLES.includes(user.role) && !isClientPortal)
+  ) && !isLandingPortal;
 
-  const isClientInWrongArea = user && CLIENT_ROLES.includes(user.role) && (isAdminRoute || isDriverRoute || isClientLoginRoute);
-  const isAdminInWrongArea = user && ADMIN_ROLES.includes(user.role) && (!isAdminRoute || isAdminLoginRoute);
-  const isDriverInWrongArea = user && DRIVER_ROLES.includes(user.role) && (!isDriverRoute || isDriverAuthRoute);
-
-  if (
-    isUnauthorizedAdmin || 
-    isUnauthorizedClient || 
-    isUnauthorizedDriver || 
-    isClientInWrongArea || 
-    isAdminInWrongArea || 
-    isDriverInWrongArea
-  ) {
+  if (isUnauthorized || isWrongPortal) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <ShieldAlert className="w-12 h-12 text-red-500 mb-4 animate-bounce" />
-        <p className="text-gray-800 font-bold">Akses Ditolak. Mengalihkan jalur...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
+        <ShieldAlert className="w-16 h-16 text-red-500 mb-4 animate-bounce" />
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Akses Ditolak</h2>
+        <p className="text-slate-500 font-medium">Sistem sedang mengarahkan Anda ke zona yang tepat...</p>
       </div>
     );
   }

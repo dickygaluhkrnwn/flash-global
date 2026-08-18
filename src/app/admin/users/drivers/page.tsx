@@ -23,6 +23,16 @@ import { DriverData } from "@/types/admin";
 
 type StatusFilterType = "All" | "Basic" | "Pending" | "Active" | "Suspended";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function FleetManagementDashboard() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -181,7 +191,7 @@ export default function FleetManagementDashboard() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -211,7 +221,7 @@ export default function FleetManagementDashboard() {
             Dashboard utama untuk memantau pendaftar baru dan merangkum seluruh ekosistem mitra pengemudi & armada vendor.
           </p>
         </div>
-        <AdminButton onClick={() => router.push("/admin/users/drivers/add")} className="h-12 shadow-[0_8px_20px_rgba(122,23,29,0.25)]">
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin/users/drivers/add"))} className="h-12 shadow-[0_8px_20px_rgba(122,23,29,0.25)]">
           <Plus className="w-4 h-4 mr-2" /> Pendaftaran Manual
         </AdminButton>
       </div>
@@ -225,25 +235,25 @@ export default function FleetManagementDashboard() {
           <p className="text-2xl font-black text-slate-800 mt-2 relative z-10">{stats.basicAccounts}</p>
         </div>
 
-        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#C5A059] hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/individual')}>
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#C5A059] hover:bg-white cursor-pointer`} onClick={() => router.push(getAdminUrl('/admin/users/drivers/individual'))}>
           <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-[#C5A059] rounded-full blur-[60px] opacity-20" />
           <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-[#C5A059]"/> Mitra Individu</span>
           <p className="text-2xl font-black text-slate-900 mt-2 relative z-10">{stats.individu}</p>
         </div>
 
-        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-blue-500 hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/vendor')}>
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-blue-500 hover:bg-white cursor-pointer`} onClick={() => router.push(getAdminUrl('/admin/users/drivers/vendor'))}>
           <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-blue-500 rounded-full blur-[60px] opacity-20" />
           <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-blue-500"/> Vendor PT</span>
           <p className="text-2xl font-black text-slate-900 mt-2 relative z-10">{stats.vendor}</p>
         </div>
 
-        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#7A171D] hover:bg-white cursor-pointer`} onClick={() => router.push('/admin/users/drivers/fleet-drivers')}>
+        <div className={`${glassPanel} p-5 relative overflow-hidden group hover:border-[#7A171D] hover:bg-white cursor-pointer`} onClick={() => router.push(getAdminUrl('/admin/users/drivers/fleet-drivers'))}>
           <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-[#7A171D] rounded-full blur-[60px] opacity-20" />
           <span className="#7A171D text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5 text-[#7A171D]"><UserSquare2 className="w-3.5 h-3.5"/> Sopir Vendor</span>
           <p className="text-2xl font-black text-[#7A171D] mt-2 relative z-10">{stats.supirTruk}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-950 rounded-[1.5rem] p-5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_8px_20px_rgba(15,23,42,0.3)] relative overflow-hidden group hover:brightness-110 cursor-pointer transition-all" onClick={() => router.push('/admin/users/drivers/fleet-vehicles')}>
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-950 rounded-[1.5rem] p-5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),0_8px_20px_rgba(15,23,42,0.3)] relative overflow-hidden group hover:brightness-110 cursor-pointer transition-all" onClick={() => router.push(getAdminUrl('/admin/users/drivers/fleet-vehicles'))}>
           <div className="absolute top-[-20%] right-[-10%] w-24 h-24 bg-slate-500 rounded-full blur-[60px] opacity-20" />
           <span className="text-slate-300 text-[10px] font-bold uppercase tracking-widest relative z-10 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5 text-white"/> Armada Truk</span>
           <p className="text-2xl font-black text-white mt-2 relative z-10">{stats.armadaTruk}</p>
@@ -388,7 +398,7 @@ export default function FleetManagementDashboard() {
                       </button>
                     )}
 
-                    <button onClick={() => router.push(`/admin/users/drivers/${p.id}`)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm flex items-center justify-center" title="Lihat Detail Entitas">
+                    <button onClick={() => router.push(getAdminUrl(`/admin/users/drivers/${p.id}`))} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm flex items-center justify-center" title="Lihat Detail Entitas">
                       <Eye className="w-4 h-4" />
                     </button>
                     

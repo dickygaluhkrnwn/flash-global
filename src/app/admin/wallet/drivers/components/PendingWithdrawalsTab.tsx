@@ -442,4 +442,4 @@ export default function PendingWithdrawalsTab({ currentUser, showToast }: Pendin
       </AnimatePresence>
     </>
   );
-}
+} 

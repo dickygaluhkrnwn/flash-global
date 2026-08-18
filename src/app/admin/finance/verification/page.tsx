@@ -14,7 +14,7 @@ import { collection, onSnapshot, query, orderBy, where } from "firebase/firestor
 import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
-import { OrderDetail } from "@/types/order"; // <-- KODE DIBERSIHKAN: Import OrderDetail
+import { OrderDetail } from "@/types/order"; 
 
 // =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Emerald/Finance Accent)
@@ -34,6 +34,16 @@ export default function FinanceVerificationHub() {
 
   const [isLoading, setIsLoading] = useState(true);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -44,7 +54,6 @@ export default function FinanceVerificationHub() {
       let pending = 0;
       let revenue = 0;
       snapshot.docs.forEach(d => {
-        // KODE DIBERSIHKAN: Type Casting ke OrderDetail agar paymentStatus dan breakdown terdeteksi
         const data = d.data() as OrderDetail;
         
         if (data.paymentStatus === "Menunggu Verifikasi Finance") pending++;
@@ -88,7 +97,7 @@ export default function FinanceVerificationHub() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Keuangan & Tagihan ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -150,7 +159,7 @@ export default function FinanceVerificationHub() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
         
         {/* Modul: Verifikasi Invoice */}
-        <motion.div onClick={() => router.push("/admin/finance/verification/invoice")} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={glassCard}>
+        <motion.div onClick={() => router.push(getAdminUrl("/admin/finance/verification/invoice"))} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={glassCard}>
           <div className="p-6 h-full flex flex-col">
             <div className="flex justify-between items-start mb-6">
               <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 shadow-sm flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:border-blue-600 transition-colors duration-300">
@@ -179,7 +188,7 @@ export default function FinanceVerificationHub() {
         </motion.div>
 
         {/* Modul: Verifikasi Deposit B2B */}
-        <motion.div onClick={() => router.push("/admin/finance/verification/deposit")} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={glassCard}>
+        <motion.div onClick={() => router.push(getAdminUrl("/admin/finance/verification/deposit"))} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={glassCard}>
           <div className="p-6 h-full flex flex-col">
             <div className="flex justify-between items-start mb-6">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:border-emerald-600 transition-colors duration-300">
@@ -208,7 +217,7 @@ export default function FinanceVerificationHub() {
         </motion.div>
 
         {/* Modul: Verifikasi Refund */}
-        <motion.div onClick={() => router.push("/admin/finance/verification/refund")} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={glassCard}>
+        <motion.div onClick={() => router.push(getAdminUrl("/admin/finance/verification/refund"))} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={glassCard}>
           <div className="p-6 h-full flex flex-col">
             <div className="flex justify-between items-start mb-6">
               <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 shadow-sm flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:border-rose-600 transition-colors duration-300">

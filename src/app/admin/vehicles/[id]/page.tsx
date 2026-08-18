@@ -21,6 +21,16 @@ import { cn } from "@/lib/utils";
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function VehicleDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -70,7 +80,7 @@ export default function VehicleDetailPage() {
               });
             } else {
               showToast("error", "Armada tidak ditemukan.");
-              setTimeout(() => router.push("/admin/vehicles"), 2000);
+              setTimeout(() => router.push(getAdminUrl("/admin/vehicles")), 2000);
             }
           }
         }
@@ -162,7 +172,7 @@ export default function VehicleDetailPage() {
       const newConfig = { ...pricingConfig, customVehicles: updatedVehicles, updatedAt: serverTimestamp() };
       await setDoc(doc(db, "settings", "pricing"), newConfig, { merge: true });
       showToast("success", "Spesifikasi armada berhasil disimpan!");
-      setTimeout(() => router.push("/admin/vehicles"), 1500);
+      setTimeout(() => router.push(getAdminUrl("/admin/vehicles")), 1500);
     } catch (error) {
       console.error("Gagal menyimpan konfigurasi:", error);
       showToast("error", "Gagal menyimpan konfigurasi ke database.");
@@ -175,7 +185,7 @@ export default function VehicleDetailPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -401,7 +411,7 @@ export default function VehicleDetailPage() {
         {/* BOTTOM ACTION BAR */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-white p-5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
           <div className="max-w-6xl mx-auto flex justify-end gap-3">
-            <AdminButton type="button" onClick={() => router.push("/admin/vehicles")} variant="outline" className="font-bold h-12 w-auto px-6 bg-white border-slate-200 hover:bg-slate-50 shadow-sm">
+            <AdminButton type="button" onClick={() => router.push(getAdminUrl("/admin/vehicles"))} variant="outline" className="font-bold h-12 w-auto px-6 bg-white border-slate-200 hover:bg-slate-50 shadow-sm">
               Batal
             </AdminButton>
             <AdminButton type="submit" disabled={isSaving || isUploading} className="bg-gradient-to-br from-slate-800 to-slate-900 text-white border-slate-950 font-bold h-12 w-auto px-8 shadow-[0_8px_20px_rgba(15,23,42,0.25)] hover:brightness-110">

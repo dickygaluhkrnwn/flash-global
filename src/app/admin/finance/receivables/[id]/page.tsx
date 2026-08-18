@@ -36,6 +36,16 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   // REF UNTUK CETAK INVOICE A4
   const invoiceRef = useRef<HTMLDivElement>(null);
 
@@ -141,7 +151,7 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
            });
         } else {
            showToast("success", "Klien ini tidak memiliki piutang menggantung.");
-           setTimeout(() => router.push("/admin/finance/receivables"), 2000);
+           setTimeout(() => router.push(getAdminUrl("/admin/finance/receivables")), 2000);
         }
 
       } catch (err) {
@@ -223,7 +233,7 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
       await batch.commit();
       showToast("success", `Pembayaran diterima! Piutang ${clientData.name} telah dilunaskan.`);
       
-      setTimeout(() => router.push("/admin/finance/receivables"), 2000);
+      setTimeout(() => router.push(getAdminUrl("/admin/finance/receivables")), 2000);
 
     } catch (error) {
       console.error("Gagal melunasi piutang:", error);
@@ -237,7 +247,7 @@ export default function ReceivablesDetailPage({ params }: { params: { id: string
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }

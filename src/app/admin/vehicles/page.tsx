@@ -22,6 +22,16 @@ import { cn } from "@/lib/utils";
 import { DynamicVehicle } from "@/types/order";
 import { PricingConfig } from "@/types/admin";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function AdminVehiclesPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -103,7 +113,7 @@ export default function AdminVehiclesPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Master Data Kendaraan ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -135,7 +145,7 @@ export default function AdminVehiclesPage() {
           </p>
         </div>
         
-        <AdminButton onClick={() => router.push("/admin/vehicles/add")} variant="primary" className="h-12 px-6 shrink-0 relative z-10 w-full md:w-auto shadow-lg">
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin/vehicles/add"))} variant="primary" className="h-12 px-6 shrink-0 relative z-10 w-full md:w-auto shadow-lg">
           <Plus className="w-4 h-4 mr-2" /> Registrasi Armada Baru
         </AdminButton>
       </div>
@@ -360,7 +370,7 @@ function VehicleCard({ data, router, onDelete }: { data: DynamicVehicle; router:
           )}
         </div>
 
-        <AdminButton variant="outline" onClick={() => router.push(`/admin/vehicles/${data.id}`)} className="w-full mt-4 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900">
+        <AdminButton variant="outline" onClick={() => router.push(getAdminUrl(`/admin/vehicles/${data.id}`))} className="w-full mt-4 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900">
           Ubah Spesifikasi <ArrowRight className="w-4 h-4 ml-2" />
         </AdminButton>
       </div>

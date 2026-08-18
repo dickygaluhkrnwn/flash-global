@@ -19,7 +19,7 @@ import { AdminInput } from "@/components/admin/ui/AdminInput";
 import { cn } from "@/lib/utils";
 
 // IMPORT GLOBAL TYPES
-import { PricingConfig, DriverData } from "@/types/admin"; // <-- KODE DIBERSIHKAN: Import DriverData
+import { PricingConfig, DriverData } from "@/types/admin"; 
 import { DynamicVehicle } from "@/types/order";
 
 // ======================================================================
@@ -57,6 +57,16 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
+
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
 
 export default function AddDriverPage() {
   const router = useRouter();
@@ -168,7 +178,6 @@ export default function AddDriverPage() {
 
       const docId = `PRT-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)}`;
       
-      // KODE DIBERSIHKAN: Divalidasi secara ketat menggunakan Partial<DriverData>
       const payload: Partial<DriverData> & { id: string } = {
         id: docId,
         name: formData.name || "Tanpa Nama",
@@ -215,7 +224,7 @@ export default function AddDriverPage() {
       showToast("success", "Registrasi entitas kemitraan berhasil!");
       
       setTimeout(() => {
-        router.push("/admin/users/drivers");
+        router.push(getAdminUrl("/admin/users/drivers"));
       }, 1500);
 
     } catch (error) {
@@ -230,7 +239,7 @@ export default function AddDriverPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -255,7 +264,7 @@ export default function AddDriverPage() {
       </AnimatePresence>
 
       <div className="flex items-center gap-5">
-        <button onClick={() => router.back()} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white transition-all">
+        <button onClick={() => router.push(getAdminUrl('/admin/users/drivers'))} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white transition-all">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
@@ -495,7 +504,7 @@ export default function AddDriverPage() {
         {/* BOTTOM ACTION BAR */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-white p-5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
           <div className="max-w-6xl mx-auto flex justify-end gap-3">
-            <AdminButton type="button" onClick={() => router.push("/admin/users/drivers")} variant="outline" className="font-bold h-12 w-auto px-6 bg-white border-slate-200 hover:bg-slate-50 shadow-sm">
+            <AdminButton type="button" onClick={() => router.push(getAdminUrl("/admin/users/drivers"))} variant="outline" className="font-bold h-12 w-auto px-6 bg-white border-slate-200 hover:bg-slate-50 shadow-sm">
               Batal & Kembali
             </AdminButton>
             <AdminButton type="submit" disabled={isProcessing} className="bg-gradient-to-br from-slate-800 to-slate-900 text-white border-slate-950 font-bold h-12 w-auto px-8 shadow-[0_8px_20px_rgba(15,23,42,0.25)] hover:brightness-110">

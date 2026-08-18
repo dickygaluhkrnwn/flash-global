@@ -40,6 +40,16 @@ export default function FinanceReportsPage() {
 
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   useEffect(() => {
     const fetchReportsAndPricing = async () => {
       try {
@@ -233,7 +243,7 @@ export default function FinanceReportsPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800 tracking-tight">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Laporan & Buku Besar ini hanya dapat diakses oleh Superadmin atau Divisi Finance.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -373,7 +383,7 @@ export default function FinanceReportsPage() {
                       animate={{ opacity: 1, y: 0 }} 
                       exit={{ opacity: 0, scale: 0.95 }} 
                       transition={{ delay: idx * 0.02 }} 
-                      onClick={() => router.push(`/admin/finance/reports/${r.id}`)}
+                      onClick={() => router.push(getAdminUrl(`/admin/finance/reports/${r.id}`))}
                       className={`${glassRow} p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 sm:gap-8 group cursor-pointer`} 
                     >
                       

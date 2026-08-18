@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation"; // <-- INJEKSI ROUTER
 import { motion } from "framer-motion";
 import { 
   LayoutDashboard, Truck, Coins, Building, 
@@ -18,6 +19,19 @@ import { DashboardStats, ChartData, ActiveNode } from "@/types/admin";
 import { OrderDetail, LocationDetail } from "@/types/order";
 
 export default function AdminDashboardPage() {
+  const router = useRouter(); // <-- SETUP ROUTER
+
+  // =========================================================================
+  // LOGIC AREA: HELPER SUB-DOMAIN ROUTING
+  // Gunakan fungsi ini kelak jika ingin membuat Card bisa diklik menuju detail order
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path; 
+    }
+    return `/admin${path}`; 
+  };
+
   const [stats, setStats] = useState<DashboardStats>({
     totalB2B: 0,
     totalDrivers: 0,
@@ -175,15 +189,14 @@ export default function AdminDashboardPage() {
 
   const maxChartValue = Math.max(...chartData.map(d => d.value), 100000); 
   
-  // Custom utility class untuk efek iPhone Glass (Diperbarui agar nge-pop)
+  // Custom utility class untuk efek iPhone Glass
   const glassStyle = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] hover:bg-white/80 transition-all duration-300";
 
   return (
     <div className="space-y-6 pb-10">
       
-      {/* 1. TOP WELCOME BANNER (Glassmorphism & Brand Colors) */}
+      {/* 1. TOP WELCOME BANNER */}
       <div className={`${glassStyle} p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6`}>
-        {/* Subtle Inner Glow */}
         <div className="absolute top-[-50%] right-[-10%] w-96 h-96 bg-[#7A171D] rounded-full blur-[120px] opacity-[0.08] pointer-events-none" />
         <div className="absolute bottom-[-50%] left-[20%] w-80 h-80 bg-[#C5A059] rounded-full blur-[100px] opacity-[0.08] pointer-events-none" />
         
@@ -199,7 +212,6 @@ export default function AdminDashboardPage() {
           </p>
         </div>
         
-        {/* Status Pill iOS Style */}
         <div className="relative z-10 flex items-center gap-2.5 bg-white/80 backdrop-blur-md px-5 py-3 rounded-2xl border border-white text-xs font-black tracking-widest uppercase text-emerald-600 shadow-sm self-start md:self-auto">
           <span className="relative flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -209,14 +221,11 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* 2. MAIN BENTO GRID (4 METRIK UTAMA + 3 INSIGHTS) */}
+      {/* 2. MAIN BENTO GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        
-        {/* Card 1: Revenue */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`${glassStyle} rounded-[2rem] p-6 flex flex-col justify-between h-40 group relative overflow-hidden`}>
           <div className="flex justify-between items-start relative z-10">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Gross Revenue</span>
-            {/* 3D Icon */}
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#DFBE7B] to-[#C5A059] shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_8px_16px_rgba(197,160,89,0.3)] border border-[#A68345]">
               <Coins className="w-5 h-5 text-white" />
             </div>
@@ -227,7 +236,6 @@ export default function AdminDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 2: Orders */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className={`${glassStyle} rounded-[2rem] p-6 flex flex-col justify-between h-40 group relative overflow-hidden`}>
           <div className="flex justify-between items-start relative z-10">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Active Manifests</span>
@@ -241,7 +249,6 @@ export default function AdminDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 3: B2B Clients */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className={`${glassStyle} rounded-[2rem] p-6 flex flex-col justify-between h-40 group relative overflow-hidden`}>
           <div className="flex justify-between items-start relative z-10">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Corporate B2B</span>
@@ -255,7 +262,6 @@ export default function AdminDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Card 4: Drivers */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className={`${glassStyle} rounded-[2rem] p-6 flex flex-col justify-between h-40 group relative overflow-hidden`}>
           <div className="flex justify-between items-start relative z-10">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Fleet Network</span>
@@ -270,7 +276,7 @@ export default function AdminDashboardPage() {
         </motion.div>
       </div>
 
-      {/* 3. SECONDARY INSIGHTS (Mini Bento Glass) */}
+      {/* 3. SECONDARY INSIGHTS */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className={`${glassStyle} rounded-2xl p-5 flex items-center justify-between`}>
           <div>
@@ -298,7 +304,7 @@ export default function AdminDashboardPage() {
       {/* 4. CORE ANALYTICS & LIVE FEED */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         
-        {/* KIRI: CHART OMSET */}
+        {/* CHART OMSET */}
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }} className={`xl:col-span-7 ${glassStyle} rounded-[2.5rem] p-6 md:p-8 flex flex-col h-[420px]`}>
           <div className="flex justify-between items-start mb-6">
             <div className="space-y-1">
@@ -314,7 +320,6 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="w-full flex-1 flex items-end gap-2 md:gap-4 relative px-2">
-            {/* Grid Lines */}
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-40 py-4">
               <div className="w-full h-px bg-slate-300 border-dashed border-b border-slate-300/50"></div>
               <div className="w-full h-px bg-slate-300 border-dashed border-b border-slate-300/50"></div>
@@ -327,12 +332,10 @@ export default function AdminDashboardPage() {
               
               return (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-3 group h-full justify-end relative z-10">
-                  {/* Tooltip */}
                   <div className="opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur-xl border border-white shadow-[0_8px_30px_rgba(0,0,0,0.12)] text-slate-900 font-bold text-[11px] py-2 px-3 rounded-xl absolute mb-14 transition-all duration-200 pointer-events-none z-20 whitespace-nowrap transform group-hover:-translate-y-2">
                     {formatRupiah(data.value)}
                   </div>
                   
-                  {/* Bar */}
                   <motion.div 
                     initial={{ height: 0 }}
                     animate={{ height: `${barHeightPercent}%` }}
@@ -342,13 +345,12 @@ export default function AdminDashboardPage() {
                         ? "bg-gradient-to-t from-[#9A242B] to-[#7A171D] shadow-[0_0_20px_rgba(122,23,29,0.3)] border border-[#5A0E13]/50" 
                         : data.value > 0 
                           ? "bg-gradient-to-t from-slate-300 to-slate-100 border border-white shadow-sm hover:from-[#DFBE7B] hover:to-[#C5A059] hover:border-[#A68345]"
-                          : "bg-slate-100/80 border border-slate-300 border-dashed border-b-0" // <-- PERBAIKAN: Bar Kosong lebih tegas
+                          : "bg-slate-100/80 border border-slate-300 border-dashed border-b-0"
                     }`}
                   >
                     {isToday && <div className="absolute inset-0 bg-white/20 w-full h-1 top-0"></div>}
                   </motion.div>
                   
-                  {/* Label */}
                   <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isToday ? "text-[#7A171D]" : "text-slate-500 group-hover:text-slate-800"}`}>
                     {data.label}
                   </span>
@@ -358,7 +360,7 @@ export default function AdminDashboardPage() {
           </div>
         </motion.div>
 
-        {/* KANAN: LIVE MANIFEST FEED */}
+        {/* LIVE MANIFEST FEED */}
         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }} className={`xl:col-span-5 ${glassStyle} rounded-[2.5rem] flex flex-col h-[420px] overflow-hidden`}>
           <div className="p-6 md:p-8 pb-4 border-b border-white flex justify-between items-center bg-white/40">
             <div className="space-y-1">
@@ -381,8 +383,12 @@ export default function AdminDashboardPage() {
             ) : (
               <div className="space-y-3 p-3">
                 {activeNodes.map((node, index) => (
-                  // Nested Glassmorphism untuk List Item
-                  <div key={index} className="p-4 bg-white/60 backdrop-blur-md border border-white rounded-2xl flex items-center justify-between gap-4 group hover:bg-white hover:shadow-md transition-all cursor-pointer">
+                  // FITUR KLIK AKTIF MENGGUNAKAN GET_ADMIN_URL
+                  <div 
+                    key={index} 
+                    onClick={() => router.push(getAdminUrl(`/orders/domestic/${node.id}`))}
+                    className="p-4 bg-white/60 backdrop-blur-md border border-white rounded-2xl flex items-center justify-between gap-4 group hover:bg-white hover:shadow-md transition-all cursor-pointer"
+                  >
                     <div className="space-y-2.5 min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono font-black bg-white border border-slate-200 px-2 py-1 text-slate-700 rounded-md shadow-sm">
@@ -394,7 +400,6 @@ export default function AdminDashboardPage() {
                       </div>
                       
                       <div className="text-xs font-semibold text-slate-600 space-y-1.5 relative pl-4">
-                        {/* Garis Konektor Rute */}
                         <div className="absolute left-[5px] top-2 bottom-2 w-[1.5px] bg-slate-300"></div>
                         <p className="truncate flex items-center gap-2 relative">
                           <span className="absolute -left-4 w-2.5 h-2.5 bg-slate-400 rounded-full border-2 border-white shadow-sm"></span>
@@ -429,4 +434,4 @@ export default function AdminDashboardPage() {
       </div>
     </div>
   );
-} 
+}

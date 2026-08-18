@@ -14,7 +14,7 @@ import { WithdrawalRequest } from "@/types/finance";
 import { FirebaseTimestamp } from "@/types/order";
 
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
-
+ 
 const getMillis = (timestamp: FirebaseTimestamp | Date | string | number | null | undefined) => {
   if (!timestamp) return 0;
   if (typeof timestamp === 'object' && timestamp !== null && 'toMillis' in timestamp && typeof (timestamp as { toMillis: () => number }).toMillis === 'function') {

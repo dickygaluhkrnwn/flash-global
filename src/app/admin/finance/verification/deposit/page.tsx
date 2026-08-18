@@ -31,6 +31,16 @@ export interface DepositRequest {
 }
 
 // =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
+// =========================================================================
 // UTILS LOKAL (Type-Safe Timestamp Extractor)
 // =========================================================================
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
@@ -115,7 +125,7 @@ export default function VerifyDepositPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Validasi Keuangan ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8 border-slate-300">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8 border-slate-300">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -130,7 +140,7 @@ export default function VerifyDepositPage() {
         {/* Header Title */}
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start gap-6 mb-10 border-b border-blue-600/30 pb-8">
           <div className="flex items-center gap-5">
-            <button onClick={() => router.push("/admin/finance/verification")} className="w-12 h-12 rounded-[1.25rem] bg-white/10 backdrop-blur-md border border-white/20 shadow-sm flex items-center justify-center text-blue-100 hover:text-white hover:bg-white/20 transition-all active:scale-90">
+            <button onClick={() => router.push(getAdminUrl("/admin/finance/verification"))} className="w-12 h-12 rounded-[1.25rem] bg-white/10 backdrop-blur-md border border-white/20 shadow-sm flex items-center justify-center text-blue-100 hover:text-white hover:bg-white/20 transition-all active:scale-90">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex flex-col">
@@ -240,7 +250,7 @@ export default function VerifyDepositPage() {
                       exit={{ opacity: 0, scale: 0.95 }} 
                       transition={{ delay: idx * 0.02 }} 
                       // 🚀 REDIRECT KE HALAMAN DETAIL BARU
-                      onClick={() => router.push(`/admin/finance/verification/deposit/${d.id}`)}
+                      onClick={() => router.push(getAdminUrl(`/admin/finance/verification/deposit/${d.id}`))}
                       className={`${glassRow} p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center cursor-pointer group`}
                     >
                       

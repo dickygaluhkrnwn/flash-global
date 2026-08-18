@@ -21,6 +21,16 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { User as UserType } from "@/types/user";
 import { FirebaseTimestamp } from "@/types/order"; // <-- IMPORT TIPE FIREBASE TIMESTAMP
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function B2CDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -45,7 +55,7 @@ export default function B2CDetailPage() {
         
         if (!docSnap.exists()) {
           showToast("error", "Data klien tidak ditemukan.");
-          setTimeout(() => router.push("/admin/users/b2c"), 2000);
+          setTimeout(() => router.push(getAdminUrl("/admin/users/b2c")), 2000);
           return;
         }
 
@@ -101,14 +111,14 @@ export default function B2CDetailPage() {
     if (typeof dateInput === 'object' && dateInput !== null) {
       const ts = dateInput as Extract<FirebaseTimestamp, object>;
       if (typeof ts.toDate === 'function') {
-        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+        return ts.toDate().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
       }
       if (typeof ts.seconds === 'number') {
-        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+        return new Date(ts.seconds * 1000).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
       }
     }
     
-    return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+    return new Date(dateInput as string | number).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
   if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
@@ -116,7 +126,7 @@ export default function B2CDetailPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }

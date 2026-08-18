@@ -21,6 +21,16 @@ import { cn } from "@/lib/utils";
 import { User as UserType } from "@/types/user";
 
 // =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
+// =========================================================================
 // CUSTOM STYLES: APPLE GLASSMORPHISM (Corporate Indigo Accent)
 // =========================================================================
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
@@ -120,7 +130,7 @@ export default function B2BManagementPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Validasi Korporat dan Limit Kredit ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -368,7 +378,7 @@ function B2BCardItem({ user, onUpdate }: { user: UserType; onUpdate: (id: string
         )}
 
         {/* Tombol Detail User - Halaman [id] */}
-        <AdminButton size="icon" variant="outline" onClick={() => router.push(`/admin/users/b2b/${user.uid}`)} className="h-9 w-9 bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 shadow-sm" title="Buka Detail Perusahaan">
+        <AdminButton size="icon" variant="outline" onClick={() => router.push(getAdminUrl(`/admin/users/b2b/${user.uid}`))} className="h-9 w-9 bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 shadow-sm" title="Buka Detail Perusahaan">
           <ArrowRight className="w-4 h-4" />
         </AdminButton>
 

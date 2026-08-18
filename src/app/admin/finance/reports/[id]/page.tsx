@@ -30,6 +30,16 @@ export default function FinanceReportDetail({ params }: { params: { id: string }
   const [report, setReport] = useState<FinanceReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   useEffect(() => {
     const fetchDetail = async () => {
       try {
@@ -127,7 +137,7 @@ export default function FinanceReportDetail({ params }: { params: { id: string }
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans h-[80vh]">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800 tracking-tight">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8 border-slate-300">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8 border-slate-300">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -163,7 +173,7 @@ export default function FinanceReportDetail({ params }: { params: { id: string }
       <div className="flex items-center justify-between pt-6">
         <div className="flex items-center gap-5">
           <button 
-            onClick={() => router.push('/admin/finance/reports')} 
+            onClick={() => router.push(getAdminUrl('/admin/finance/reports'))} 
             className="w-12 h-12 rounded-[1.25rem] bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-white transition-all active:scale-90"
           >
             <ArrowLeft className="w-5 h-5" />

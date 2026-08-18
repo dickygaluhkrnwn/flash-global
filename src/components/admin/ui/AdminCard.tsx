@@ -43,4 +43,4 @@ const AdminCardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
 ));
 AdminCardFooter.displayName = "AdminCardFooter";
 
-export { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardDescription, AdminCardContent, AdminCardFooter };
+export { AdminCard, AdminCardHeader, AdminCardTitle, AdminCardDescription, AdminCardContent, AdminCardFooter }; 

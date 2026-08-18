@@ -23,6 +23,16 @@ import { DriverData } from "@/types/admin";
 
 type StatusFilterType = "All" | "Pending" | "Active" | "Suspended";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function VendorPartnersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -158,7 +168,7 @@ export default function VendorPartnersPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -344,7 +354,7 @@ export default function VendorPartnersPage() {
                       </button>
                     )}
 
-                    <button onClick={() => router.push(`/admin/users/drivers/${v.id}`)} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm flex items-center justify-center" title="Lihat/Edit Perusahaan">
+                    <button onClick={() => router.push(getAdminUrl(`/admin/users/drivers/${v.id}`))} className="w-10 h-10 rounded-xl bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm flex items-center justify-center" title="Lihat/Edit Perusahaan">
                       <Eye className="w-4 h-4" />
                     </button>
                     

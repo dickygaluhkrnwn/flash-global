@@ -45,6 +45,16 @@ export default function AdminWalletHubPage() {
   const [isDanaLoading, setIsDanaLoading] = useState(true);
   const [danaError, setDanaError] = useState<string | null>(null);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   const fetchHubStats = async () => {
     try {
       // 1. Fetch Driver Wallets
@@ -126,7 +136,7 @@ export default function AdminWalletHubPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Pusat Dompet & Kas ini hanya dapat dikelola oleh Superadmin atau Divisi Finance.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -270,7 +280,7 @@ export default function AdminWalletHubPage() {
         {/* Card 1: Dompet Mitra */}
         <motion.div 
           whileHover={{ y: -5 }}
-          onClick={() => router.push("/admin/wallet/drivers")}
+          onClick={() => router.push(getAdminUrl("/admin/wallet/drivers"))}
           className="bg-white/80 backdrop-blur-xl border border-white shadow-[0_10px_30px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200 transition-all duration-300 rounded-[2rem] p-6 cursor-pointer group flex flex-col justify-between min-h-[220px]"
         >
           <div>
@@ -292,7 +302,7 @@ export default function AdminWalletHubPage() {
         {/* Card 2: Deposit B2B */}
         <motion.div 
           whileHover={{ y: -5 }}
-          onClick={() => router.push("/admin/wallet/clients")}
+          onClick={() => router.push(getAdminUrl("/admin/wallet/clients"))}
           className="bg-white/80 backdrop-blur-xl border border-white shadow-[0_10px_30px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_rgba(59,130,246,0.1)] hover:border-blue-200 transition-all duration-300 rounded-[2rem] p-6 cursor-pointer group flex flex-col justify-between min-h-[220px]"
         >
           <div>
@@ -314,7 +324,7 @@ export default function AdminWalletHubPage() {
         {/* Card 3: Validasi Top-Up */}
         <motion.div 
           whileHover={{ y: -5 }}
-          onClick={() => router.push("/admin/wallet/topups")}
+          onClick={() => router.push(getAdminUrl("/admin/wallet/topups"))}
           className="bg-white/80 backdrop-blur-xl border border-white shadow-[0_10px_30px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.1)] hover:border-emerald-200 transition-all duration-300 rounded-[2rem] p-6 cursor-pointer group flex flex-col justify-between min-h-[220px] relative overflow-hidden"
         >
           {stats.pendingTopups > 0 && (
@@ -343,7 +353,7 @@ export default function AdminWalletHubPage() {
         {/* Card 4: Pencairan Dana (Withdraw) */}
         <motion.div 
           whileHover={{ y: -5 }}
-          onClick={() => router.push("/admin/wallet/withdrawals")}
+          onClick={() => router.push(getAdminUrl("/admin/wallet/withdrawals"))}
           className="bg-white/80 backdrop-blur-xl border border-white shadow-[0_10px_30px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_rgba(220,38,38,0.1)] hover:border-red-200 transition-all duration-300 rounded-[2rem] p-6 cursor-pointer group flex flex-col justify-between min-h-[220px] relative overflow-hidden"
         >
           {stats.pendingWithdrawals > 0 && (

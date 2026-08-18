@@ -23,6 +23,16 @@ import { Quote } from "@/types/order";
 // Type Extension untuk menangani data lama dan data baru secara aman
 type QuoteWithDisplayId = Quote & { quoteId?: string };
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 // KODE DIBERSIHKAN: Export default HARUS ada agar next build tidak crash
 export default function GlobalOrdersPage() {
   const router = useRouter();
@@ -127,7 +137,7 @@ export default function GlobalOrdersPage() {
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
         <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -332,7 +342,7 @@ export default function GlobalOrdersPage() {
                       <AdminButton 
                         size="sm" 
                         variant="gold" 
-                        onClick={() => router.push(`/admin/orders/global/${q.id}`)} 
+                        onClick={() => router.push(getAdminUrl(`/admin/orders/global/${q.id}`))} 
                         className="w-full text-[10px] shadow-sm py-4 h-auto rounded-xl"
                       >
                         Buka Detail <ArrowRight className="w-3 h-3 ml-1" />

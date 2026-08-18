@@ -19,6 +19,16 @@ export default function AdminWalletCommandCenter() {
   const [activeTab, setActiveTab] = useState<"balances" | "pending" | "history">("balances");
   const [toast, setToast] = useState<{ type: "success" | "error", msg: string } | null>(null);
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   const showToast = useCallback((type: "success" | "error", msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 4000);
@@ -29,7 +39,7 @@ export default function AdminWalletCommandCenter() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -56,7 +66,7 @@ export default function AdminWalletCommandCenter() {
         
         {/* Navigation & Title */}
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push("/admin/wallet")} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-white transition-all shrink-0">
+          <button onClick={() => router.push(getAdminUrl("/admin/wallet"))} className="w-12 h-12 rounded-2xl bg-white/70 backdrop-blur-md border border-white shadow-sm flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:bg-white transition-all shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>

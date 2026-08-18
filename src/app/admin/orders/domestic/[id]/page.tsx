@@ -12,6 +12,7 @@ import {
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, arrayUnion, collection, getDocs } from "firebase/firestore";
+import { useAuthStore } from "@/store/useAuthStore";
 
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminInput } from "@/components/admin/ui/AdminInput";
@@ -23,8 +24,21 @@ import { DriverData } from "@/types/admin";
 
 const glassPanel = "bg-white/70 backdrop-blur-[40px] saturate-[180%] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function DomesticOrderDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  
+  // 🚀 PERBAIKAN: Deklarasi currentUser agar Auth Guard berfungsi
+  const { user: currentUser } = useAuthStore();
   
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [drivers, setDrivers] = useState<DriverData[]>([]);
@@ -44,7 +58,6 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
   const [statusForm, setStatusForm] = useState({
     status: "", location: "Pusat Logistik Flash Global", description: "", timeMode: "auto", customDate: ""
   });
-
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,7 +95,7 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
 
         } else {
           showToast("error", "Data pesanan tidak ditemukan.");
-          setTimeout(() => router.push("/admin/orders/domestic"), 2000);
+          setTimeout(() => router.push(getAdminUrl("/admin/orders/domestic")), 2000);
           return;
         }
 
@@ -216,6 +229,18 @@ export default function DomesticOrderDetailPage({ params }: { params: { id: stri
       <div className="min-h-[70vh] flex flex-col items-center justify-center font-sans">
         <div className="w-12 h-12 border-4 border-slate-200 border-t-[#7A171D] rounded-full animate-spin mb-4"></div>
         <p className="text-[#7A171D] text-xs font-bold uppercase tracking-widest animate-pulse">Menarik Data Pesanan...</p>
+      </div>
+    );
+  }
+
+  // 🚀 Auth Guard sekarang mengenali currentUser
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <AlertCircle className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }

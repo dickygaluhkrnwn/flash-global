@@ -13,7 +13,7 @@ export default function AdminUsersLayout({ children }: { children: React.ReactNo
         exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.3 }}
         className="font-sans pb-10"
-      >
+      > 
         {children}
       </motion.div> 
     </AnimatePresence>

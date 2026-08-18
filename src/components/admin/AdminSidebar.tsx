@@ -42,24 +42,40 @@ const allowedRoles: Role[] = ["superadmin", "admin_finance", "admin_operational"
 export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Deteksi rute aktif
-  const isUsersRouteActive = pathname.startsWith("/admin/users/b2");
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  
+  // 1. Helper cerdas untuk menyesuaikan URL (Hilangkan /admin jika di production sub-domain)
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
+  // 2. Normalisasi Pathname untuk mendeteksi Active Menu dengan presisi
+  // (Karena di sub-domain, pathname tidak akan memiliki "/admin")
+  const normalizedPath = pathname.startsWith("/admin") ? pathname.replace(/^\/admin/, "") : pathname;
+  const cleanPath = normalizedPath || "/";
+  
+  // Deteksi rute aktif berdasarkan cleanPath
+  const isUsersRouteActive = cleanPath.startsWith("/users/b2") || cleanPath.startsWith("/users/staff");
   const [isUsersMenuOpen, setIsUsersMenuOpen] = useState(isUsersRouteActive);
 
-  const isFleetRouteActive = pathname.startsWith("/admin/users/drivers");
+  const isFleetRouteActive = cleanPath.startsWith("/users/drivers");
   const [isFleetMenuOpen, setIsFleetMenuOpen] = useState(isFleetRouteActive);
 
-  const isOrdersRouteActive = pathname.startsWith("/admin/orders");
+  const isOrdersRouteActive = cleanPath.startsWith("/orders");
   const [isOrdersMenuOpen, setIsOrdersMenuOpen] = useState(isOrdersRouteActive);
 
-  const isFinanceRouteActive = pathname.startsWith("/admin/finance");
+  const isFinanceRouteActive = cleanPath.startsWith("/finance");
   const [isFinanceMenuOpen, setIsFinanceMenuOpen] = useState(isFinanceRouteActive);
 
-  // 🚀 DETEKSI RUTE WALLET BARU
-  const isWalletRouteActive = pathname.startsWith("/admin/wallet");
+  const isWalletRouteActive = cleanPath.startsWith("/wallet");
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(isWalletRouteActive);
 
-  const isSupportRouteActive = pathname.startsWith("/admin/support");
+  const isSupportRouteActive = cleanPath.startsWith("/support");
   const [isSupportMenuOpen, setIsSupportMenuOpen] = useState(isSupportRouteActive);
 
   // Auto-expand menu jika sedang aktif
@@ -68,7 +84,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
     if (isFleetRouteActive && isExpanded) setIsFleetMenuOpen(true);
     if (isOrdersRouteActive && isExpanded) setIsOrdersMenuOpen(true);
     if (isFinanceRouteActive && isExpanded) setIsFinanceMenuOpen(true);
-    if (isWalletRouteActive && isExpanded) setIsWalletMenuOpen(true); // Auto expand wallet
+    if (isWalletRouteActive && isExpanded) setIsWalletMenuOpen(true); 
     if (isSupportRouteActive && isExpanded) setIsSupportMenuOpen(true);
   }, [isUsersRouteActive, isFleetRouteActive, isOrdersRouteActive, isFinanceRouteActive, isWalletRouteActive, isSupportRouteActive, isExpanded]);
 
@@ -93,19 +109,18 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
           if (!isFleetRouteActive) setIsFleetMenuOpen(false);
           if (!isOrdersRouteActive) setIsOrdersMenuOpen(false);
           if (!isFinanceRouteActive) setIsFinanceMenuOpen(false);
-          if (!isWalletRouteActive) setIsWalletMenuOpen(false); // Tutup wallet jika bukan di rute itu
+          if (!isWalletRouteActive) setIsWalletMenuOpen(false); 
           if (!isSupportRouteActive) setIsSupportMenuOpen(false);
         }}
         className={cn(
           "fixed top-4 left-4 h-[calc(100vh-32px)] shrink-0 py-6 flex flex-col transition-all duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] z-50 overflow-y-auto overflow-x-hidden admin-scrollbar rounded-[2rem]",
-          // ✨ iPHONE GLASSMORPHISM MAGIC ✨
           "bg-white/40 backdrop-blur-[40px] saturate-[180%] border border-white/60",
           isExpanded ? "w-72 px-5 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)]" : "w-[84px] px-3 hidden md:flex shadow-[0_4px_15px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.05)]" 
         )}
       >
         <div className="space-y-6 flex-1">
           
-          {/* Header Brand (Super Clean) */}
+          {/* Header Brand */}
           <div className={cn("flex flex-col px-2 transition-all duration-300", isExpanded ? "items-start" : "items-center")}>
             <div className={cn("relative transition-all duration-300 ease-in-out", isExpanded ? "w-[160px] h-[35px]" : "w-[40px] h-[40px]")}>
               <Image 
@@ -121,11 +136,10 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
           <div className="space-y-1.5 w-full mt-4">
             
             {isExpanded && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] px-4 mb-2 mt-4 transition-opacity">Main Board</p>}
-            <SidebarButton icon={LayoutDashboard} label="Dashboard" href="/admin" isActive={pathname === "/admin"} isExpanded={isExpanded} />
+            {/* Navigasi Menggunakan Helper getAdminUrl dan cleanPath */}
+            <SidebarButton icon={LayoutDashboard} label="Dashboard" href={getAdminUrl("/admin")} isActive={cleanPath === "/"} isExpanded={isExpanded} />
 
-            {/* ==================================================== */}
             {/* KATEGORI 1: CUSTOMER & SECURITY */}
-            {/* ==================================================== */}
             {isExpanded && <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-[0.2em] px-4 mb-2 mt-6 transition-opacity">Clients & Team</p>}
             {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
               <div className="flex flex-col">
@@ -141,18 +155,16 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isUsersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  <SubMenuButton href="/admin/users/b2c" label="Personal (B2C)" isActive={pathname.includes("/users/b2c")} />
-                  <SubMenuButton href="/admin/users/b2b" label="Korporat (B2B)" isActive={pathname.includes("/users/b2b")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/b2c")} label="Personal (B2C)" isActive={cleanPath.startsWith("/users/b2c")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/b2b")} label="Korporat (B2B)" isActive={cleanPath.startsWith("/users/b2b")} />
                   {currentRole === "superadmin" && (
-                    <SubMenuButton href="/admin/users/staff" label="Manajemen Staf" isActive={pathname.includes("/users/staff")} />
+                    <SubMenuButton href={getAdminUrl("/admin/users/staff")} label="Manajemen Staf" isActive={cleanPath.startsWith("/users/staff")} />
                   )}
                 </div>
               </div>
             )}
 
-            {/* ==================================================== */}
             {/* KATEGORI 2: FLEET & DRIVER MANAGEMENT */}
-            {/* ==================================================== */}
             {isExpanded && <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-[0.2em] px-4 mb-2 mt-6 transition-opacity">Fleet Network</p>}
             {(currentRole === "superadmin" || currentRole === "admin_operational") && (
               <div className="flex flex-col">
@@ -168,18 +180,16 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isFleetMenuOpen ? "max-h-96 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  <SubMenuButton href="/admin/users/drivers" label="Pusat Verifikasi" isActive={pathname === "/admin/users/drivers"} />
-                  <SubMenuButton href="/admin/users/drivers/individual" label="Mitra Individu" isActive={pathname.includes("/users/drivers/individual")} />
-                  <SubMenuButton href="/admin/users/drivers/vendor" label="Vendor (PT/CV)" isActive={pathname.includes("/users/drivers/vendor")} />
-                  <SubMenuButton href="/admin/users/drivers/fleet-drivers" label="Sopir Vendor" isActive={pathname.includes("/users/drivers/fleet-drivers")} />
-                  <SubMenuButton href="/admin/users/drivers/fleet-vehicles" label="Armada Truk" isActive={pathname.includes("/users/drivers/fleet-vehicles")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/drivers")} label="Pusat Verifikasi" isActive={cleanPath === "/users/drivers"} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/drivers/individual")} label="Mitra Individu" isActive={cleanPath.startsWith("/users/drivers/individual")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/drivers/vendor")} label="Vendor (PT/CV)" isActive={cleanPath.startsWith("/users/drivers/vendor")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/drivers/fleet-drivers")} label="Sopir Vendor" isActive={cleanPath.startsWith("/users/drivers/fleet-drivers")} />
+                  <SubMenuButton href={getAdminUrl("/admin/users/drivers/fleet-vehicles")} label="Armada Truk" isActive={cleanPath.startsWith("/users/drivers/fleet-vehicles")} />
                 </div>
               </div>
             )}
 
-            {/* ==================================================== */}
-            {/* SISA MENU (DISPATCH, FINANCE, WALLET, DLL) */}
-            {/* ==================================================== */}
+            {/* OPERATIONS */}
             {isExpanded && <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-[0.2em] px-4 mb-2 mt-6 transition-opacity">Operations</p>}
             
             {(currentRole === "superadmin" || currentRole === "admin_operational") && (
@@ -196,9 +206,9 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isOrdersMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  <SubMenuButton href="/admin/orders/domestic" label="Order Domestik" isActive={pathname.includes("/orders/domestic")} />
-                  <SubMenuButton href="/admin/orders/global" label="Global Forwarding" isActive={pathname.includes("/orders/global")} />
-                  <SubMenuButton href="/admin/orders/radar" label="Radar Satelit" isActive={pathname.includes("/orders/radar")} />
+                  <SubMenuButton href={getAdminUrl("/admin/orders/domestic")} label="Order Domestik" isActive={cleanPath.startsWith("/orders/domestic")} />
+                  <SubMenuButton href={getAdminUrl("/admin/orders/global")} label="Global Forwarding" isActive={cleanPath.startsWith("/orders/global")} />
+                  <SubMenuButton href={getAdminUrl("/admin/orders/radar")} label="Radar Satelit" isActive={cleanPath.startsWith("/orders/radar")} />
                 </div>
               </div>
             )}
@@ -217,14 +227,14 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isFinanceMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  <SubMenuButton href="/admin/finance/verification" label="Verifikasi Manual" isActive={pathname.includes("/finance/verification")} />
-                  <SubMenuButton href="/admin/finance/receivables" label="Piutang B2B (Net)" isActive={pathname.includes("/finance/receivables")} />
-                  <SubMenuButton href="/admin/finance/reports" label="Laporan Pembukuan" isActive={pathname.includes("/finance/reports")} />
+                  <SubMenuButton href={getAdminUrl("/admin/finance/verification")} label="Verifikasi Manual" isActive={cleanPath.startsWith("/finance/verification")} />
+                  <SubMenuButton href={getAdminUrl("/admin/finance/receivables")} label="Piutang B2B (Net)" isActive={cleanPath.startsWith("/finance/receivables")} />
+                  <SubMenuButton href={getAdminUrl("/admin/finance/reports")} label="Laporan Pembukuan" isActive={cleanPath.startsWith("/finance/reports")} />
                 </div>
               </div>
             )}
 
-            {/* 🚀 DROPDOWN WALLET BARU 🚀 */}
+            {/* WALLET */}
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
               <div className="flex flex-col">
                 <MenuDropdownButton 
@@ -239,32 +249,31 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isWalletMenuOpen ? "max-h-[300px] mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  {/* Exact match untuk Dashboard utama */}
-                  <SubMenuButton href="/admin/wallet" label="Pusat Kas (Hub)" isActive={pathname === "/admin/wallet"} />
-                  {/* 🚀 PERBAIKAN: Menu drivers diganti labelnya karena udah mencakup Pencairan */}
-                  <SubMenuButton href="/admin/wallet/drivers" label="Buku Kas & Pencairan" isActive={pathname.includes("/wallet/drivers")} />
-                  <SubMenuButton href="/admin/wallet/clients" label="Deposit Korporat" isActive={pathname.includes("/wallet/clients")} />
-                  <SubMenuButton href="/admin/wallet/topups" label="Validasi Top-Up" isActive={pathname.includes("/wallet/topups")} />
-                  {/* 🚀 PERBAIKAN: Menu withdrawals DIHAPUS karena udah digabung ke Command Center */}
+                  <SubMenuButton href={getAdminUrl("/admin/wallet")} label="Pusat Kas (Hub)" isActive={cleanPath === "/wallet"} />
+                  <SubMenuButton href={getAdminUrl("/admin/wallet/drivers")} label="Buku Kas & Pencairan" isActive={cleanPath.startsWith("/wallet/drivers")} />
+                  <SubMenuButton href={getAdminUrl("/admin/wallet/clients")} label="Deposit Korporat" isActive={cleanPath.startsWith("/wallet/clients")} />
+                  <SubMenuButton href={getAdminUrl("/admin/wallet/topups")} label="Validasi Top-Up" isActive={cleanPath.startsWith("/wallet/topups")} />
                 </div>
               </div>
             )}
 
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
-              <SidebarButton icon={CreditCard} label="Payment Methods" href="/admin/payments" isActive={pathname === "/admin/payments"} isExpanded={isExpanded} />
+              <SidebarButton icon={CreditCard} label="Payment Methods" href={getAdminUrl("/admin/payments")} isActive={cleanPath.startsWith("/payments")} isExpanded={isExpanded} />
             )}
             
+            {/* SYSTEM CONFIG */}
             {isExpanded && <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-[0.2em] px-4 mb-2 mt-6 transition-opacity">System Config</p>}
             {(currentRole === "superadmin" || currentRole === "admin_operational") && (
-              <SidebarButton icon={Truck} label="Data Armada" href="/admin/vehicles" isActive={pathname === "/admin/vehicles"} isExpanded={isExpanded} />
+              <SidebarButton icon={Truck} label="Data Armada" href={getAdminUrl("/admin/vehicles")} isActive={cleanPath.startsWith("/vehicles")} isExpanded={isExpanded} />
             )}
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
-              <SidebarButton icon={Coins} label="Pricing Rules" href="/admin/pricing" isActive={pathname === "/admin/pricing"} isExpanded={isExpanded} />
+              <SidebarButton icon={Coins} label="Pricing Rules" href={getAdminUrl("/admin/pricing")} isActive={cleanPath.startsWith("/pricing")} isExpanded={isExpanded} />
             )}
             {(currentRole === "superadmin" || currentRole === "admin_finance") && (
-              <SidebarButton icon={Ticket} label="Promo & Voucher" href="/admin/promo" isActive={pathname === "/admin/promo"} isExpanded={isExpanded} />
+              <SidebarButton icon={Ticket} label="Promo & Voucher" href={getAdminUrl("/admin/promo")} isActive={cleanPath.startsWith("/promo")} isExpanded={isExpanded} />
             )}
 
+            {/* SUPPORT & LOGS */}
             {isExpanded && <p className="text-[10px] font-bold text-slate-400/80 uppercase tracking-[0.2em] px-4 mb-2 mt-6 transition-opacity">Support & Logs</p>}
             {(currentRole === "superadmin" || currentRole === "admin_operational" || currentRole === "staff") && (
               <div className="flex flex-col">
@@ -280,10 +289,10 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
                   }} 
                 />
                 <div className={cn("overflow-hidden transition-all duration-300 flex flex-col gap-1", isExpanded && isSupportMenuOpen ? "max-h-60 mt-1.5 opacity-100" : "max-h-0 opacity-0")}>
-                  <SubMenuButton href="/admin/support/tickets" label="Tiket Bantuan CS" isActive={pathname.includes("/support/tickets")} />
-                  <SubMenuButton href="/admin/support/claims" label="Klaim Asuransi" isActive={pathname.includes("/support/claims")} />
+                  <SubMenuButton href={getAdminUrl("/admin/support/tickets")} label="Tiket Bantuan CS" isActive={cleanPath.startsWith("/support/tickets")} />
+                  <SubMenuButton href={getAdminUrl("/admin/support/claims")} label="Klaim Asuransi" isActive={cleanPath.startsWith("/support/claims")} />
                   {currentRole === "superadmin" && (
-                    <SubMenuButton href="/admin/support/audit" label="Audit Trail" isActive={pathname.includes("/support/audit")} />
+                    <SubMenuButton href={getAdminUrl("/admin/support/audit")} label="Audit Trail" isActive={cleanPath.startsWith("/support/audit")} />
                   )}
                 </div>
               </div>
@@ -296,7 +305,7 @@ export default function AdminSidebar({ currentRole, pathname }: AdminSidebarProp
 }
 
 // =========================================================================
-// KOMPONEN TOMBOL DENGAN EFEK 3D NEUMORPHISM (Gen-Z & Premium)
+// KOMPONEN TOMBOL DENGAN EFEK 3D NEUMORPHISM
 // =========================================================================
 function SidebarButton({ icon: Icon, label, isActive, href, isExpanded }: SidebarButtonProps) {
   return (
@@ -308,7 +317,6 @@ function SidebarButton({ icon: Icon, label, isActive, href, isExpanded }: Sideba
       )}
       title={label}
     >
-      {/* 3D ICON WRAPPER */}
       <div className={cn(
         "w-[42px] h-[42px] shrink-0 rounded-2xl flex items-center justify-center transition-all duration-300",
         isActive 
@@ -325,7 +333,6 @@ function SidebarButton({ icon: Icon, label, isActive, href, isExpanded }: Sideba
   );
 }
 
-// Komponen Pembungkus Menu Dropdown
 function MenuDropdownButton({ icon: Icon, label, isActive, isOpen, isExpanded, onClick }: MenuDropdownButtonProps) {
   return (
     <button 
@@ -354,7 +361,6 @@ function MenuDropdownButton({ icon: Icon, label, isActive, isOpen, isExpanded, o
   );
 }
 
-// Submenu
 function SubMenuButton({ href, label, isActive }: { href: string; label: string; isActive: boolean }) {
   return (
     <Link 

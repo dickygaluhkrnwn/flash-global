@@ -20,7 +20,7 @@ import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 // IMPORT GLOBAL TYPES
 import { PricingConfig, DriverData } from "@/types/admin";
-import { DynamicVehicle } from "@/types/order"; // <-- KODE DIBERSIHKAN: Menghapus FirebaseTimestamp karena tidak lagi dipakai
+import { DynamicVehicle } from "@/types/order"; 
 
 const SearchBox = dynamic(() => import("@mapbox/search-js-react").then((mod) => mod.SearchBox), { 
   ssr: false, 
@@ -33,6 +33,16 @@ const MapBase = dynamic(() => import("@/components/desktop/MapBase"), {
 });
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
+
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
 
 export default function DriverDetailPage() {
   const router = useRouter();
@@ -208,7 +218,7 @@ export default function DriverDetailPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -314,7 +324,7 @@ export default function DriverDetailPage() {
             <p className="text-3xl font-black text-emerald-600 tracking-tight">
               {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(partner.balance || 0)}
             </p>
-            <AdminButton onClick={() => router.push(`/admin/users/drivers/${partner.id}/wallet`)} variant="outline" className="w-full mt-4 h-9 text-[10px]">
+            <AdminButton onClick={() => router.push(getAdminUrl(`/admin/users/drivers/${partner.id}/wallet`))} variant="outline" className="w-full mt-4 h-9 text-[10px]">
               Riwayat Mutasi
             </AdminButton>
           </div>

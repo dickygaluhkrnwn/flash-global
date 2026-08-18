@@ -34,6 +34,16 @@ export default function FinanceReceivablesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("highest_debt");
 
+  // =========================================================================
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+  // =========================================================================
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path.replace(/^\/admin/, '') || '/';
+    }
+    return path; 
+  };
+
   useEffect(() => {
     const fetchDebts = async () => {
       try {
@@ -46,14 +56,11 @@ export default function FinanceReceivablesPage() {
           const data = docObj.data() as OrderDetail;
           
           // 🚀 FIX FATAL LOGIC: Filter Positif. 
-          // Jangan gunakan (paymentStatus !== "Lunas"). Karena orderan Batal juga masuk!
-          // Filter ketat: HANYA yang berstatus Piutang, Menunggu Verifikasi, atau Ditolak.
           const isTrueDebt = 
             data.paymentStatus === "Piutang B2B" || 
             data.paymentStatus === "Menunggu Verifikasi Finance" || 
             data.paymentStatus === "Ditolak";
             
-          // Pastikan juga status pesanan utamanya BUKAN Dibatalkan.
           const isNotCancelled = data.status !== "Dibatalkan" && data.paymentStatus !== "Dibatalkan" && data.paymentStatus !== "Refund Selesai";
 
           if (isTrueDebt && isNotCancelled) {
@@ -166,7 +173,7 @@ export default function FinanceReceivablesPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -302,7 +309,7 @@ export default function FinanceReceivablesPage() {
                       exit={{ opacity: 0, scale: 0.95 }} 
                       transition={{ delay: idx * 0.02 }} 
                       className={`${glassRow} p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-6 group cursor-pointer border border-white`}
-                      onClick={() => router.push(`/admin/finance/receivables/${debt.id}`)}
+                      onClick={() => router.push(getAdminUrl(`/admin/finance/receivables/${debt.id}`))}
                     >
                       <div className="flex items-center gap-4 w-full lg:w-[35%]">
                         <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm border", isHeavyDebt ? "bg-red-50 text-red-600 border-red-200" : isMediumDebt ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-blue-50 text-blue-600 border-blue-200")}>
@@ -331,7 +338,7 @@ export default function FinanceReceivablesPage() {
                           size="icon" 
                           variant="outline" 
                           className="h-10 w-10 shrink-0 text-slate-400 group-hover:text-red-600 group-hover:border-red-300 group-hover:bg-red-50 rounded-xl"
-                          onClick={(e) => { e.stopPropagation(); router.push(`/admin/finance/receivables/${debt.id}`); }}
+                          onClick={(e) => { e.stopPropagation(); router.push(getAdminUrl(`/admin/finance/receivables/${debt.id}`)); }}
                           title="Buka Detail Penagihan"
                         >
                           <ArrowRight className="w-4 h-4" />

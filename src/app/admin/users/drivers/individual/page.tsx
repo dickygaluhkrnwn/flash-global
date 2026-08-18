@@ -23,6 +23,16 @@ import { DriverData } from "@/types/admin";
 
 type StatusFilterType = "All" | "Pending" | "Active" | "Suspended";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
+
 export default function IndividualPartnersPage() {
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
@@ -138,7 +148,7 @@ export default function IndividualPartnersPage() {
       <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
         <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
         <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
-        <AdminButton onClick={() => router.push("/admin")} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }
@@ -326,7 +336,7 @@ export default function IndividualPartnersPage() {
                     <AdminButton 
                       size="icon" 
                       variant="outline" 
-                      onClick={() => router.push(`/admin/users/drivers/${p.id}`)} 
+                      onClick={() => router.push(getAdminUrl(`/admin/users/drivers/${p.id}`))} 
                       className="bg-white border border-slate-200 text-[#C5A059] hover:bg-amber-50 hover:border-amber-200 hover:text-amber-700 shadow-sm rounded-xl h-10 w-10 shrink-0" 
                       title="Lihat Profil Detail"
                     >

@@ -32,8 +32,17 @@ export default function AdminLoginPage() {
   const [successMsg, setSuccessMsg] = useState("");
 
   // =========================================================================
-  // LOGIC AREA: JANGAN DIUBAH!
+  // LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
   // =========================================================================
+  
+  // Helper cerdas untuk menyesuaikan URL
+  const getAdminUrl = (path: string) => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+      return path === '' ? '/' : path; // Di sub-domain, arahkan ke root '/'
+    }
+    return `/admin${path === '/' ? '' : path}`; // Di localhost, arahkan ke '/admin'
+  };
+
   const verifyAdminRole = async (uid: string) => {
     try {
       const userDocRef = doc(db, "users", uid);
@@ -44,7 +53,8 @@ export default function AdminLoginPage() {
         const userRole = (userData?.role || "") as Role;
         
         if (allowedRoles.includes(userRole)) {
-          router.push("/admin"); 
+          // [BUG FIX]: Redirect dinamis berdasar env (menghindari /admin nyangkut)
+          router.push(getAdminUrl("/")); 
         } else {
           await signOut(auth);
           setErrorMsg("Akses ditolak. Akun Anda tidak memiliki hak akses Administrator.");
@@ -117,9 +127,9 @@ export default function AdminLoginPage() {
     setSuccessMsg("");
 
     try {
-      const resetUrl = process.env.NODE_ENV === "development" 
-        ? "http://localhost:3000/reset-password" 
-        : "https://flash-global.vercel.app/reset-password";
+      // [BUG FIX]: Gunakan origin otomatis agar tidak hardcoded Vercel/Localhost
+      const origin = typeof window !== 'undefined' ? window.location.origin : "https://admin.flashglobalslogistik.com";
+      const resetUrl = `${origin}/reset-password`;
 
       const actionCodeSettings = {
         url: resetUrl,

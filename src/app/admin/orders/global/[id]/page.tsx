@@ -7,20 +7,32 @@ import {
   ArrowLeft, Globe2, User, MapPin, 
   Calendar, Box, Weight, Building2, DollarSign, 
   Barcode, ClipboardList, Edit3, Save, X, Navigation,
-  Maximize
+  Maximize, ShieldAlert // <-- KODE DIBERSIHKAN: ShieldAlert ditambahkan
 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { Quote, FirebaseTimestamp } from "@/types/order"; 
+import { useAuthStore } from "@/store/useAuthStore"; // <-- KODE DIBERSIHKAN: Import auth store untuk proteksi
 
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
+
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getAdminUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('admin.flashglobalslogistik.com')) {
+    return path.replace(/^\/admin/, '') || '/';
+  }
+  return path; 
+};
 
 export default function GlobalOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+  const { user: currentUser } = useAuthStore(); // <-- KODE DIBERSIHKAN: Deklarasi currentUser
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,6 +134,18 @@ export default function GlobalOrderDetailPage() {
           <div className="absolute inset-0 border-4 border-[#C5A059] border-t-[#7A171D] rounded-full animate-spin"></div>
         </div>
         <p className="text-[#C5A059] text-xs font-bold uppercase tracking-widest animate-pulse">Menarik Data Dokumen...</p>
+      </div>
+    );
+  }
+
+  // 🚀 PERBAIKAN: Auth Guard
+  if (currentUser && currentUser.role !== 'superadmin' && currentUser.role !== 'admin_operational') {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-center font-sans">
+        <ShieldAlert className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-slate-500 max-w-lg mt-3 text-lg">Modul Dispatch & Order ini hanya dapat dikelola oleh Superadmin atau Divisi Operasional.</p>
+        <AdminButton onClick={() => router.push(getAdminUrl("/admin"))} variant="outline" className="mt-8">Kembali ke Dashboard</AdminButton>
       </div>
     );
   }

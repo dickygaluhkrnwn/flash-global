@@ -31,6 +31,6 @@ function AdminBadge({ className, variant = "default", ...props }: AdminBadgeProp
       {...props}
     />
   );
-}
+} 
 
 export { AdminBadge };
