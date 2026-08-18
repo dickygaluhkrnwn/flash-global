@@ -29,8 +29,17 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // ==========================================
   // DETEKSI ZONA PORTAL (HOST & PATH)
   // ==========================================
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  const isLocalhost = hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  // Kita pastikan pendeteksian berjalan aman baik di Server maupun Client
+  const [hostname, setHostname] = useState("");
+  const [isLocalhost, setIsLocalhost] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentHost = window.location.hostname;
+      setHostname(currentHost);
+      setIsLocalhost(currentHost.includes('localhost') || currentHost.includes('127.0.0.1'));
+    }
+  }, []);
 
   // Menentukan user sedang membuka portal yang mana
   const isLandingPortal = hostname === 'flashglobalslogistik.com' || hostname === 'www.flashglobalslogistik.com';
@@ -101,7 +110,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // 2. Route Guard Berbasis Zona Portal
   useEffect(() => {
-    if (initializing || !isHydrated) return;
+    // Tunggu sampai host & Auth selesai init
+    if (initializing || !isHydrated || !hostname) return;
 
     // A. Biarkan Landing Page bebas diakses siapa saja
     if (isLandingPortal) return;
@@ -155,7 +165,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
     }
 
-  }, [initializing, isHydrated, user, pathname, router, isLandingPortal, isAdminPortal, isDriverPortal, isClientPortal, isPublicAuthRoute]);
+  }, [
+    initializing, isHydrated, user, pathname, router, 
+    isLandingPortal, isAdminPortal, isDriverPortal, isClientPortal, 
+    isPublicAuthRoute, isLocalhost, hostname // <-- FIX: Menambahkan isLocalhost & hostname ke dependencies
+  ]);
 
   // Loading Screen
   if (initializing || !isHydrated) {

@@ -21,6 +21,21 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 const MapBase = dynamic(() => import("@/components/desktop/MapBase"), { 
   ssr: false, 
   loading: () => (
@@ -81,6 +96,7 @@ export default function DriverAWBExecutionPage() {
         setOrder({ id: docSnap.id, ...docSnap.data() } as OrderDetail);
       } else {
         showToast("Manifes pengiriman tidak ditemukan.", "error");
+        setTimeout(() => router.push(getDriverUrl("/driver/radar")), 2000); // FIX: Arahkan ke radar, bukan ke admin/staff
       }
       setIsLoading(false);
     }, (error) => {
@@ -89,7 +105,7 @@ export default function DriverAWBExecutionPage() {
     });
 
     return () => unsub();
-  }, [orderId]);
+  }, [orderId, router]);
 
   useEffect(() => {
     let watchId: number;
@@ -286,7 +302,7 @@ export default function DriverAWBExecutionPage() {
       showToast(`Status diperbarui: ${nextStatus}`);
 
       if (nextStatus === "Selesai") {
-        setTimeout(() => router.push("/driver/radar"), 2500);
+        setTimeout(() => router.push(getDriverUrl("/driver/radar")), 2500); // FIX: Dinamis Routing
       }
 
     } catch (error) {
@@ -338,6 +354,19 @@ export default function DriverAWBExecutionPage() {
     );
   }
 
+  // FIX: Auth Guard. Izinkan driver masuk. (Bug sebelumnya mencegah driver mengakses halamannya sendiri)
+  if (user && !['superadmin', 'admin_operational', 'admin_finance', 'driver'].includes(user.role)) {
+    return createPortal(
+      <div className="fixed inset-0 z-[999999] bg-[var(--background)] p-6 flex flex-col items-center justify-center text-center">
+        <AlertTriangle className="w-20 h-20 text-red-500 mb-6 opacity-50" />
+        <h2 className="text-3xl font-black text-slate-800">Akses Ditolak</h2>
+        <p className="text-sm font-medium text-slate-500 mt-2 mb-6 max-w-[250px]">Halaman ini khusus untuk Mitra Kurir dan Operasional.</p>
+        <Button variant="secondary" onClick={() => router.push(getDriverUrl("/driver/dashboard"))}>Kembali ke Beranda</Button>
+      </div>,
+      document.body
+    );
+  }
+
   if (!order) {
     return createPortal(
       <div className="fixed inset-0 z-[999999] bg-[var(--background)] p-6 flex flex-col items-center justify-center text-center">
@@ -346,7 +375,7 @@ export default function DriverAWBExecutionPage() {
         </div>
         <h2 className="text-2xl font-black text-slate-900 tracking-tight">Manifes Tidak Valid</h2>
         <p className="text-sm font-medium text-slate-500 mt-2 mb-6 max-w-[250px]">Resi mungkin telah dihapus oleh Admin atau sistem.</p>
-        <Button variant="secondary" onClick={() => router.push("/driver/radar")}>Kembali ke Radar</Button>
+        <Button variant="secondary" onClick={() => router.push(getDriverUrl("/driver/radar"))}>Kembali ke Radar</Button>
       </div>,
       document.body
     );
@@ -401,7 +430,7 @@ export default function DriverAWBExecutionPage() {
 
         <div className="absolute top-0 left-0 right-0 z-20 pt-safe px-4 mt-4 flex items-center justify-between pointer-events-none">
           <button 
-            onClick={() => router.push("/driver/radar")} 
+            onClick={() => router.push(getDriverUrl("/driver/radar"))} 
             className="w-12 h-12 flex items-center justify-center bg-white/80 backdrop-blur-md border border-white rounded-[1.25rem] shadow-[0_4px_20px_rgba(0,0,0,0.1)] text-slate-800 pointer-events-auto active:scale-90 transition-transform"
           >
             <ArrowLeft size={22} strokeWidth={2.5} />
@@ -692,7 +721,7 @@ export default function DriverAWBExecutionPage() {
               <Button 
                 size="lg"
                 variant="outline"
-                onClick={() => router.push("/driver/radar")}
+                onClick={() => router.push(getDriverUrl("/driver/radar"))}
                 className="w-full flex items-center justify-center gap-2 bg-white"
               >
                 Kembali ke Bursa Radar

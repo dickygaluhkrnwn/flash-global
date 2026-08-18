@@ -11,7 +11,7 @@ import {
   User, MapPin, UploadCloud, 
   ArrowLeft, ArrowRight, X, Building2, Loader2, 
   MapPinned, ChevronDown, CheckCircle2 
-} from "lucide-react";
+} from "lucide-react"; 
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";

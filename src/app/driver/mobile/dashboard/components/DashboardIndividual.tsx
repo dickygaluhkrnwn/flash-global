@@ -17,6 +17,21 @@ import { cn } from "@/lib/utils";
 
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 // Ekstraktor Waktu Super Aman
 const getSafeMillis = (ts: unknown): number => {
   if (!ts) return 0;
@@ -155,7 +170,7 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
                   Anda belum bisa menerima order. Segera lengkapi dokumen KTP, SIM, dan kendaraan Anda.
                 </p>
                 <button 
-                  onClick={() => router.push("/driver/profile")}
+                  onClick={() => router.push(getDriverUrl("/driver/profile"))}
                   className="bg-gradient-to-b from-amber-500 to-amber-600 hover:to-amber-700 text-white text-xs font-bold py-2.5 px-5 rounded-[1rem] transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_4px_10px_rgba(217,119,6,0.2)] border border-amber-700 active:scale-95 tap-highlight-transparent outline-none"
                 >
                   Lengkapi Sekarang
@@ -195,7 +210,7 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, height: 0 }}
-            onClick={() => router.push(`/driver/awb/${activeOrder.id}`)}
+            onClick={() => router.push(getDriverUrl(`/driver/awb/${activeOrder.id}`))}
             className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-[1.5rem] p-4 shadow-[0_8px_20px_rgba(16,185,129,0.3)] border border-emerald-400 relative overflow-hidden cursor-pointer tap-highlight-transparent active:scale-[0.98] transition-transform"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-[40px] pointer-events-none"></div>
@@ -272,7 +287,7 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className="glass-card rounded-[2rem] p-6 text-center relative overflow-hidden tap-highlight-transparent cursor-pointer active:scale-[0.98] transition-transform"
-            onClick={() => router.push("/driver/radar")}
+            onClick={() => router.push(getDriverUrl("/driver/radar"))}
           >
             {/* Animasi Gelombang Radar */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-[#7A171D]/10 rounded-full animate-ping"></div>
@@ -332,13 +347,13 @@ export default function DashboardIndividual({ driverStatus, isLocked, balance }:
 
         <div className="relative z-10 grid grid-cols-2 gap-3">
           <button 
-            onClick={() => router.push('/driver/wallet')}
+            onClick={() => router.push(getDriverUrl('/driver/wallet'))}
             className="bg-gradient-to-b from-[#DFBE7B] to-[#C5A059] hover:to-[#B69352] text-white text-sm font-black py-3.5 rounded-[1.25rem] transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),0_6px_15px_rgba(197,160,89,0.3)] border border-[#A68345] active:scale-95 tap-highlight-transparent"
           >
             Tarik Dana
           </button>
           <button 
-            onClick={() => router.push('/driver/wallet')}
+            onClick={() => router.push(getDriverUrl('/driver/wallet'))}
             className="bg-white/10 hover:bg-white/20 text-white text-sm font-bold py-3.5 rounded-[1.25rem] backdrop-blur-md transition-all border border-white/20 active:scale-95 tap-highlight-transparent shadow-sm"
           >
             Riwayat Saldo

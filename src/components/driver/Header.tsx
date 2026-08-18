@@ -16,6 +16,22 @@ import { signOut } from "firebase/auth";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  // Jika di localhost
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 interface HeaderProps {
   title: string;
   showBack?: boolean;
@@ -73,7 +89,7 @@ export default function Header({
     try {
       await signOut(auth); 
       logout(); 
-      router.push("/driver/login"); // Arahkan kembali ke login driver
+      router.push(getDriverUrl("/driver/login")); // Dinamis redirect login driver
     } catch (error) {
       console.error("Gagal Logout:", error);
     }
@@ -172,20 +188,20 @@ export default function Header({
                   {/* List Menu Cepat */}
                   <div className="space-y-1">
                     {partnerType === 'Vendor' && (
-                      <Link href="/driver/fleet" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-blue-50 active:text-blue-700 rounded-xl transition-colors tap-highlight-transparent">
+                      <Link href={getDriverUrl("/driver/fleet")} onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-blue-50 active:text-blue-700 rounded-xl transition-colors tap-highlight-transparent">
                         <Truck className="w-4 h-4 text-blue-500" /> Kelola Armada
                       </Link>
                     )}
                     
-                    <Link href="/driver/wallet" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
+                    <Link href={getDriverUrl("/driver/wallet")} onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
                       <Wallet className="w-4 h-4 text-emerald-500" /> Dompet & Komisi
                     </Link>
 
-                    <Link href="/driver/profile" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
+                    <Link href={getDriverUrl("/driver/profile")} onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
                       <Settings className="w-4 h-4 text-slate-500" /> Pengaturan Akun
                     </Link>
 
-                    <Link href="/driver/support" onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
+                    <Link href={getDriverUrl("/driver/support")} onClick={() => setIsProfileOpen(false)} className="flex items-center gap-3 px-3 py-2.5 text-xs font-bold text-slate-700 active:bg-white active:text-[#7A171D] rounded-xl transition-colors tap-highlight-transparent">
                       <LifeBuoy className="w-4 h-4 text-amber-500" /> Pusat Bantuan
                     </Link>
                   </div>

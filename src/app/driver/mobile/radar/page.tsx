@@ -18,6 +18,21 @@ import { cn } from "@/lib/utils";
 // IMPORT PREMIUM COMPONENTS
 import { Button } from "@/components/ui/Button";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 // UTILS LOKAL
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
@@ -95,9 +110,9 @@ export default function MobileRadarPage() {
       showToast(`Berhasil mengambil pesanan #${order.id.substring(0,8)}!`);
       setShowVendorModal(false);
       
-      // Arahkan ke Layar Eksekusi (Resi / AWB)
+      // Arahkan ke Layar Eksekusi (Resi / AWB) - DINAMIS ROUTING
       setTimeout(() => {
-        router.push(`/driver/awb/${order.id}`);
+        router.push(getDriverUrl(`/driver/awb/${order.id}`));
       }, 1500);
 
     } catch (error) {

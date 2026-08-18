@@ -13,6 +13,21 @@ import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/store/useAuthStore";
 import { cn } from "@/lib/utils";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 interface DashboardVendorProps {
   driverStatus: "Pending" | "Active" | "Suspended" | "";
   isLocked: boolean;
@@ -113,7 +128,7 @@ export default function DashboardVendor({ driverStatus, isLocked, balance }: Das
                   Akun vendor Anda sedang dalam tahap verifikasi oleh Tim Admin. Anda belum bisa menugaskan armada.
                 </p>
                 <button 
-                  onClick={() => router.push("/driver/profile")}
+                  onClick={() => router.push(getDriverUrl("/driver/profile"))}
                   className="bg-gradient-to-b from-amber-500 to-amber-600 hover:to-amber-700 text-white text-xs font-bold py-2.5 px-5 rounded-[1rem] transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_4px_10px_rgba(217,119,6,0.2)] border border-amber-700 active:scale-95 tap-highlight-transparent outline-none"
                 >
                   Cek Status Berkas
@@ -177,14 +192,14 @@ export default function DashboardVendor({ driverStatus, isLocked, balance }: Das
         <div className="relative z-10 grid grid-cols-2 gap-3">
           <button 
             disabled={isLocked} 
-            onClick={() => router.push('/driver/wallet')}
+            onClick={() => router.push(getDriverUrl('/driver/wallet'))}
             className="bg-gradient-to-b from-blue-500 to-blue-600 hover:to-blue-700 text-white text-sm font-black py-3.5 rounded-[1.25rem] transition-all shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_6px_15px_rgba(37,99,235,0.3)] border border-blue-700 active:scale-95 tap-highlight-transparent disabled:opacity-50 disabled:active:scale-100"
           >
             Tarik Dana PT
           </button>
           <button 
             disabled={isLocked} 
-            onClick={() => router.push('/driver/wallet')}
+            onClick={() => router.push(getDriverUrl('/driver/wallet'))}
             className="bg-white/10 hover:bg-white/20 text-white text-sm font-bold py-3.5 rounded-[1.25rem] backdrop-blur-md transition-all border border-white/20 active:scale-95 tap-highlight-transparent shadow-sm disabled:opacity-50 disabled:active:scale-100"
           >
             Cek Mutasi
@@ -203,7 +218,7 @@ export default function DashboardVendor({ driverStatus, isLocked, balance }: Das
         <div className="flex items-center justify-between mb-3 px-2">
           <h3 className="text-sm font-black text-slate-800 tracking-tight">Manajemen Armada</h3>
           <button 
-            onClick={() => router.push('/driver/fleet')}
+            onClick={() => router.push(getDriverUrl('/driver/fleet'))}
             className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors tap-highlight-transparent flex items-center gap-1"
           >
             Kelola Truk <ChevronRight size={12} strokeWidth={3} />
@@ -246,7 +261,7 @@ export default function DashboardVendor({ driverStatus, isLocked, balance }: Das
         <div className="flex items-center justify-between mb-3 px-2 mt-6">
           <h3 className="text-sm font-black text-slate-800 tracking-tight">Performa Karyawan</h3>
           <button 
-            onClick={() => router.push('/driver/fleet')}
+            onClick={() => router.push(getDriverUrl('/driver/fleet'))}
             className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors tap-highlight-transparent flex items-center gap-1"
           >
             Sopir <ChevronRight size={12} strokeWidth={3} />

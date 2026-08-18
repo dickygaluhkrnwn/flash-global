@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -11,8 +12,24 @@ import DashboardIndividual from "./components/DashboardIndividual";
 import DashboardVendor from "./components/DashboardVendor";
 import Header from "@/components/driver/Header"; 
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 export default function DriverDashboard() {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, isHydrated } = useAuthStore();
   const [isVerifying, setIsVerifying] = useState(true);
   
   // States Global
@@ -22,8 +39,16 @@ export default function DriverDashboard() {
 
   // Fetch Data dari Firestore
   useEffect(() => {
+    // Pastikan Zustand sudah terhidrasi sebelum mengecek user
+    if (!isHydrated) return;
+
     const fetchDashboardData = async () => {
-      if (!user) return;
+      // AUTH GUARD: Cegah infinite loading jika user tidak ada
+      if (!user) {
+        router.push(getDriverUrl("/driver/login"));
+        return;
+      }
+      
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
@@ -40,7 +65,7 @@ export default function DriverDashboard() {
     };
 
     fetchDashboardData();
-  }, [user]);
+  }, [user, isHydrated, router]);
 
   // Layar Loading Premium
   if (isVerifying) {

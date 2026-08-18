@@ -18,6 +18,21 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 const formatRupiah = (val: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(val || 0);
 
 // FUNGSI HELPER PENJINAK WAKTU TYPE-SAFE
@@ -618,7 +633,7 @@ export default function DriverWalletPage() {
         <div className={cn("absolute bottom-[-20px] left-[-20px] w-32 h-32 rounded-full blur-[60px] opacity-30 pointer-events-none", partnerType === "Vendor" ? "bg-blue-600" : "bg-[#7A171D]")}></div>
 
         <div className="flex items-center justify-between mb-8 relative z-10">
-          <button onClick={() => router.push("/driver/dashboard")} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-[1rem] hover:bg-white/20 transition-colors border border-white/10 shadow-sm active:scale-90">
+          <button onClick={() => router.push(getDriverUrl("/driver/dashboard"))} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-[1rem] hover:bg-white/20 transition-colors border border-white/10 shadow-sm active:scale-90">
             <ArrowLeft size={20} strokeWidth={2.5} />
           </button>
           <span className="font-mono text-[10px] font-black bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-sm">

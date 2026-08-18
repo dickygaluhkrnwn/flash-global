@@ -18,6 +18,21 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 export default function DriverRegisterPage() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -70,8 +85,8 @@ export default function DriverRegisterPage() {
         createdAt: new Date(),
       } as StoreUser);
 
-      // 5. Arahkan ke Dashboard
-      router.push("/driver/dashboard");
+      // 5. Arahkan ke Dashboard (Dinamis)
+      router.push(getDriverUrl("/driver/dashboard"));
 
     } catch (error: unknown) {
       if (error instanceof Error) {
@@ -120,7 +135,7 @@ export default function DriverRegisterPage() {
           createdAt: new Date()
         } as StoreUser);
 
-        router.push("/driver/dashboard");
+        router.push(getDriverUrl("/driver/dashboard"));
       } else {
         // Jika akun sudah ada, periksa apakah rolenya benar-benar driver
         const data = userSnap.data();
@@ -135,7 +150,7 @@ export default function DriverRegisterPage() {
             createdAt: data.createdAt || new Date()
           } as StoreUser);
           
-          router.push("/driver/dashboard");
+          router.push(getDriverUrl("/driver/dashboard"));
         } else {
           await signOut(auth);
           setErrorMsg("Akun ini sudah terdaftar sebagai Pengguna/Admin. Gunakan email lain untuk mendaftar sebagai Mitra.");
@@ -295,7 +310,7 @@ export default function DriverRegisterPage() {
               {/* Link ke Login */}
               <div className="mt-8 text-center text-xs font-bold text-slate-500">
                 Sudah bergabung menjadi mitra? <br className="mb-1" />
-                <Link href="/driver/login" className="text-[var(--brand-maroon)] hover:text-[#5A0E13] underline underline-offset-4 transition-colors">
+                <Link href={getDriverUrl("/driver/login")} className="text-[var(--brand-maroon)] hover:text-[#5A0E13] underline underline-offset-4 transition-colors">
                   Masuk di sini
                 </Link>
               </div>

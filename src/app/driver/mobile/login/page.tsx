@@ -19,6 +19,21 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 export default function DriverLoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -58,7 +73,8 @@ export default function DriverLoginPage() {
             partnerType: userData.partnerType || "Individual"
           } as StoreUser);
 
-          router.push("/driver/dashboard"); 
+          // Redirect dinamis setelah sukses login
+          router.push(getDriverUrl("/driver/dashboard")); 
           return true;
         } else {
           await signOut(auth);
@@ -255,7 +271,7 @@ export default function DriverLoginPage() {
               {/* Link ke Registrasi */}
               <div className="mt-8 text-center text-xs font-bold text-slate-500">
                 Belum bergabung menjadi mitra? <br className="mb-1" />
-                <Link href="/driver/register" className="text-[#C5A059] hover:text-[#A68345] underline underline-offset-4 transition-colors">
+                <Link href={getDriverUrl("/driver/register")} className="text-[#C5A059] hover:text-[#A68345] underline underline-offset-4 transition-colors">
                   Daftar Sekarang
                 </Link>
               </div>

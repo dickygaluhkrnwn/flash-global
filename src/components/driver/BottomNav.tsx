@@ -8,6 +8,23 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/useAuthStore";
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    // Potong prefix /driver/mobile ATAU /driver agar sesuai dengan rules Middleware
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  // Jika di localhost, arahkan ke path asli mobile
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 export default function BottomNav() {
   const pathname = usePathname();
   const { user, isHydrated } = useAuthStore();
@@ -31,18 +48,19 @@ export default function BottomNav() {
     ? "from-blue-600 to-blue-800 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_6px_15px_rgba(37,99,235,0.3)] border border-blue-900" 
     : "from-[#9A242B] to-[#7A171D] shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_6px_15px_rgba(122,23,29,0.3)] border border-[#5A0E13]";
 
+  // Gunakan getDriverUrl pada semua tautan dasar
   const baseNavItems = [
-    { name: "Home", href: "/driver/dashboard", icon: Home },
-    { name: "Radar", href: "/driver/radar", icon: Radar }, 
-    { name: "Dompet", href: "/driver/wallet", icon: Wallet },
-    { name: "Profil", href: "/driver/profile", icon: User },
+    { name: "Home", href: getDriverUrl("/driver/dashboard"), baseName: "dashboard", icon: Home },
+    { name: "Radar", href: getDriverUrl("/driver/radar"), baseName: "radar", icon: Radar }, 
+    { name: "Dompet", href: getDriverUrl("/driver/wallet"), baseName: "wallet", icon: Wallet },
+    { name: "Profil", href: getDriverUrl("/driver/profile"), baseName: "profile", icon: User },
   ];
 
   const navItems = isVendor 
     ? [
         baseNavItems[0], 
         baseNavItems[1], 
-        { name: "Armada", href: "/driver/fleet", icon: Truck }, 
+        { name: "Armada", href: getDriverUrl("/driver/fleet"), baseName: "fleet", icon: Truck }, 
         baseNavItems[2], 
         baseNavItems[3]  
       ]
@@ -74,7 +92,8 @@ export default function BottomNav() {
       <nav className="w-full max-w-md flex items-center justify-between p-2 bg-white/80 backdrop-blur-[40px] saturate-[150%] rounded-[2.5rem] border border-white shadow-[inset_0_1px_1px_rgba(255,255,255,1),0_12px_40px_rgba(0,0,0,0.08)] pointer-events-auto">
         
         {navItems.map((item) => {
-          const isActive = pathname.includes(item.href) || pathname === item.href || pathname === item.href.replace("/driver", "/driver/mobile");
+          // Pengecekan isActive yang lebih dinamis dan aman terhadap Middleware
+          const isActive = pathname.includes(item.baseName);
 
           return (
             <Link 

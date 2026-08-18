@@ -14,6 +14,21 @@ import DriverTab from "./components/DriverTab";
 import VehicleTab from "./components/VehicleTab"; 
 import Header from "@/components/driver/Header"; // 🚀 Import Smart Header kita
 
+// =========================================================================
+// LOGIC AREA: REFACTORING SUB-DOMAIN ROUTING
+// =========================================================================
+const getDriverUrl = (path: string) => {
+  if (typeof window !== 'undefined' && window.location.hostname.includes('driver.flashglobalslogistik.com')) {
+    let cleanPath = path.replace(/^\/driver\/mobile/, '');
+    cleanPath = cleanPath.replace(/^\/driver/, '');
+    return cleanPath || '/';
+  }
+  if (path.startsWith('/driver') && !path.startsWith('/driver/mobile')) {
+    return path.replace('/driver', '/driver/mobile');
+  }
+  return path;
+};
+
 export default function FleetManagementPage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -26,7 +41,7 @@ export default function FleetManagementPage() {
   useEffect(() => {
     const checkVendorRole = async () => {
       if (!user) {
-        router.replace("/driver/login");
+        router.replace(getDriverUrl("/driver/login"));
         return;
       }
       try {
@@ -34,17 +49,17 @@ export default function FleetManagementPage() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           if (data.partnerType !== "Vendor") {
-            // Kalau bukan Vendor, tendang keluar ke Dashboard
-            router.replace("/driver/dashboard");
+            // Kalau bukan Vendor, tendang keluar ke Dashboard (Dinamis Routing)
+            router.replace(getDriverUrl("/driver/dashboard"));
           } else {
             setIsLoading(false);
           }
         } else {
-          router.replace("/driver/dashboard");
+          router.replace(getDriverUrl("/driver/dashboard"));
         }
       } catch (error) {
         console.error("Gagal verifikasi role:", error);
-        router.replace("/driver/dashboard");
+        router.replace(getDriverUrl("/driver/dashboard"));
       }
     };
 
